@@ -1,0 +1,42 @@
+erDiagram
+    STUDENTS {
+        BIGINT id PK
+        VARCHAR student_code UK
+        VARCHAR first_name
+        VARCHAR last_name
+        VARCHAR email UK
+        DATE date_of_birth
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    BOOKS {
+        BIGINT id PK
+        VARCHAR isbn UK
+        VARCHAR title
+        VARCHAR author
+        DATE published_date
+        BIGINT student_id FK
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    COURSES {
+        BIGINT id PK
+        VARCHAR course_code UK
+        VARCHAR name
+        TEXT description
+        INTEGER credits
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    STUDENT_COURSES {
+        BIGINT student_id PK, FK
+        BIGINT course_id PK, FK
+        TIMESTAMP enrolled_at
+    }
+
+    STUDENTS ||--o{ BOOKS : owns
+    STUDENTS ||--o{ STUDENT_COURSES : enrolls
+    COURSES ||--o{ STUDENT_COURSES : contains

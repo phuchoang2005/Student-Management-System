@@ -1,0 +1,51 @@
+parameters:
+  - $ref: "../components/parameters/StudentIdParam.yml"
+get:
+  tags: [Students]
+  summary: Get a student by ID
+  operationId: getStudentById
+  responses:
+    "200":
+      description: Student found
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/student/StudentResponse.yml"
+    "404":
+      $ref: "../components/responses/StudentNotFound.yml"
+put:
+  tags: [Students]
+  summary: Update a student
+  operationId: updateStudent
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../components/schemas/student/StudentUpdateRequest.yml"
+  responses:
+    "200":
+      description: Student updated
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/student/StudentResponse.yml"
+    "400":
+      $ref: "../components/responses/ValidationError.yml"
+    "404":
+      $ref: "../components/responses/StudentNotFound.yml"
+    "409":
+      $ref: "../components/responses/DuplicateResource.yml"
+delete:
+  tags: [Students]
+  summary: Delete a student
+  description: |
+    Deleting a student unassigns all their books (book.studentId = null),
+    removes all student_course enrollment records, then deletes the student.
+    Books and courses themselves are not deleted.
+  operationId: deleteStudent
+  responses:
+    "204":
+      description: Student deleted successfully
+    "404":
+      $ref: "../components/responses/StudentNotFound.yml"

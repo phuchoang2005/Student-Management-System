@@ -1,0 +1,8 @@
+name: bookId
+in: path
+required: true
+description: Book identifier
+schema:
+  type: integer
+  format: int64
+  example: 10

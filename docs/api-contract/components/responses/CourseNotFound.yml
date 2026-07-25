@@ -1,0 +1,12 @@
+description: Course not found
+content:
+  application/json:
+    schema:
+      $ref: "../schemas/ErrorResponse.yml"
+    example:
+      timestamp: "2026-07-25T10:15:30Z"
+      status: 404
+      error: Not Found
+      code: COURSE_NOT_FOUND
+      message: Course with id 100 was not found
+      path: /api/v1/courses/100

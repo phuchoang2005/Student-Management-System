@@ -1,0 +1,17 @@
+parameters:
+  - $ref: "../components/parameters/StudentIdParam.yml"
+get:
+  tags: [Student Books]
+  summary: Get all books owned by a student
+  operationId: getStudentBooks
+  responses:
+    "200":
+      description: Books owned by the student (empty array if none)
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "../components/schemas/book/BookResponse.yml"
+    "404":
+      $ref: "../components/responses/StudentNotFound.yml"
