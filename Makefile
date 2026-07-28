@@ -22,11 +22,16 @@ env:
 	@test -f .env || cp .env.example .env
 
 up: env
+	colima start
 	$(DC) up -d
 	@echo "Postgres is starting on port $${POSTGRES_PORT:-5432}..."
 
+down_temp:
+	$(DC) down
+
 down:
 	$(DC) down
+	colima stop
 
 restart: down up
 
