@@ -1,0 +1,54 @@
+%% Sequence: Assign Book to Student
+%% Contract: POST /students/{studentId}/books/{bookId}  (operationId assignBookToStudent)
+%% Success 200 BookResponse | 404 student or book missing | 409 already owned by another
+
+sequenceDiagram
+  autonumber
+  actor Admin as Library Admin
+  participant C as StudentBookController
+  participant S as BookOwnershipApplicationService
+  participant P as OwnershipPolicy
+  participant SR as StudentRepository
+  participant BR as BookRepository
+  participant B as Book «AggregateRoot»
+
+  Admin->>C: POST /students/{studentId}/books/{bookId}
+  C->>S: assignBook(StudentId, BookId)
+
+  activate S
+  Note over S: @Transactional boundary opens here
+
+  S->>SR: existsById(studentId)
+  SR-->>S: false
+  alt student not found
+    S-->>C: throw ResourceNotFoundException
+    C-->>Admin: 404 ErrorResponse (code STUDENT_NOT_FOUND)
+  else student exists
+    S->>BR: findById(bookId)
+    BR-->>S: Optional.empty()
+    alt book not found
+      S-->>C: throw ResourceNotFoundException
+      C-->>Admin: 404 ErrorResponse (code BOOK_NOT_FOUND)
+    else book found
+      S->>P: assertAssignable(book, studentId)
+      P->>B: isOwned()
+      B-->>P: true, ownerId != studentId
+      alt owned by a different student
+        P-->>S: throw InvalidRelationshipException
+        S-->>C: propagate
+        C-->>Admin: 409 ErrorResponse (code BOOK_ALREADY_ASSIGNED)
+      else unowned, or already owned by this same student
+        P-->>S: ok
+        S->>B: assignTo(studentId)
+        B-->>S: ownerId := studentId
+        S->>BR: save(book)
+        BR-->>S: persisted
+        Note over S: @Transactional boundary commits here
+        S-->>C: BookResponse
+        C-->>Admin: 200 BookResponse
+      end
+    end
+  end
+  deactivate S
+
+  Note over P,B: Single-owner invariant. Re-assigning to the SAME owner is<br/>idempotent and returns 200. Re-assigning to a DIFFERENT owner is a<br/>conflict, never a silent overwrite.

@@ -1,0 +1,33 @@
+%% Sequence: Delete Book
+%% Contract: DELETE /books/{bookId}  (operationId deleteBook)
+%% Success 204 | 404 book missing
+%% The owning Student survives. Ownership disappears with the book. (req.md §16)
+
+sequenceDiagram
+  autonumber
+  actor Admin as Library Admin
+  participant C as BookController
+  participant S as BookApplicationService
+  participant BR as BookRepository
+
+  Admin->>C: DELETE /books/{bookId}
+  C->>S: deleteBook(BookId)
+
+  activate S
+  Note over S: @Transactional boundary opens here
+
+  S->>BR: existsById(bookId)
+  BR-->>S: false
+  alt book not found
+    S-->>C: throw ResourceNotFoundException
+    C-->>Admin: 404 ErrorResponse (code BOOK_NOT_FOUND)
+  else book exists
+    S->>BR: deleteById(bookId)
+    BR-->>S: removed
+    Note over S: @Transactional boundary commits here
+    S-->>C: void
+    C-->>Admin: 204 No Content
+  end
+  deactivate S
+
+  Note over S,BR: No ownership cleanup step is needed. ownerId lives ON the Book<br/>aggregate (books.student_id), so deleting the row removes the link<br/>atomically. Contrast delete-student.mmd, where the link lives on the<br/>OTHER side and must be released explicitly.

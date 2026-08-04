@@ -1,0 +1,37 @@
+%% Sequence: Unenroll Student from Course
+%% Contract: DELETE /students/{studentId}/courses/{courseId}  (operationId unenrollStudentFromCourse)
+%% Success 204 | 404 when the enrollment does not exist
+%% Both the Student and the Course survive.
+
+sequenceDiagram
+  autonumber
+  actor Admin as Academic Admin
+  participant C as StudentCourseController
+  participant S as EnrollmentApplicationService
+  participant P as EnrollmentPolicy
+  participant ER as EnrollmentRepository
+
+  Admin->>C: DELETE /students/{studentId}/courses/{courseId}
+  C->>S: unenroll(StudentId, CourseId)
+
+  activate S
+  Note over S: @Transactional boundary opens here
+
+  S->>P: assertEnrolled(studentId, courseId)
+  P->>ER: exists(studentId, courseId)
+  ER-->>P: false
+  alt enrollment not found
+    P-->>S: throw ResourceNotFoundException
+    S-->>C: propagate
+    C-->>Admin: 404 ErrorResponse (code ENROLLMENT_NOT_FOUND)
+  else enrollment exists
+    P-->>S: ok
+    S->>ER: delete(studentId, courseId)
+    ER-->>S: 1 row removed
+    Note over S: @Transactional boundary commits here
+    S-->>C: void
+    C-->>Admin: 204 No Content
+  end
+  deactivate S
+
+  Note over ER: Only the student_courses join row is removed.<br/>Neither the Student aggregate nor the Course aggregate is touched.

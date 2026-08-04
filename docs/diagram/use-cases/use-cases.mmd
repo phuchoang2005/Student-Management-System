@@ -1,0 +1,160 @@
+%% Use Case Diagram — Student Management  (actor-lane / swimlane form)
+%% Covers all 23 operations in docs/api-contract/. See diagram/traceability.md
+%% for the operationId -> use case -> sequence mapping.
+%% ---
+%% HOW TO READ THIS DIAGRAM
+%%   Association is expressed by CONTAINMENT, not by arrows: a use case sits
+%%   inside the lane of the actor who triggers it. Each of the 23 use cases has
+%%   exactly one actor, so the classic "actor --> use case" line carries no
+%%   information a lane cannot carry — and 23 of those lines crossing three
+%%   module boundaries is what made the previous version unreadable.
+%%   Colour carries the second dimension: which module owns the use case.
+%%   blue = module:academic, green = module:library.
+%% ---
+%%   «include» relationships live in their own view: use-cases-includes.mmd.
+%%   Mixing them in here is the other half of what caused the arrow overlap.
+
+%%{init: {"flowchart": {"rankSpacing": 22, "nodeSpacing": 22, "padding": 8}}}%%
+flowchart TB
+
+  %% ===========================================================================
+  %% Lane 1 — Academic Admin  (writes to the academic module)
+  %% ===========================================================================
+  subgraph LaneA["👤 Academic Admin — commands"]
+    direction TB
+
+    subgraph A_student["Student lifecycle"]
+      direction TB
+      UC1([UC1 · Create Student])
+      UC4([UC4 · Update Student])
+      UC5([UC5 · Delete Student])
+    end
+
+    subgraph A_course["Course lifecycle"]
+      direction TB
+      UC6([UC6 · Create Course])
+      UC9([UC9 · Update Course])
+      UC10([UC10 · Delete Course])
+    end
+
+    subgraph A_enrol["Enrollment"]
+      direction TB
+      UC11([UC11 · Enroll Student in Course])
+      UC12([UC12 · Unenroll Student from Course])
+    end
+  end
+
+  %% ===========================================================================
+  %% Lane 2 — Library Admin  (writes to the library module)
+  %% ===========================================================================
+  subgraph LaneL["👤 Library Admin — commands"]
+    direction TB
+
+    subgraph L_book["Book lifecycle"]
+      direction TB
+      UC15([UC15 · Create Book])
+      UC18([UC18 · Update Book])
+      UC19([UC19 · Delete Book])
+    end
+
+    subgraph L_own["Ownership"]
+      direction TB
+      UC20([UC20 · Assign Book to Student])
+      UC21([UC21 · Unassign Book from Student])
+    end
+  end
+
+  %% ===========================================================================
+  %% Lane 3 — API Client  (reads only; spans both modules)
+  %% ===========================================================================
+  subgraph LaneC["🖥️ API Client — queries"]
+    direction TB
+
+    subgraph C_acad["Academic reads"]
+      direction TB
+      UC2([UC2 · Get Student by ID])
+      UC3([UC3 · List Students])
+      UC7([UC7 · Get Course by ID])
+      UC8([UC8 · List Courses])
+      UC13([UC13 · List Courses of a Student])
+      UC14([UC14 · List Students in a Course])
+    end
+
+    subgraph C_lib["Library reads"]
+      direction TB
+      UC16([UC16 · Get Book by ID])
+      UC17([UC17 · List Books])
+      UC22([UC22 · List Books Owned by a Student])
+      UC23([UC23 · Get Owner of a Book])
+    end
+  end
+
+  %% ===========================================================================
+  %% Legend
+  %% ===========================================================================
+  subgraph Legend["Legend"]
+    direction TB
+    LG1([module: academic])
+    LG2([module: library])
+    LG3([lane = the actor who triggers the use case])
+  end
+
+  %% ===========================================================================
+  %% Layout only — invisible links (~~~) carry NO meaning.
+  %% Without them a diagram with no real edges collapses into one flat row:
+  %% every node lands on rank 0. One chain per lane stacks that lane's groups
+  %% top-to-bottom and lets the three lanes sit side by side.
+  %% ===========================================================================
+  UC1 ~~~ UC4 ~~~ UC5 ~~~ UC6 ~~~ UC9 ~~~ UC10 ~~~ UC11 ~~~ UC12
+  UC15 ~~~ UC18 ~~~ UC19 ~~~ UC20 ~~~ UC21
+  UC2 ~~~ UC3 ~~~ UC7 ~~~ UC8 ~~~ UC13 ~~~ UC14 ~~~ UC16 ~~~ UC17 ~~~ UC22 ~~~ UC23
+  LG1 ~~~ LG2 ~~~ LG3
+
+  classDef acad fill:#e8ecff,stroke:#3b4a9c,color:#111;
+  classDef lib fill:#e6f6ea,stroke:#2f7d46,color:#111;
+  classDef note fill:#fff,stroke:#bbb,color:#555,stroke-dasharray:3 3;
+
+  class UC1,UC2,UC3,UC4,UC5,UC6,UC7,UC8,UC9,UC10,UC11,UC12,UC13,UC14,LG1 acad
+  class UC15,UC16,UC17,UC18,UC19,UC20,UC21,UC22,UC23,LG2 lib
+  class LG3 note
+
+  style LaneA fill:#fffdf5,stroke:#c9a227,stroke-width:2px
+  style LaneL fill:#fffdf5,stroke:#c9a227,stroke-width:2px
+  style LaneC fill:#fffdf5,stroke:#c9a227,stroke-width:2px
+  style Legend fill:#fafafa,stroke:#ddd
+
+%% =============================================================================
+%% Actor coverage — 8 + 5 + 10 = 23, a clean partition (no use case has two actors)
+%% =============================================================================
+%% Academic Admin  UC1  UC4  UC5  UC6  UC9  UC10 UC11 UC12
+%% Library Admin   UC15 UC18 UC19 UC20 UC21
+%% API Client      UC2  UC3  UC7  UC8  UC13 UC14 UC16 UC17 UC22 UC23
+%% ---
+%% =============================================================================
+%% Business rules attached to use cases  (see class-diagram.mmd for the owner)
+%% =============================================================================
+%% UC1  Create Student   409 if studentCode or email already exists
+%% UC4  Update Student   409 if the new studentCode/email belongs to another student
+%% UC5  Delete Student   orchestrates: release owned books -> delete enrollments
+%%                       -> delete student. Books and Courses survive.
+%% UC6  Create Course    409 if courseCode already exists; credits must be positive
+%% UC10 Delete Course    removes the course's enrollments. Students survive.
+%% UC11 Enroll           409 if (studentId, courseId) already enrolled
+%% UC15 Create Book      409 if isbn already exists
+%% UC19 Delete Book      ownership disappears with the book. The owner survives.
+%% UC20 Assign Book      409 if the book is already owned by a different student
+%% UC21 Unassign Book    404 if the book is not owned by that student.
+%%                       Clears ownerId only — the book is NOT deleted.
+%% UC23 Get Book Owner   404 if the book exists but has no owner
+%% ---
+%% UC3, UC8, UC17 support page / size / sort / search per
+%% docs/api-contract/components/parameters/.
+%% ---
+%% =============================================================================
+%% Caveat on actors
+%% =============================================================================
+%% The Academic Admin / Library Admin / API Client split is ASPIRATIONAL. The
+%% current OpenAPI contract defines no security scheme and spring-boot-starter-
+%% security is commented out in management/pom.xml, so every operation is in
+%% practice reachable by any caller. The split documents intended authority for
+%% a future authorization story; it is not an implementable requirement today.
