@@ -1,0 +1,41 @@
+parameters:
+  - $ref: "../components/parameters/StudentIdParam.yml"
+  - $ref: "../components/parameters/BookIdParam.yml"
+post:
+  tags: [Student Books]
+  summary: Assign a book to a student
+  description: |
+    A book can have only one student owner. Assigning a book that is
+    already owned by another student returns 409 Conflict.
+  operationId: assignBookToStudent
+  responses:
+    "200":
+      description: Book assigned successfully
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/book/BookResponse.yml"
+    "404":
+      $ref: "../components/responses/ResourceNotFound.yml"
+    "409":
+      description: Book is already assigned to another student
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/ErrorResponse.yml"
+delete:
+  tags: [Student Books]
+  summary: Unassign a book from a student
+  description: |
+    Removes only the ownership relationship (book.studentId = null).
+    The book itself is not deleted.
+  operationId: unassignBookFromStudent
+  responses:
+    "204":
+      description: Book unassigned successfully
+    "404":
+      description: Student-book relationship not found
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/ErrorResponse.yml"

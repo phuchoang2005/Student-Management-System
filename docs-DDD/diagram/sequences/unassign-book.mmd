@@ -1,0 +1,47 @@
+%% Sequence: Unassign Book from Student
+%% Contract: DELETE /students/{studentId}/books/{bookId}  (operationId unassignBookFromStudent)
+%% Success 204 | 404 when the student-book relationship does not exist
+%% The book itself is NEVER deleted.
+
+sequenceDiagram
+  autonumber
+  actor Admin as Library Admin
+  participant C as StudentBookController
+  participant S as BookOwnershipApplicationService
+  participant P as OwnershipPolicy
+  participant BR as BookRepository
+  participant B as Book «AggregateRoot»
+
+  Admin->>C: DELETE /students/{studentId}/books/{bookId}
+  C->>S: unassignBook(StudentId, BookId)
+
+  activate S
+  Note over S: @Transactional boundary opens here
+
+  S->>BR: findById(bookId)
+  BR-->>S: Optional.empty()
+  alt book not found
+    S-->>C: throw ResourceNotFoundException
+    C-->>Admin: 404 ErrorResponse (code BOOK_NOT_FOUND)
+  else book found
+    S->>P: assertOwnedBy(book, studentId)
+    P->>B: isOwned()
+    B-->>P: ownerId
+    alt book unowned, or owned by a different student
+      P-->>S: throw ResourceNotFoundException
+      S-->>C: propagate
+      C-->>Admin: 404 ErrorResponse (code OWNERSHIP_NOT_FOUND)
+    else owned by this student
+      P-->>S: ok
+      S->>B: release()
+      B-->>S: ownerId := null
+      S->>BR: save(book)
+      BR-->>S: persisted
+      Note over S: @Transactional boundary commits here
+      S-->>C: void
+      C-->>Admin: 204 No Content
+    end
+  end
+  deactivate S
+
+  Note over BR,B: Only the ownership link is cleared. The Book row survives with<br/>student_id = NULL and remains listable via GET /books.

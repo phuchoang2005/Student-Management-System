@@ -1,0 +1,63 @@
+%% Sequence: List Students (paged · sorted · searched)
+%% Contract: GET /students  (operationId getStudents)
+%% Success 200 PageStudentResponse | 400 malformed paging parameter
+%% ---
+%% Representative of EVERY paged read in the contract — GET /books (UC17) and
+%% GET /courses (UC8) are the identical shape with their own repository and
+%% Page*Response. Traceability rows 2, 7 and 12 all point here.
+%% ---
+%% This flow has NO domain policy and NO 404: an empty result is 200 with an
+%% empty content array, never "not found". That is the whole reason it deserves
+%% its own diagram instead of being read as a variant of create-student.mmd.
+
+sequenceDiagram
+  autonumber
+  actor Client as API Client
+  participant C as StudentController
+  participant PR as Spring MVC<br/>PageableHandlerMethodArgumentResolver
+  participant S as StudentApplicationService
+  participant SR as StudentRepository
+  participant M as StudentMapper
+
+  Client->>C: GET /students?page=0&size=20&sort=lastName,asc&search=john
+
+  C->>PR: bind page / size / sort
+  Note over PR: page >= 0 (default 0), 1 <= size <= 100 (default 20),<br/>sort is "property,(asc|desc)" — see<br/>api-contract/components/parameters/
+  PR-->>C: Pageable
+
+  alt page/size not an integer, or sort names an unknown property
+    C-->>Client: 400 ValidationErrorResponse
+  else parameters bind
+    C->>S: listStudents(search, Pageable)
+
+    activate S
+    Note over S: @Transactional(readOnly = true) — a read boundary,<br/>not a write one. No policy is consulted: there is no<br/>business rule to enforce on a query.
+
+    S->>SR: search(query, pageable)
+    Note over SR: search == null -> findAll(pageable)<br/>search != null -> case-insensitive LIKE over<br/>firstName, lastName, studentCode, email
+    SR-->>S: Page~Student~ (content + totalElements + totalPages)
+
+    S->>M: toResponse(each Student)
+    M-->>S: List~StudentResponse~
+    Note over S: @Transactional boundary closes here.<br/>Aggregates never leave the service — only DTOs do.
+    S-->>C: PageStudentResponse { content, page: PageMetadata }
+    C-->>Client: 200 PageStudentResponse
+  end
+
+  Note over C,SR: An out-of-range page (page=99 of 3) is NOT an error: it returns<br/>200 with content: [] and empty: true. Same for a search that matches<br/>nothing. 404 belongs to single-resource reads only.
+
+  Note over S,M: The size cap of 100 is a contract term, not a suggestion. Enforce it<br/>on binding (spring.data.web.pageable.max-page-size) so a caller cannot<br/>ask for the whole table in one request.
+
+%% =============================================================================
+%% Applies unchanged to
+%% =============================================================================
+%%   GET /books    UC17  BookApplicationService.listBooks    PageBookResponse
+%%   GET /courses  UC8   CourseApplicationService.listCourses PageCourseResponse
+%% ---
+%% =============================================================================
+%% Does NOT apply to the relationship reads
+%% =============================================================================
+%% GET /students/{id}/books, GET /students/{id}/courses and
+%% GET /courses/{id}/students return PLAIN ARRAYS, not pages, and they DO 404
+%% when the parent id is unknown — that existence check is the «include» in
+%% use-cases/use-cases-includes.mmd. Do not copy this diagram onto them.

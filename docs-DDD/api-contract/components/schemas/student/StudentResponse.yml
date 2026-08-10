@@ -1,0 +1,33 @@
+type: object
+required: [id, studentCode, firstName, lastName, email, dateOfBirth]
+properties:
+  id:
+    type: integer
+    format: int64
+    readOnly: true
+    example: 1
+  studentCode:
+    type: string
+    example: STU001
+  firstName:
+    type: string
+    example: John
+  lastName:
+    type: string
+    example: Smith
+  email:
+    type: string
+    format: email
+    example: john.smith@example.com
+  dateOfBirth:
+    type: string
+    format: date
+    example: 2002-05-10
+  createdAt:
+    type: string
+    format: date-time
+    readOnly: true
+  updatedAt:
+    type: string
+    format: date-time
+    readOnly: true

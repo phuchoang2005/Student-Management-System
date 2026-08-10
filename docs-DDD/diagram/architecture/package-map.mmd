@@ -1,0 +1,219 @@
+%% Package Map — org.phuchoang2005.management
+%% Maps the domain model in classes/class-diagram.mmd onto Spring Boot layers.
+%% ---
+%% Dependency rule: arrows point INWARD only.
+%%   api -> application -> domain
+%%   infrastructure -> domain   (implements domain repository interfaces)
+%% The domain package never imports api, application, or infrastructure.
+%% ---
+%% HOW TO READ THIS DIAGRAM
+%%   LEFT TO RIGHT = DEPTH. One column per layer: api -> application -> domain,
+%%   with infrastructure sitting beside application because the two are peers
+%%   (both depend on domain, neither depends on the other) and the database on
+%%   the far side. Every arrow therefore points RIGHTWARD, i.e. inward. An arrow
+%%   pointing back to the left would be an architecture violation, and would be
+%%   visible as such at a glance.
+%% ---
+%%   TOP TO BOTTOM = MODULE. Inside every layer the academic row sits above the
+%%   library row, in that order, so each module is one straight horizontal track:
+%%   follow a row across the page and you have read one module end to end.
+%% ---
+%%   Only TWO arrows leave their row, and they are dotted: they are the only
+%%   cross-module dependencies in the system, and both are owned by the
+%%   application layer (see context-map.mmd R2 and R4). They are the point of
+%%   the diagram, not noise.
+%% ---
+%%   NOTHING IS DRAWN INSIDE A LAYER. dto, mapper, error and config are listed
+%%   as contents of their layer, without arrows. Intra-layer wiring is obvious
+%%   (a controller uses its DTOs and its mapper) and drawing it was what made
+%%   the earlier version unreadable — 8 edges converged on the two domain boxes
+%%   and no line could be traced to its end. The two intra-layer relationships
+%%   that are NOT obvious get their own views instead:
+%%     - mapper <-> domain aggregate        -> classes/class-diagram.mmd
+%%     - error handler <-> domain exception -> architecture/error-mapping.mmd
+
+%%{init: {"flowchart": {"rankSpacing": 90, "nodeSpacing": 26, "curve": "linear"}}}%%
+flowchart LR
+
+  %% ===========================================================================
+  %% Column 0 — api : the HTTP boundary
+  %% ===========================================================================
+  subgraph API["api  —  HTTP boundary"]
+    direction TB
+
+    subgraph API_C["controller  (the only nodes with arrows)"]
+      direction TB
+      CtrlAcad["StudentController<br/>CourseController<br/>StudentCourseController"]
+      CtrlLib["BookController<br/>StudentBookController"]
+    end
+
+    subgraph API_SUP["dto · mapper · error  (no arrows — supporting cast)"]
+      direction TB
+      SUP["<b>dto/</b> requests: Student·Book·Course CreateRequest / UpdateRequest<br/><b>dto/</b> responses: StudentResponse, StudentSummaryResponse, BookResponse,<br/>CourseResponse, EnrollmentResponse, PageMetadata<br/>—<br/><b>mapper/</b> StudentMapper, BookMapper, CourseMapper — aggregate &lt;-&gt; DTO<br/>—<br/><b>error/</b> GlobalExceptionHandler @RestControllerAdvice,<br/>ErrorResponse, ValidationErrorResponse"]
+    end
+  end
+
+  %% ===========================================================================
+  %% Column 1 — application and infrastructure : peers, both point at domain
+  %% ===========================================================================
+  subgraph APP["application  —  use cases, @Transactional"]
+    direction TB
+    AppAcad["StudentApplicationService<br/>CourseApplicationService<br/>EnrollmentApplicationService"]
+    AppLib["BookApplicationService<br/>BookOwnershipApplicationService"]
+  end
+
+  subgraph INF["infrastructure  —  adapters"]
+    direction TB
+    JpaAcad["persistence/<br/>StudentJpaRepository<br/>CourseJpaRepository<br/>EnrollmentJpaRepository"]
+    JpaLib["persistence/<br/>BookJpaRepository"]
+    Cfg["config/  (no arrows)<br/>JpaAuditingConfig<br/>OpenApiConfig, WebMvcConfig"]
+  end
+
+  %% ===========================================================================
+  %% Column 2 — domain : the target of every arrow, depends on nothing
+  %% ===========================================================================
+  subgraph DOM["domain  —  no Spring stereotypes, no @Transactional"]
+    direction TB
+    DomA["academic/<br/>Student · Course · Enrollment «AggregateRoot»<br/>StudentId · CourseId · StudentCode · CourseCode · Email «VO»<br/>EnrollmentPolicy «DomainService»<br/>Student/Course/EnrollmentRepository (interfaces)"]
+    DomL["library/<br/>Book «AggregateRoot»<br/>BookId · ISBN «VO»<br/>OwnershipPolicy «DomainService»<br/>BookRepository (interface)"]
+    DomE["exception/  (no arrows — see error-mapping.mmd)<br/>DomainException · ResourceNotFoundException<br/>DuplicateResourceException · InvalidRelationshipException"]
+  end
+
+  %% ===========================================================================
+  %% Column 3 — the database
+  %% ===========================================================================
+  DB[("PostgreSQL 16<br/>students · books<br/>courses · student_courses")]
+
+  %% ===========================================================================
+  %% Row ACADEMIC — one straight track across the page
+  %% ===========================================================================
+  CtrlAcad ==>|"one call per operation"| AppAcad
+  AppAcad ==>|"load · invoke EnrollmentPolicy · save"| DomA
+  JpaAcad -.->|"implements"| DomA
+  JpaAcad --> DB
+
+  %% ===========================================================================
+  %% Row LIBRARY — one straight track across the page
+  %% ===========================================================================
+  CtrlLib ==>|"one call per operation"| AppLib
+  AppLib ==>|"load · invoke OwnershipPolicy · save"| DomL
+  JpaLib -.->|"implements"| DomL
+  JpaLib --> DB
+
+  %% ===========================================================================
+  %% The ONLY two cross-module dependencies in the system (the two dotted crossings)
+  %% ===========================================================================
+  AppAcad -.->|"delete student:<br/>release owned books"| DomL
+  AppLib -.->|"assign book:<br/>verify student exists"| DomA
+
+  classDef api fill:#fde,stroke:#333;
+  classDef app fill:#ffe,stroke:#333;
+  classDef dom fill:#eef,stroke:#333,stroke-width:2px;
+  classDef inf fill:#efe,stroke:#333;
+  classDef db fill:#ddd,stroke:#333;
+  classDef quiet fill:#fafafa,stroke:#bbb,color:#555,stroke-dasharray:3 3;
+
+  class CtrlAcad,CtrlLib api
+  class AppAcad,AppLib app
+  class DomA,DomL dom
+  class JpaAcad,JpaLib inf
+  class DB db
+  class SUP,Cfg,DomE quiet
+
+%% =============================================================================
+%% Edge inventory — 10 edges, and why each one exists
+%% =============================================================================
+%%   solid ==>   a compile-time dependency on the layer below, inside one module
+%%   dotted -.-> either "implements an interface owned by domain" or one of the
+%%               two sanctioned cross-module calls
+%% ---
+%%   CtrlAcad ==> AppAcad     controllers hold no rules; they delegate
+%%   CtrlLib  ==> AppLib
+%%   AppAcad  ==> DomA        the @Transactional method drives the aggregate
+%%   AppLib   ==> DomL
+%%   JpaAcad -.-> DomA        Spring Data implements the domain interfaces
+%%   JpaLib  -.-> DomL
+%%   JpaAcad  --> DB          SQL
+%%   JpaLib   --> DB
+%%   AppAcad -.-> DomL        DELETE /students releases the student's books
+%%                            BEFORE deleting the row — sequences/delete-student.mmd
+%%   AppLib  -.-> DomA        POST /students/{id}/books/{id} must 404 on an
+%%                            unknown student — sequences/assign-book.mmd
+%% ---
+%% Arrows that a reader may EXPECT and will not find, with where they went:
+%%   controller -> dto/mapper      obvious; omitted to keep the map legible
+%%   mapper -> aggregate           classes/class-diagram.mmd
+%%   handler -> domain exception   architecture/error-mapping.mmd
+%%   application -> repository     the repository INTERFACE is part of domain,
+%%                                 so this is already the app ==> domain arrow
+%% ---
+%% =============================================================================
+%% Layer responsibilities
+%% =============================================================================
+%% api
+%%   Binds HTTP to use cases. Owns DTOs, @Valid bean validation, pagination
+%%   parameter binding (page/size/sort/search), Location headers, and the
+%%   exception-to-status mapping. Contains NO business rule.
+%% ---
+%% application
+%%   One method per use case. OWNS THE @Transactional BOUNDARY. Loads
+%%   aggregates, invokes policies, calls aggregate behaviour, saves. This is
+%%   the only layer allowed to touch more than one aggregate in one call — see
+%%   sequences/delete-student.mmd.
+%% ---
+%% domain
+%%   Aggregates, value objects, policies, repository INTERFACES, domain
+%%   exceptions. Plain Java. No @Service, no @Transactional.
+%% ---
+%% infrastructure
+%%   Spring Data JPA implementations of the domain repository interfaces,
+%%   @Entity mappings, auditing, OpenAPI and MVC configuration.
+%% ---
+%% =============================================================================
+%% Reconciling this with req.md §1
+%% =============================================================================
+%% req.md sketches a flat structure: config / controller / dto / entity /
+%% repository / service / exception. That is the same set of concerns, just
+%% grouped by TECHNICAL TYPE rather than by LAYER. The mapping is:
+%% ---
+%%   req.md            ->  here
+%%   controller        ->  api.controller
+%%   dto               ->  api.dto
+%%   exception         ->  api.error (handler + envelopes)
+%%                         + domain.exception (the thrown types)
+%%   service           ->  application (orchestration)
+%%                         + domain (policies — the rules themselves)
+%%   entity            ->  domain (aggregates)
+%%                         + infrastructure.persistence (@Entity mappings)
+%%   repository        ->  domain (interfaces)
+%%                         + infrastructure.persistence (Spring Data impls)
+%%   config            ->  infrastructure.config
+%% ---
+%% Two deliberate departures from req.md:
+%%   1. Business rules live in domain policies and aggregate methods, not in
+%%      @Service classes. @Service only orchestrates.
+%%   2. "entity" is split. The domain aggregate and the JPA @Entity are the
+%%      same class ONLY IF the pragmatic option is taken (see below).
+%% ---
+%% =============================================================================
+%% Pragmatic simplification actually chosen
+%% =============================================================================
+%% Strict hexagonal would keep domain aggregates and JPA entities as separate
+%% classes with a mapper between them. For a system this size that doubles the
+%% class count for no benefit, so:
+%% ---
+%%   The domain aggregate IS the JPA entity — annotated with @Entity and
+%%   @Embeddable value objects — and lives in domain.*.
+%% ---
+%% The cost: domain depends on jakarta.persistence. That is an accepted,
+%% documented trade-off, not an oversight. The rules that still hold and that
+%% reviewers should enforce:
+%%   - No Spring stereotype (@Service, @Component) in domain.
+%%   - No @Transactional in domain.
+%%   - No DTO import in domain.
+%%   - Aggregates reference each other by identity (StudentId), never by
+%%     @ManyToOne to another aggregate root.
+%% ---
+%% If the project later needs true persistence-ignorance, introduce
+%% infrastructure.persistence.*Entity classes plus mappers. Nothing above the
+%% domain layer changes when that happens.

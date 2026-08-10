@@ -1,0 +1,75 @@
+%% ER Diagram — PostgreSQL 16 schema
+%% The physical form of diagram/classes/class-diagram.mmd. One table per
+%% aggregate root, plus student_courses for the Enrollment aggregate.
+%% ---
+%% CONSTRAINTS THE DIAGRAM CANNOT DRAW — every one of them is load-bearing,
+%% because each is the second line of defence behind an in-service check
+%% (see diagram/traceability.md, "Error mapping"):
+%%   UNIQUE  students(student_code)          -> 409 STUDENT_CODE_EXISTS
+%%   UNIQUE  students(email)                 -> 409 EMAIL_EXISTS
+%%   UNIQUE  books(isbn)                     -> 409 ISBN_EXISTS
+%%   UNIQUE  courses(course_code)            -> 409 COURSE_CODE_EXISTS
+%%   PRIMARY KEY student_courses(student_id, course_id)
+%%                                           -> 409 ALREADY_ENROLLED
+%%   CHECK   courses(credits > 0)            -> 400 (also @Positive)
+%% ---
+%% NULLABILITY AND DELETE BEHAVIOUR
+%%   books.student_id is NULLABLE — NULL means "unowned", a normal state, not a
+%%   missing value. It is the ONLY nullable foreign key here.
+%%   No ON DELETE CASCADE anywhere. Cleanup order is owned by the application
+%%   layer inside one transaction, so that the ordering is explicit and
+%%   testable: see sequences/delete-student.mmd and sequences/delete-course.mmd.
+%%   Deleting a student releases their books (student_id := NULL) and deletes
+%%   their student_courses rows. Deleting a course deletes its student_courses
+%%   rows. Deleting a book touches nothing else.
+%% ---
+%% created_at / updated_at are written by JPA auditing, never by the API.
+%% student_courses.enrolled_at is written by Enrollment.open().
+%% ---
+%% NOT YET EXECUTABLE. There is no migration that creates any of this: no
+%% Flyway dependency and no spring.jpa.hibernate.ddl-auto setting. Until a
+%% V1__init.sql exists, none of the constraints above are actually enforced —
+%% traceability.md, "Implementation gaps", item 2.
+
+erDiagram
+    STUDENTS {
+        BIGINT id PK
+        VARCHAR student_code UK
+        VARCHAR first_name
+        VARCHAR last_name
+        VARCHAR email UK
+        DATE date_of_birth
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    BOOKS {
+        BIGINT id PK
+        VARCHAR isbn UK
+        VARCHAR title
+        VARCHAR author
+        DATE published_date
+        BIGINT student_id FK
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    COURSES {
+        BIGINT id PK
+        VARCHAR course_code UK
+        VARCHAR name
+        TEXT description
+        INTEGER credits
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    STUDENT_COURSES {
+        BIGINT student_id PK, FK
+        BIGINT course_id PK, FK
+        TIMESTAMP enrolled_at
+    }
+
+    STUDENTS ||--o{ BOOKS : owns
+    STUDENTS ||--o{ STUDENT_COURSES : enrolls
+    COURSES ||--o{ STUDENT_COURSES : contains

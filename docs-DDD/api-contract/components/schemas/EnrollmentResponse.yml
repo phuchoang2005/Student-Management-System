@@ -1,0 +1,10 @@
+type: object
+properties:
+  studentId:
+    type: integer
+    format: int64
+    example: 1
+  courseId:
+    type: integer
+    format: int64
+    example: 101

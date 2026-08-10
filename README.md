@@ -2,6 +2,7 @@
 
 A production-oriented **Student Management System** backend, built as a portfolio-grade Spring Boot REST API. It manages students, books, and courses with proper layered architecture, validation, exception handling, and relational data integrity.
 
+> **New here? Read the docs in order:** [docs/READING-ORDER.md](./docs/READING-ORDER.md)
 > Full requirements: [req.md](./req.md)
 > API contract: [api-contract/openapi.yml](./api-contract/openapi.yml)
 > Database schema: [database/schema.mermaid](./database/schema.mermaid)

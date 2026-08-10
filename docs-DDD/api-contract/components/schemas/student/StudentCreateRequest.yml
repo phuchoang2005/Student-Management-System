@@ -1,0 +1,23 @@
+type: object
+required: [studentCode, firstName, lastName, email, dateOfBirth]
+properties:
+  studentCode:
+    type: string
+    minLength: 1
+    example: STU001
+  firstName:
+    type: string
+    minLength: 1
+    example: John
+  lastName:
+    type: string
+    minLength: 1
+    example: Smith
+  email:
+    type: string
+    format: email
+    example: john.smith@example.com
+  dateOfBirth:
+    type: string
+    format: date
+    example: 2002-05-10
