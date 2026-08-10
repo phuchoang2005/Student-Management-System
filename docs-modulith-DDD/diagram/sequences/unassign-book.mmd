@@ -1,0 +1,89 @@
+%% Sequence: Unassign Book from Student
+%% Contract: DELETE /students/{studentId}/books/{bookId}  (operationId unassignBookFromStudent)
+%% Success 204 | 404 when the student-book relationship does not exist
+%% The book itself is NEVER deleted.
+
+sequenceDiagram
+  autonumber
+  actor Admin as Library Admin
+
+  box rgb(238, 255, 238) module: book
+    participant C as StudentBookController
+    participant S as BookOwnershipService
+    participant BR as BookRepository
+    participant B as Book «Aggregate»
+  end
+
+  Admin->>C: DELETE /students/{studentId}/books/{bookId}
+  C->>S: unassignBook(StudentId, BookId)
+
+  activate S
+  Note over S: @Transactional boundary opens here
+
+  S->>BR: findById(bookId.value())
+  BR-->>S: Optional.empty()
+  alt book not found
+    S-->>C: throw ResourceNotFoundException
+    C-->>Admin: 404 ErrorResponse (code BOOK_NOT_FOUND)
+  else book found
+    S->>B: isOwnedBy(studentId)
+    B-->>S: false
+    alt book unowned, or owned by a different student
+      S-->>C: throw ResourceNotFoundException
+      C-->>Admin: 404 ErrorResponse (code OWNERSHIP_NOT_FOUND)
+    else owned by this student
+      B-->>S: true
+      S->>B: release()
+      B-->>S: ownerId := null
+      S->>BR: save(book)
+      BR-->>S: persisted (books.student_id = NULL)
+      Note over S: @Transactional boundary commits here
+      S-->>C: void
+      C-->>Admin: 204 No Content
+    end
+  end
+  deactivate S
+
+  Note over BR,B: Only the ownership link is cleared. The Book row survives with<br/>student_id = NULL and remains listable via GET /books.
+
+%% =============================================================================
+%% Why the guard is a service `if` and not an aggregate throw
+%% =============================================================================
+%% assign-book.mmd pushed its rule INTO Book.assignTo(), because refusing a bad
+%% assignment protects the book's own invariant. This one is different:
+%% release() has no invariant to protect — clearing an already-null owner is
+%% harmless, and Book.release() is idempotent by design.
+%% ---
+%% What is being enforced here is an API contract, not a domain invariant: the
+%% caller named a specific student, and if that student is not the owner then
+%% the relationship they asked to remove does not exist, so the answer is 404.
+%% That is an HTTP-shaped decision, so it belongs in the service beside the
+%% other 404s, not inside the aggregate.
+%% ---
+%% The pure-DDD version routed it through OwnershipPolicy.assertOwnedBy(). The
+%% policy read only book.ownerId, so Book.isOwnedBy(StudentId) replaces it — a
+%% query method on the aggregate, with the throw left in the service where the
+%% status code is decided.
+%% ---
+%% =============================================================================
+%% Two 404s, one code — and why that differs from get-book-owner.mmd
+%% =============================================================================
+%%   book does not exist                      -> BOOK_NOT_FOUND
+%%   book exists but is unowned               -> OWNERSHIP_NOT_FOUND
+%%   book exists but is owned by someone else -> OWNERSHIP_NOT_FOUND
+%% ---
+%% The last two share a code deliberately: from the caller's point of view "this
+%% student does not own this book" is one fact, and telling them WHO does own it
+%% would leak another student's relationship. get-book-owner.mmd splits its two
+%% causes precisely because there the owner is what was asked for.
+%% ---
+%% =============================================================================
+%% No cross-module call
+%% =============================================================================
+%% Note what is absent: there is no StudentService.exists() here. Ownership is a
+%% column on the book, so the book module can answer the whole question alone.
+%% If the student id names nobody, no book is owned by it, and the operation
+%% 404s with OWNERSHIP_NOT_FOUND without ever consulting the student module.
+%% ---
+%% See ../states/book-ownership.mmd — this is one of the four transitions that
+%% end an ownership.

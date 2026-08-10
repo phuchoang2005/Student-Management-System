@@ -1,0 +1,113 @@
+%% Sequence: Update Student
+%% Contract: PUT /students/{studentId}  (operationId updateStudent)
+%% Success 200 StudentResponse
+%% 400 bean-validation failure | 404 student missing | 409 code/email taken by ANOTHER student
+%% ---
+%% Representative of the update flow for all three aggregates — Update Course
+%% (courseCode, credits > 0) and Update Book (isbn) follow the identical shape
+%% in their own modules. Traceability rows 4, 9 and 14 all point here.
+%% ---
+%% WHY THIS IS NOT "create-student.mmd with a different verb"
+%%   Create asks "does this value exist anywhere?". Update must ask "does this
+%%   value exist on a DIFFERENT row?" — a student keeping their own studentCode
+%%   must not 409 against themselves. That single word (EXCLUDING SELF) is the
+%%   most commonly implemented-wrong rule in this contract, so it gets a view.
+
+sequenceDiagram
+  autonumber
+  actor Admin as Academic Admin
+
+  box rgb(238, 238, 255) module: student
+    participant C as StudentController
+    participant V as Bean Validation
+    participant S as StudentService
+    participant SR as StudentRepository
+    participant St as Student «Aggregate»
+  end
+
+  Admin->>C: PUT /students/{studentId} { studentCode, firstName, lastName, email, dateOfBirth }
+
+  C->>V: @Valid StudentUpdateRequest
+  V-->>C: field violations
+  alt payload invalid
+    C-->>Admin: 400 ValidationErrorResponse { fieldErrors }
+  else payload valid
+    C->>S: updateStudent(StudentId, StudentUpdateRequest)
+
+    activate S
+    Note over S: @Transactional boundary opens here
+
+    S->>SR: findById(studentId.value())
+    SR-->>S: Optional.empty()
+    alt student not found
+      S-->>C: throw ResourceNotFoundException
+      C-->>Admin: 404 ErrorResponse (code STUDENT_NOT_FOUND)
+    else student exists
+
+      rect rgb(255, 245, 235)
+        Note over S,SR: Uniqueness EXCLUDING SELF — the whole point of this diagram
+        S->>SR: existsByStudentCodeAndIdNot(newCode, studentId.value())
+        SR-->>S: true
+        alt code belongs to another student
+          S-->>C: throw DuplicateResourceException
+          C-->>Admin: 409 ErrorResponse (code STUDENT_CODE_EXISTS)
+        else code free, or unchanged and still this student's own
+          S->>SR: existsByEmailAndIdNot(newEmail, studentId.value())
+          SR-->>S: true
+          alt email belongs to another student
+            S-->>C: throw DuplicateResourceException
+            C-->>Admin: 409 ErrorResponse (code EMAIL_EXISTS)
+          else email free, or unchanged
+            S->>St: rename(firstName, lastName)
+            S->>St: changeEmail(Email.of(newEmail))
+            Note over St: The aggregate mutates ITSELF through behaviour methods.<br/>No setter is called from the service. Value-object<br/>factories re-check format. updatedAt is set by JPA auditing.
+            St-->>S: mutated aggregate (still managed by the persistence context)
+            S->>SR: save(student)
+            SR-->>S: persisted
+            Note over S: @Transactional boundary commits here
+            S-->>C: StudentResponse
+            C-->>Admin: 200 StudentResponse (no Location header — the resource already existed)
+          end
+        end
+      end
+    end
+    deactivate S
+  end
+
+  Note over SR: existsBy*AndIdNot is the exclude-self form of the create-time check.<br/>Written as existsByStudentCode(code) it produces the classic bug:<br/>PUT with an unchanged studentCode 409s against the student's own row.
+
+  Note over S,St: Fields the request must NOT be able to change: id, createdAt,<br/>and — on Book — ownerId. Ownership moves only through UC20/UC21<br/>(assign-book.mmd / unassign-book.mmd), never through an update body.
+
+%% =============================================================================
+%% Applies unchanged to
+%% =============================================================================
+%%   PUT /courses/{id}  UC9   course module  existsByCourseCodeAndIdNot
+%%                            -> 409 COURSE_CODE_EXISTS
+%%                            plus credits > 0, enforced by @Positive (400)
+%%   PUT /books/{id}    UC18  book module    existsByIsbnAndIdNot
+%%                            -> 409 ISBN_EXISTS
+%%                            ownerId is absent from BookUpdateRequest by design
+%% ---
+%% =============================================================================
+%% No event, no cross-module call
+%% =============================================================================
+%% An update is entirely local to its module. Nothing outside student cares that
+%% a name or an email changed — book stores only a StudentId, and enrollment
+%% stores only a StudentId and a CourseId, so no other module holds a copy of
+%% anything this operation can modify.
+%% ---
+%% That is a direct consequence of rule M1 in ../modules/module-map.mmd
+%% (identity-only references). Had another module cached the student's name, an
+%% update would need a StudentRenamed event and the whole eventual-consistency
+%% apparatus that goes with it.
+%% ---
+%% =============================================================================
+%% PUT semantics chosen
+%% =============================================================================
+%% PUT here is a FULL replace of the mutable fields: every field in
+%% StudentUpdateRequest is required, and the whole aggregate state is set from
+%% it. There is no PATCH in this contract, so a caller cannot send a partial
+%% body — omitting a field is a 400, not "leave it alone".
+%% ---
+%% Updating with a body identical to the current state is a valid 200, not a
+%% 409 and not a 304. It re-saves the row and bumps updatedAt.

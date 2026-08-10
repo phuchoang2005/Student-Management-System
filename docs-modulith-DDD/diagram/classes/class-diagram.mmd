@@ -1,0 +1,379 @@
+%% Class Diagram — Domain Model
+%% org.phuchoang2005.management — four aggregates, one per application module.
+%% ---
+%% Reading rules:
+%%   solid *--   composition INSIDE one aggregate: a value object owned by the
+%%               entity that holds it. Never crosses a module boundary.
+%%   dashed ..>  reference to ANOTHER aggregate, BY IDENTITY ONLY, and therefore
+%%               also a cross-module dependency. Every dashed arrow here is one
+%%               of the three solid edges in ../modules/module-map.mmd.
+%% No aggregation and no composition crosses an aggregate boundary. There is no
+%% @ManyToOne and no @ManyToMany in this system.
+%% ---
+%% WHAT IS NOT HERE, AND WHERE IT WENT
+%%   - controllers, DTOs, error envelopes      -> ../modules/module-structure.mmd
+%%   - which module may import which           -> ../modules/module-map.mmd
+%%   - exception -> HTTP status                -> ../architecture/error-mapping.mmd
+%%   - OwnershipPolicy / EnrollmentPolicy      -> deleted; see the footer
+
+classDiagram
+  direction LR
+
+  %% ===========================================================================
+  %% Module: student
+  %% ===========================================================================
+
+  class Student {
+    <<Aggregate>>
+    -Long id
+    -StudentCode studentCode
+    -String firstName
+    -String lastName
+    -Email email
+    -LocalDate dateOfBirth
+    -Instant createdAt
+    -Instant updatedAt
+    +StudentId id()
+    +rename(String first, String last)
+    +changeEmail(Email email)
+  }
+
+  class StudentRepository {
+    <<JpaRepository~Student, Long~>>
+    +Optional~Student~ findById(Long)
+    +boolean existsById(Long)
+    +boolean existsByStudentCode(StudentCode)
+    +boolean existsByEmail(Email)
+    +boolean existsByStudentCodeAndIdNot(StudentCode, Long)
+    +boolean existsByEmailAndIdNot(Email, Long)
+    +Page~Student~ search(String query, Pageable)
+    +List~Student~ findAllByIdIn(List~Long~)
+    +Student save(Student)
+    +void deleteById(Long)
+  }
+
+  class StudentService {
+    <<Service>>
+    +StudentResponse createStudent(StudentCreateRequest)
+    +StudentResponse getStudent(StudentId)
+    +Page~StudentResponse~ listStudents(String, Pageable)
+    +StudentResponse updateStudent(StudentId, StudentUpdateRequest)
+    +void deleteStudent(StudentId)
+    +boolean exists(StudentId)
+    +Optional~StudentSummaryResponse~ summaryOf(StudentId)
+    +List~StudentSummaryResponse~ summariesOf(List~StudentId~)
+  }
+
+  class StudentDeleted {
+    <<DomainEvent>>
+    +StudentId studentId
+  }
+
+  %% ===========================================================================
+  %% Module: course
+  %% ===========================================================================
+
+  class Course {
+    <<Aggregate>>
+    -Long id
+    -CourseCode courseCode
+    -String name
+    -String description
+    -Integer credits
+    -Instant createdAt
+    -Instant updatedAt
+    +CourseId id()
+    +changeCredits(Integer credits)
+  }
+
+  class CourseRepository {
+    <<JpaRepository~Course, Long~>>
+    +Optional~Course~ findById(Long)
+    +boolean existsById(Long)
+    +boolean existsByCourseCode(CourseCode)
+    +boolean existsByCourseCodeAndIdNot(CourseCode, Long)
+    +Page~Course~ search(String query, Pageable)
+    +List~Course~ findAllByIdIn(List~Long~)
+    +Course save(Course)
+    +void deleteById(Long)
+  }
+
+  class CourseService {
+    <<Service>>
+    +CourseResponse createCourse(CourseCreateRequest)
+    +CourseResponse getCourse(CourseId)
+    +Page~CourseResponse~ listCourses(String, Pageable)
+    +CourseResponse updateCourse(CourseId, CourseUpdateRequest)
+    +void deleteCourse(CourseId)
+    +boolean exists(CourseId)
+    +List~CourseResponse~ responsesOf(List~CourseId~)
+  }
+
+  class CourseDeleted {
+    <<DomainEvent>>
+    +CourseId courseId
+  }
+
+  %% ===========================================================================
+  %% Module: book
+  %% ===========================================================================
+
+  class Book {
+    <<Aggregate>>
+    -Long id
+    -ISBN isbn
+    -String title
+    -String author
+    -LocalDate publishedDate
+    -StudentId ownerId
+    -Instant createdAt
+    -Instant updatedAt
+    +BookId id()
+    +boolean isOwned()
+    +boolean isOwnedBy(StudentId)
+    +assignTo(StudentId newOwner)
+    +release()
+  }
+
+  class BookRepository {
+    <<JpaRepository~Book, Long~>>
+    +Optional~Book~ findById(Long)
+    +boolean existsByIsbn(ISBN)
+    +boolean existsByIsbnAndIdNot(ISBN, Long)
+    +List~Book~ findByOwnerId(StudentId)
+    +Page~Book~ search(String query, Pageable)
+    +Book save(Book)
+    +void deleteById(Long)
+  }
+
+  class BookService {
+    <<Service>>
+    +BookResponse createBook(BookCreateRequest)
+    +BookResponse getBook(BookId)
+    +Page~BookResponse~ listBooks(String, Pageable)
+    +BookResponse updateBook(BookId, BookUpdateRequest)
+    +void deleteBook(BookId)
+  }
+
+  class BookOwnershipService {
+    <<Service>>
+    +BookResponse assignBook(StudentId, BookId)
+    +void unassignBook(StudentId, BookId)
+    +List~BookResponse~ listBooksOf(StudentId)
+    +StudentSummaryResponse findOwner(BookId)
+  }
+
+  class BookStudentDeletedListener {
+    <<EventListener>>
+    +void on(StudentDeleted event)
+  }
+
+  %% ===========================================================================
+  %% Module: enrollment
+  %% ===========================================================================
+
+  class Enrollment {
+    <<Aggregate>>
+    -EnrollmentId id
+    -Instant enrolledAt
+    +StudentId studentId()
+    +CourseId courseId()
+    +static Enrollment open(StudentId, CourseId)
+  }
+
+  class EnrollmentId {
+    <<Embeddable>>
+    +Long studentId
+    +Long courseId
+  }
+
+  class EnrollmentRepository {
+    <<JpaRepository~Enrollment, EnrollmentId~>>
+    +boolean existsById(EnrollmentId)
+    +Optional~Enrollment~ findById(EnrollmentId)
+    +List~Enrollment~ findByIdStudentId(Long)
+    +List~Enrollment~ findByIdCourseId(Long)
+    +Enrollment save(Enrollment)
+    +void deleteById(EnrollmentId)
+    +void deleteByIdStudentId(Long)
+    +void deleteByIdCourseId(Long)
+  }
+
+  class EnrollmentService {
+    <<Service>>
+    +EnrollmentResponse enroll(StudentId, CourseId)
+    +void unenroll(StudentId, CourseId)
+    +List~CourseResponse~ coursesOf(StudentId)
+    +List~StudentSummaryResponse~ studentsIn(CourseId)
+  }
+
+  class EnrollmentCleanupListener {
+    <<EventListener>>
+    +void on(StudentDeleted event)
+    +void on(CourseDeleted event)
+  }
+
+  %% ===========================================================================
+  %% Value objects — identity
+  %% ===========================================================================
+
+  class StudentId {
+    <<ValueObject>>
+    +Long value
+  }
+  class CourseId {
+    <<ValueObject>>
+    +Long value
+  }
+  class BookId {
+    <<ValueObject>>
+    +Long value
+  }
+
+  %% ===========================================================================
+  %% Value objects — business
+  %% ===========================================================================
+
+  class StudentCode {
+    <<ValueObject>>
+    +String value
+    +static StudentCode of(String raw)
+  }
+  class CourseCode {
+    <<ValueObject>>
+    +String value
+    +static CourseCode of(String raw)
+  }
+  class ISBN {
+    <<ValueObject>>
+    +String value
+    +static ISBN of(String raw)
+  }
+  class Email {
+    <<ValueObject>>
+    +String value
+    +static Email of(String raw)
+  }
+
+  %% ===========================================================================
+  %% Module: shared — the exception hierarchy
+  %% ===========================================================================
+
+  class DomainException {
+    <<abstract>>
+    +String code
+    +String message
+  }
+  class ResourceNotFoundException {
+    <<DomainException>>
+  }
+  class DuplicateResourceException {
+    <<DomainException>>
+  }
+  class InvalidRelationshipException {
+    <<DomainException>>
+  }
+
+  DomainException <|-- ResourceNotFoundException
+  DomainException <|-- DuplicateResourceException
+  DomainException <|-- InvalidRelationshipException
+
+  %% ===========================================================================
+  %% Aggregate -> value object composition (INSIDE the aggregate — allowed)
+  %% ===========================================================================
+
+  Student *-- StudentCode
+  Student *-- Email
+  Course *-- CourseCode
+  Book *-- ISBN
+  Enrollment *-- EnrollmentId
+
+  %% ===========================================================================
+  %% Cross-aggregate references — IDENTITY ONLY, and therefore cross-module
+  %% ===========================================================================
+
+  Book ..> StudentId : ownerId (nullable)
+  Enrollment ..> StudentId : studentId()
+  Enrollment ..> CourseId : courseId()
+
+  %% ===========================================================================
+  %% Wiring inside a module
+  %% ===========================================================================
+
+  StudentService ..> StudentRepository
+  StudentService ..> Student
+  StudentService ..> StudentDeleted : publishes
+  CourseService ..> CourseRepository
+  CourseService ..> Course
+  CourseService ..> CourseDeleted : publishes
+  BookService ..> BookRepository
+  BookService ..> Book
+  BookOwnershipService ..> BookRepository
+  BookOwnershipService ..> Book
+  EnrollmentService ..> EnrollmentRepository
+  EnrollmentService ..> Enrollment
+
+  %% ===========================================================================
+  %% Cross-module calls and event subscriptions
+  %% ===========================================================================
+
+  BookOwnershipService ..> StudentService : exists / summaryOf
+  EnrollmentService ..> StudentService : exists / summariesOf
+  EnrollmentService ..> CourseService : exists / responsesOf
+  BookStudentDeletedListener ..> StudentDeleted : consumes
+  BookStudentDeletedListener ..> BookRepository
+  EnrollmentCleanupListener ..> StudentDeleted : consumes
+  EnrollmentCleanupListener ..> CourseDeleted : consumes
+  EnrollmentCleanupListener ..> EnrollmentRepository
+
+  %% ===========================================================================
+  %% Invariants
+  %% ===========================================================================
+
+  note for StudentCode "format ^STU[0-9]{3,}$ — unique across Students (409 on duplicate).\nPersisted by StudentCodeConverter : AttributeConverter~StudentCode, String~\nto students.student_code VARCHAR."
+  note for Email "RFC-5322 shape — unique across Students (409 on duplicate).\nPersisted by EmailConverter to students.email VARCHAR."
+  note for CourseCode "format ^[A-Z]{2,4}[0-9]{3}$ — unique across Courses (409 on duplicate).\nPersisted by CourseCodeConverter to courses.course_code VARCHAR."
+  note for ISBN "10 or 13 digits — unique across Books (409 on duplicate).\nPersisted by IsbnConverter to books.isbn VARCHAR."
+  note for StudentId "Published API of the student module: book and enrollment both store it.\nAs an ENTITY ID it is NOT the mapped field — Student keeps @Id @GeneratedValue\nLong id and exposes id() : StudentId. @EmbeddedId with @GeneratedValue does not\nwork in Hibernate; do not attempt it.\nAs Book.ownerId it IS mapped, by StudentIdConverter : AttributeConverter~StudentId, Long~\nto books.student_id BIGINT NULL."
+  note for Course "credits must be positive (@Positive on the request DTO,\nCHECK (credits > 0) in the schema, guarded again in changeCredits)."
+  note for StudentRepository "existsBy*(x) answers create-time uniqueness.\nexistsBy*AndIdNot(x, id) answers UPDATE-time uniqueness — the\nsame check EXCLUDING the row being updated. Using the first form\non a PUT makes a student conflict with their own studentCode.\nSee ../sequences/update-student.mmd."
+  note for Enrollment "identity IS (studentId, courseId), mapped as @EmbeddedId EnrollmentId\nholding RAW Longs — nesting converted value objects inside an @EmbeddedId is\nwhere this design stops being worth it. studentId() and courseId() wrap on read.\nUniqueness of the pair is the no-duplicate-enrolment invariant, enforced by\nEnrollmentService and by the composite PRIMARY KEY on student_courses."
+  note for Book "single-owner invariant, and it lives HERE rather than in a service because it\nreads only the book's own state:\n  assignTo(y) on a book owned by x != y throws InvalidRelationshipException (409)\n  assignTo(x) on a book already owned by x is idempotent\n  release() is idempotent"
+  note for EnrollmentService "the duplicate-enrollment rule lives in the SERVICE, not on the entity,\nbecause it needs a repository lookup. An entity that holds a repository\nis not an entity. That asymmetry with Book is deliberate."
+  note for Student "deleting a Student does NOT cascade to Books. StudentService publishes\nStudentDeleted BEFORE removing the row; the book module releases owned books\nand the enrollment module drops enrollments, synchronously, in the same\ntransaction. See ../sequences/delete-student.mmd."
+
+%% =============================================================================
+%% What this model dropped from the pure-DDD version, and why
+%% =============================================================================
+%% OwnershipPolicy «DomainService»
+%%   assertAssignable(book, candidate) -> Book.assignTo(newOwner)
+%%   assertOwnedBy(book, owner)        -> Book.isOwnedBy(owner) + a throw in
+%%                                        BookOwnershipService
+%%   Both only read the book's own state, so the aggregate can enforce them. The
+%%   policy was a class whose entire body was an if and a throw.
+%% ---
+%% EnrollmentPolicy «DomainService»
+%%   assertNotEnrolled / assertEnrolled -> EnrollmentService, which already holds
+%%   the repository the check needs. Extracting a stateless class that takes the
+%%   repository as a constructor argument adds a name, not a boundary.
+%% ---
+%% StudentRepository / CourseRepository / BookRepository / EnrollmentRepository
+%% as hand-written DOMAIN INTERFACES with separate Spring Data implementations
+%%   -> one JpaRepository each, in module/internal/. The split existed to keep
+%%   the wrong code from depending on Spring Data. Module visibility now does
+%%   that: no class outside book/ can name BookRepository at all.
+%% ---
+%% What was NOT dropped: all seven value objects, every invariant note above,
+%% identity-only references, one transaction per use case, and the ubiquitous
+%% language. Those are the parts of DDD that were paying for themselves.
+%% ---
+%% =============================================================================
+%% OUT OF SCOPE for this diagram
+%% =============================================================================
+%% Controllers, request/response DTOs, PageMetadata and the error envelopes live
+%% in each module's root package and are specified by ../../api-contract/.
+%% They are absent here so the model stays readable; see
+%% ../modules/module-structure.mmd for how a module fits together.
+%% ---
+%% Pageable / Page above are Spring Data types appearing in repository and
+%% service signatures only; they never enter an aggregate.

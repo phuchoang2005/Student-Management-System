@@ -1,0 +1,70 @@
+%% Sequence: Unenroll Student from Course
+%% Contract: DELETE /students/{studentId}/courses/{courseId}  (operationId unenrollStudentFromCourse)
+%% Success 204 | 404 when the enrollment does not exist
+%% Both the Student and the Course survive.
+%% ---
+%% The mirror image of enroll.mmd, and notably SHORTER: it makes no cross-module
+%% call at all. The composite id (studentId, courseId) is enough to find the
+%% row, so neither the student module nor the course module is consulted.
+
+sequenceDiagram
+  autonumber
+  actor Admin as Academic Admin
+
+  box rgb(255, 244, 224) module: enrollment
+    participant C as StudentCourseController
+    participant S as EnrollmentService
+    participant ER as EnrollmentRepository
+  end
+
+  Admin->>C: DELETE /students/{studentId}/courses/{courseId}
+  C->>S: unenroll(StudentId, CourseId)
+
+  activate S
+  Note over S: @Transactional boundary opens here
+
+  S->>ER: existsById(new EnrollmentId(studentId, courseId))
+  ER-->>S: false
+  alt enrollment not found
+    S-->>C: throw ResourceNotFoundException
+    C-->>Admin: 404 ErrorResponse (code ENROLLMENT_NOT_FOUND)
+  else enrollment exists
+    S->>ER: deleteById(new EnrollmentId(studentId, courseId))
+    ER-->>S: 1 row removed
+    Note over S: @Transactional boundary commits here
+    S-->>C: void
+    C-->>Admin: 204 No Content
+  end
+  deactivate S
+
+  Note over ER: Only the student_courses row is removed.<br/>Neither the Student aggregate nor the Course aggregate is touched —<br/>they are in other modules and this operation cannot reach them.
+
+%% =============================================================================
+%% Why there is no existence check on the student or the course
+%% =============================================================================
+%% enroll.mmd asks StudentService.exists() and CourseService.exists() because it
+%% is about to CREATE a row referencing both, and a row referencing a
+%% non-existent parent must not be written. Unenroll writes nothing — it removes
+%% a row that, if it exists, already proves both parents existed when it was
+%% created.
+%% ---
+%% So the single existsById() covers every 404 case:
+%%   student does not exist  -> no enrollment row  -> 404 ENROLLMENT_NOT_FOUND
+%%   course does not exist   -> no enrollment row  -> 404 ENROLLMENT_NOT_FOUND
+%%   both exist, not enrolled-> no enrollment row  -> 404 ENROLLMENT_NOT_FOUND
+%% ---
+%% One code for all three is deliberate. The client asked to end a relationship
+%% that is not there; WHICH of its two ends is missing is not information the
+%% client can act on differently. Contrast get-book-owner.mmd, where the two
+%% causes DO get different codes because the client can act on them differently.
+%% ---
+%% =============================================================================
+%% The four ways an enrollment can end
+%% =============================================================================
+%%   UC12  DELETE /students/{s}/courses/{c}  this diagram        204
+%%   UC5   DELETE /students/{s}              delete-student.mmd  204, via event
+%%   UC10  DELETE /courses/{c}               delete-course.mmd   204, via event
+%%   —     never expires on its own; there is no enrollment lifecycle job
+%% ---
+%% All of them are in ../states/enrollment.mmd, which is the transition
+%% checklist for the state-based tests.

@@ -1,0 +1,43 @@
+post:
+  tags: [Students]
+  summary: Create a student
+  operationId: createStudent
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../components/schemas/student/StudentCreateRequest.yml"
+  responses:
+    "201":
+      description: Student created successfully
+      headers:
+        Location:
+          description: URI of the newly created student
+          schema:
+            type: string
+            example: /api/v1/students/1
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/student/StudentResponse.yml"
+    "400":
+      $ref: "../components/responses/ValidationError.yml"
+    "409":
+      $ref: "../components/responses/DuplicateResource.yml"
+get:
+  tags: [Students]
+  summary: Get a paginated list of students
+  operationId: getStudents
+  parameters:
+    - $ref: "../components/parameters/PageParam.yml"
+    - $ref: "../components/parameters/SizeParam.yml"
+    - $ref: "../components/parameters/SortParam.yml"
+    - $ref: "../components/parameters/SearchParam.yml"
+  responses:
+    "200":
+      description: Paginated list of students
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/PageStudentResponse.yml"

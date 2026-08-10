@@ -1,0 +1,19 @@
+parameters:
+  - $ref: "../components/parameters/BookIdParam.yml"
+get:
+  tags: [Student Books]
+  summary: Get the owner of a book
+  operationId: getBookOwner
+  responses:
+    "200":
+      description: The student who owns the book
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/student/StudentSummaryResponse.yml"
+    "404":
+      description: Book does not exist or has no owner
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/ErrorResponse.yml"

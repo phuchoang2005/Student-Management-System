@@ -1,0 +1,17 @@
+parameters:
+  - $ref: "../components/parameters/CourseIdParam.yml"
+get:
+  tags: [Student Courses]
+  summary: Get all students enrolled in a course
+  operationId: getCourseStudents
+  responses:
+    "200":
+      description: Students enrolled in the course (empty array if none)
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "../components/schemas/student/StudentSummaryResponse.yml"
+    "404":
+      $ref: "../components/responses/CourseNotFound.yml"

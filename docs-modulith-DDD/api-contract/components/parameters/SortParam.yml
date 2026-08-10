@@ -1,0 +1,6 @@
+name: sort
+in: query
+description: Sort criteria in the format `property,(asc|desc)`
+schema:
+  type: string
+  example: lastName,asc

@@ -1,0 +1,103 @@
+%% ER Diagram — PostgreSQL 16 schema
+%% The physical form of diagram/classes/class-diagram.mmd. One table per
+%% aggregate — and, because there is one aggregate per application module, also
+%% ONE TABLE PER MODULE:
+%%   students        -> module student
+%%   courses         -> module course
+%%   books           -> module book
+%%   student_courses -> module enrollment
+%% A module reads and writes only its own table. There is no query anywhere that
+%% joins across two modules' tables; where a caller needs data from two, the
+%% modules exchange DTOs instead — see diagram/sequences/get-book-owner.mmd.
+%% The two foreign keys below therefore constrain data integrity WITHOUT ever
+%% being traversed by a JPA association: there is no @ManyToOne and no
+%% @ManyToMany in this system (diagram/modules/module-map.mmd, rule M1).
+%% ---
+%% CONSTRAINTS THE DIAGRAM CANNOT DRAW — every one of them is load-bearing,
+%% because each is the second line of defence behind an in-service check
+%% (see diagram/traceability.md, "Error mapping"):
+%%   UNIQUE  students(student_code)          -> 409 STUDENT_CODE_EXISTS
+%%   UNIQUE  students(email)                 -> 409 EMAIL_EXISTS
+%%   UNIQUE  books(isbn)                     -> 409 ISBN_EXISTS
+%%   UNIQUE  courses(course_code)            -> 409 COURSE_CODE_EXISTS
+%%   PRIMARY KEY student_courses(student_id, course_id)
+%%                                           -> 409 ALREADY_ENROLLED
+%%   CHECK   courses(credits > 0)            -> 400 (also @Positive)
+%% ---
+%% NULLABILITY AND DELETE BEHAVIOUR
+%%   books.student_id is NULLABLE — NULL means "unowned", a normal state, not a
+%%   missing value. It is the ONLY nullable foreign key here.
+%%   No ON DELETE CASCADE and no ON DELETE SET NULL anywhere. Cleanup is driven
+%%   by SYNCHRONOUS DOMAIN EVENTS inside one transaction, so the ordering is
+%%   explicit, testable, and visible in the code rather than hidden in DDL:
+%%   see diagram/sequences/delete-student.mmd and delete-course.mmd.
+%%   Deleting a student publishes StudentDeleted; the book module releases the
+%%   student's books (student_id := NULL) and the enrollment module deletes
+%%   their student_courses rows — both BEFORE the students row is removed.
+%%   Deleting a course publishes CourseDeleted; the enrollment module deletes
+%%   its student_courses rows first. Deleting a book touches nothing else and
+%%   publishes nothing, because no table references books.
+%% ---
+%%   That the FKs have no cascade is load-bearing, not an omission. It is what
+%%   makes a missing or mis-ordered listener fail LOUDLY with a constraint
+%%   violation instead of silently orphaning rows. If the events are ever made
+%%   asynchronous (deferred — see diagram/modules/module-map.mmd), student_id
+%%   must become ON DELETE SET NULL and this guarantee is lost.
+%% ---
+%% created_at / updated_at are written by JPA auditing, never by the API.
+%% student_courses.enrolled_at is written by Enrollment.open().
+%% ---
+%% VALUE OBJECTS DO NOT CHANGE THIS PICTURE. student_code, email, course_code
+%% and isbn are plain VARCHAR columns; books.student_id is a plain BIGINT. The
+%% StudentCode / Email / CourseCode / ISBN / StudentId value objects reach them
+%% through JPA AttributeConverters, so every UNIQUE constraint and every index
+%% below behaves exactly as it would with raw Strings. See
+%% diagram/classes/class-diagram.mmd for the converter per value object.
+%% ---
+%% NOT YET EXECUTABLE. There is no migration that creates any of this: no
+%% Flyway dependency and no spring.jpa.hibernate.ddl-auto setting. Until a
+%% V1__init.sql exists, none of the constraints above are actually enforced —
+%% diagram/traceability.md, "Implementation gaps", item 2.
+
+erDiagram
+    STUDENTS {
+        BIGINT id PK
+        VARCHAR student_code UK
+        VARCHAR first_name
+        VARCHAR last_name
+        VARCHAR email UK
+        DATE date_of_birth
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    BOOKS {
+        BIGINT id PK
+        VARCHAR isbn UK
+        VARCHAR title
+        VARCHAR author
+        DATE published_date
+        BIGINT student_id FK
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    COURSES {
+        BIGINT id PK
+        VARCHAR course_code UK
+        VARCHAR name
+        TEXT description
+        INTEGER credits
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    STUDENT_COURSES {
+        BIGINT student_id PK, FK
+        BIGINT course_id PK, FK
+        TIMESTAMP enrolled_at
+    }
+
+    STUDENTS ||--o{ BOOKS : owns
+    STUDENTS ||--o{ STUDENT_COURSES : enrolls
+    COURSES ||--o{ STUDENT_COURSES : contains

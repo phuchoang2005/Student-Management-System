@@ -1,0 +1,74 @@
+openapi: 3.0.3
+
+info:
+  title: Student Management API
+  description: |
+    REST API for managing students, books, and courses.
+
+    Relationships:
+      * Student 1 --- N Book   (a student owns many books; a book has at most one owner)
+      * Student N --- N Course (many-to-many enrollment via a student_course join table)
+
+    This specification is the formal API contract. Spring Boot controllers and services
+    are implemented to conform to it.
+
+    The contract is modularized: each path and reusable component lives in its own file
+    under `paths/` and `components/`. Bundle into a single document with, for example:
+      `redocly bundle openapi.yml -o dist/openapi.bundled.yml`
+      or `npx @redocly/cli bundle openapi.yml -o dist/openapi.bundled.yml`
+  version: 1.0.0
+  contact:
+    name: Student Management System
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development server
+
+tags:
+  - name: Students
+    description: Student CRUD operations
+  - name: Books
+    description: Book CRUD operations
+  - name: Courses
+    description: Course CRUD operations
+  - name: Student Books
+    description: One-to-many relationship between students and books
+  - name: Student Courses
+    description: Many-to-many enrollment between students and courses
+
+paths:
+  # Students
+  /students:
+    $ref: "./paths/students.yml"
+  /students/{studentId}:
+    $ref: "./paths/students_byId.yml"
+
+  # Books
+  /books:
+    $ref: "./paths/books.yml"
+  /books/{bookId}:
+    $ref: "./paths/books_byId.yml"
+
+  # Student Books (one-to-many relationship)
+  /students/{studentId}/books/{bookId}:
+    $ref: "./paths/student-books_byId.yml"
+  /students/{studentId}/books:
+    $ref: "./paths/student-books.yml"
+  /books/{bookId}/owner:
+    $ref: "./paths/book-owner.yml"
+
+  # Courses
+  /courses:
+    $ref: "./paths/courses.yml"
+  /courses/{courseId}:
+    $ref: "./paths/courses_byId.yml"
+
+  # Student Courses (many-to-many enrollment)
+  /students/{studentId}/courses/{courseId}:
+    $ref: "./paths/student-courses_byId.yml"
+  /students/{studentId}/courses:
+    $ref: "./paths/student-courses.yml"
+  /courses/{courseId}/students:
+    $ref: "./paths/course-students.yml"

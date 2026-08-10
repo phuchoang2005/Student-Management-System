@@ -1,0 +1,141 @@
+%% Error Mapping — thrown type -> HTTP response
+%% Owner: shared.GlobalExceptionHandler  (@RestControllerAdvice)
+%% The diagram form of the "Error mapping" table in ../traceability.md.
+%% ---
+%% HOW TO READ THIS DIAGRAM
+%%   SEVEN INDEPENDENT TRACKS, each running left to right on its own row:
+%%     what raises it   ->   the exception type   ->   what the caller receives
+%%   No track ever touches another, so a status code can be traced back to its
+%%   trigger by reading one row straight across.
+%% ---
+%% WHY THE HANDLER LIVES IN shared
+%%   Four modules throw; one class decides the status. If the handler lived in
+%%   any one module, that module would own the HTTP translation of the other
+%%   three — so it lives in shared, together with the four exception types, and
+%%   depends on nothing. This is the ONE place in the system where an exception
+%%   type meets a status code. No entity, service or listener mentions a status.
+
+%%{init: {"flowchart": {"rankSpacing": 70, "nodeSpacing": 18, "curve": "linear"}}}%%
+flowchart LR
+
+  %% Column headers. No container boxes anywhere in this diagram: a subgraph
+  %% laid out inside an LR graph puts its children side by side, which turned
+  %% the seven tracks into three horizontal rows and re-created the arrow tangle
+  %% this view exists to avoid. Three plain header nodes, one invisible chain.
+  H1["<b>what raises it</b>"]
+  H2["<b>the exception</b>"]
+  H3["<b>what the caller receives</b>"]
+  H1 ~~~ H2 ~~~ H3
+
+  T1["@Valid on a request DTO<br/>the controller, BEFORE any service runs"]
+  T2["a referenced aggregate or relationship<br/>does not exist<br/>a service, or a cross-module exists() returning false"]
+  T3["a uniqueness rule is violated<br/>a service"]
+  T4["a relationship rule is violated<br/>Book.assignTo()"]
+  T5["a concurrent write wins the race<br/>a PostgreSQL UNIQUE or PRIMARY KEY constraint"]
+  T7["a synchronous @EventListener fails<br/>during delete-student / delete-course"]
+  T6["a bug<br/>anything unmapped"]
+
+  E1["MethodArgumentNotValidException<br/>(Spring)"]
+  E2["ResourceNotFoundException<br/>«shared»"]
+  E3["DuplicateResourceException<br/>«shared»"]
+  E4["InvalidRelationshipException<br/>«shared»"]
+  E5["DataIntegrityViolationException<br/>(Spring Data)"]
+  E7["whatever the listener threw<br/>propagates to the publisher"]
+  E6["Exception"]
+
+  R1["<b>400</b> ValidationErrorResponse<br/>fieldErrors[ field, message ]"]
+  R2["<b>404</b> ErrorResponse<br/>STUDENT_NOT_FOUND · BOOK_NOT_FOUND<br/>COURSE_NOT_FOUND · ENROLLMENT_NOT_FOUND<br/>OWNERSHIP_NOT_FOUND · BOOK_NOT_ASSIGNED"]
+  R3["<b>409</b> ErrorResponse<br/>STUDENT_CODE_EXISTS · EMAIL_EXISTS<br/>ISBN_EXISTS · COURSE_CODE_EXISTS<br/>ALREADY_ENROLLED"]
+  R4["<b>409</b> ErrorResponse<br/>BOOK_ALREADY_ASSIGNED"]
+  R5["<b>409</b> ErrorResponse<br/>the same code as the check that lost the race"]
+  R7["<b>the listener's own status</b><br/>and the WHOLE transaction rolls back:<br/>the parent row is NOT deleted"]
+  R6["<b>500</b> ErrorResponse<br/>INTERNAL_ERROR — message NOT echoed"]
+
+  T1 --> E1 --> R1
+  T2 --> E2 --> R2
+  T3 --> E3 --> R3
+  T4 --> E4 --> R4
+  T5 --> E5 --> R5
+  T7 --> E7 --> R7
+  T6 --> E6 --> R6
+
+  classDef v400 fill:#fff4e0,stroke:#b8860b,color:#111;
+  classDef v404 fill:#eef2ff,stroke:#3b4a9c,color:#111;
+  classDef v409 fill:#fdeaea,stroke:#a33,color:#111;
+  classDef vevt fill:#eef6ee,stroke:#2f7d46,color:#111;
+  classDef v500 fill:#eee,stroke:#666,color:#111;
+  classDef trig fill:#fafafa,stroke:#bbb,color:#333;
+  classDef hdr fill:#fff,stroke:#fff,color:#555;
+
+  class T1,T2,T3,T4,T5,T6,T7 trig
+  class E1,R1 v400
+  class E2,R2 v404
+  class E3,R3,E4,R4,E5,R5 v409
+  class E7,R7 vevt
+  class E6,R6 v500
+  class H1,H2,H3 hdr
+
+%% =============================================================================
+%% Rules this mapping asserts
+%% =============================================================================
+%% 1. A business rule collision is a 4xx. It is NEVER a 500. Track 5 exists for
+%%    exactly this: the DB constraint firing under concurrency must land on the
+%%    same status as the in-service check it duplicates.
+%% ---
+%% 2. TRACK 7 IS THE ONE THIS ARCHITECTURE ADDS, and it is not a new status —
+%%    it is a guarantee about what happens to the transaction. The listeners in
+%%    delete-student.mmd and delete-course.mmd are plain @EventListener calls
+%%    running INSIDE the publisher's transaction, on the publisher's thread. So
+%%    an exception thrown in a listener:
+%%      - propagates straight back out of publishEvent()
+%%      - is handled by GlobalExceptionHandler like any other, by its own type
+%%      - rolls the ENTIRE operation back — the student or course is still there
+%%    It does NOT become a 500, and it does NOT leave a half-cleaned parent.
+%%    Had the listeners been @ApplicationModuleListener (async, after commit,
+%%    own transaction), a failure there would be invisible to the caller, who
+%%    would already have received 204 — that difference is the whole reason for
+%%    the choice. See the footer of ../sequences/delete-student.mmd.
+%% ---
+%% 3. Track 6 should be unreachable in normal operation. Every reachable failure
+%%    in ../traceability.md has a mapped exception. If a 500 appears in a log, a
+%%    row is missing from this diagram — add it, do not widen track 6.
+%% ---
+%% 4. The exception carries the CODE; the handler chooses the STATUS. That split
+%%    is what lets two different causes share 404 (BOOK_NOT_FOUND vs
+%%    BOOK_NOT_ASSIGNED on UC23) and stay distinguishable to a client.
+%% ---
+%% 5. Bean validation runs before the service, so a 400 and a 409 can never be
+%%    raised by the same request: a malformed payload never reaches a
+%%    uniqueness check.
+%% ---
+%% 6. NO MODULE MENTIONS A STATUS CODE. A service throws
+%%    ResourceNotFoundException("STUDENT_NOT_FOUND", ...); that 404 lives here
+%%    and nowhere else. A cross-module exists() returns a boolean and throws
+%%    nothing — the CALLING module decides that false is an error.
+%% ---
+%% =============================================================================
+%% Where each code is raised
+%% =============================================================================
+%%   STUDENT_NOT_FOUND      ops 3,4,5,16,17,18,20,21,22   (../traceability.md)
+%%   BOOK_NOT_FOUND         ops 8,9,10,16,17,19
+%%   COURSE_NOT_FOUND       ops 13,14,15,20,21,23
+%%   ENROLLMENT_NOT_FOUND   op 21                          unenroll.mmd
+%%   OWNERSHIP_NOT_FOUND    op 17                          unassign-book.mmd
+%%   BOOK_NOT_ASSIGNED      op 19                          get-book-owner.mmd
+%%   STUDENT_CODE_EXISTS    ops 1,4                        create/update-student
+%%   EMAIL_EXISTS           ops 1,4
+%%   ISBN_EXISTS            ops 6,9
+%%   COURSE_CODE_EXISTS     ops 11,14
+%%   ALREADY_ENROLLED       op 20                          enroll.mmd
+%%   BOOK_ALREADY_ASSIGNED  op 16                          assign-book.mmd
+%% ---
+%% =============================================================================
+%% Not yet true in the code
+%% =============================================================================
+%% Track 1 requires spring-boot-starter-validation, which management/pom.xml
+%% does not declare today. Without it @Valid is inert and every 400 in this
+%% diagram silently becomes a 500 further down. See ../traceability.md,
+%% "Implementation gaps", item 2.
+%% ---
+%% Track 5 requires the UNIQUE and PRIMARY KEY constraints to exist, and no
+%% migration creates them yet — item 3 of the same list.

@@ -1,0 +1,8 @@
+allOf:
+  - $ref: "./PageMetadata.yml"
+  - type: object
+    properties:
+      content:
+        type: array
+        items:
+          $ref: "./student/StudentResponse.yml"

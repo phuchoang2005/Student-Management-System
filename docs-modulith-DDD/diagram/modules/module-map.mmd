@@ -1,0 +1,153 @@
+%% Module Map — Spring Modulith application modules
+%% org.phuchoang2005.management — ONE Spring Boot application, FIVE application modules.
+%% ---
+%% This is the top-level architecture diagram. Everything else in this folder
+%% elaborates one box or one arrow on it.
+%% ---
+%% WHAT AN "APPLICATION MODULE" IS HERE
+%%   Every direct sub-package of org.phuchoang2005.management is an application
+%%   module in the Spring Modulith sense. Types in the module's ROOT package are
+%%   its published API; types in any SUB-package (internal/) are invisible to
+%%   every other module. This is not a convention — it is checked by
+%%   ApplicationModules.of(ManagementApplication.class).verify() running as a
+%%   JUnit test. See ../../modulith-verification.md.
+%% ---
+%% HOW TO READ THIS DIAGRAM
+%%   SOLID arrow  = a compile-time dependency, declared in @ApplicationModule
+%%                  allowedDependencies. Reading it as "imports from".
+%%   DASHED arrow = a domain event travelling the OPPOSITE way along an edge
+%%                  that already exists. It is not a new dependency: the
+%%                  listener lives in the DOWNSTREAM module and imports the
+%%                  event type from the upstream one, which the solid arrow
+%%                  already permits.
+%% ---
+%%   The solid graph is ACYCLIC and that is the whole point. Read it bottom-up:
+%%   shared depends on nobody, student and course depend only on shared, book
+%%   adds student, enrollment adds both. If you can draw a cycle on this
+%%   picture, verify() fails and the build goes red.
+
+flowchart TB
+
+  subgraph APP["Spring Boot application  —  org.phuchoang2005.management"]
+    direction TB
+
+    subgraph L3["depends on two peers"]
+      direction LR
+      ENR["<b>enrollment</b><br/>Enrollment «Aggregate»<br/>EnrollmentService<br/>StudentCourseController<br/>—<br/>invariant: no duplicate<br/>(studentId, courseId)"]
+    end
+
+    subgraph L2["depends on one peer"]
+      direction LR
+      BOOK["<b>book</b><br/>Book «Aggregate»<br/>BookService · BookOwnershipService<br/>BookController · StudentBookController<br/>—<br/>invariant: a book has<br/>at most one owner"]
+    end
+
+    subgraph L1["depend on shared only"]
+      direction LR
+      STU["<b>student</b><br/>Student «Aggregate»<br/>StudentService<br/>StudentController<br/>—<br/>invariant: studentCode<br/>and email are unique"]
+      CRS["<b>course</b><br/>Course «Aggregate»<br/>CourseService<br/>CourseController<br/>—<br/>invariant: courseCode unique,<br/>credits &gt; 0"]
+    end
+
+    SHR["<b>shared</b>  «open module»<br/>DomainException · ResourceNotFoundException<br/>DuplicateResourceException · InvalidRelationshipException<br/>GlobalExceptionHandler · ErrorResponse · ValidationErrorResponse<br/>PageMetadata · JpaAuditingConfig · OpenApiConfig<br/>—<br/>owns no table, no aggregate, no rule"]
+  end
+
+  %% ---------------------------------------------------------------------------
+  %% Solid edges — declared allowedDependencies
+  %% ---------------------------------------------------------------------------
+  STU  ==> SHR
+  CRS  ==> SHR
+  BOOK ==> SHR
+  ENR  ==> SHR
+
+  BOOK ==>|"Book.ownerId : StudentId<br/>StudentService.exists()"| STU
+  ENR  ==>|"Enrollment.studentId : StudentId<br/>StudentService.summariesOf()"| STU
+  ENR  ==>|"Enrollment.courseId : CourseId<br/>CourseService.responsesOf()"| CRS
+
+  %% ---------------------------------------------------------------------------
+  %% Dashed edges — domain events, travelling back up an existing solid edge
+  %% ---------------------------------------------------------------------------
+  STU -.->|"StudentDeleted<br/>@EventListener releases owned books"| BOOK
+  STU -.->|"StudentDeleted<br/>@EventListener drops enrollments"| ENR
+  CRS -.->|"CourseDeleted<br/>@EventListener drops enrollments"| ENR
+
+  classDef mod fill:#eef,stroke:#3b4a9c,stroke-width:2px,color:#111;
+  classDef lib fill:#efe,stroke:#2d7a2d,stroke-width:2px,color:#111;
+  classDef rel fill:#fff4e0,stroke:#b8860b,stroke-width:2px,color:#111;
+  classDef shr fill:#fafafa,stroke:#888,stroke-dasharray:4 3,color:#333;
+  classDef band fill:#fdfdfd,stroke:#ddd,color:#777;
+
+  class STU,CRS mod
+  class BOOK lib
+  class ENR rel
+  class SHR shr
+  class L1,L2,L3 band
+  style APP fill:#ffffff,stroke:#999
+
+%% =============================================================================
+%% The declaration this diagram is drawn from
+%% =============================================================================
+%%   student/package-info.java
+%%     @ApplicationModule(allowedDependencies = {"shared"})
+%%   course/package-info.java
+%%     @ApplicationModule(allowedDependencies = {"shared"})
+%%   book/package-info.java
+%%     @ApplicationModule(allowedDependencies = {"shared", "student"})
+%%   enrollment/package-info.java
+%%     @ApplicationModule(allowedDependencies = {"shared", "student", "course"})
+%%   shared/package-info.java
+%%     @ApplicationModule(type = Type.OPEN)
+%% ---
+%% shared is OPEN so its sub-packages stay reachable and so it does not need to
+%% declare anything about the modules that use it. An open module is exempt from
+%% the internal/-is-hidden rule; that exemption is acceptable precisely because
+%% shared holds no business rule. If a rule ever lands in shared, close it.
+%% ---
+%% =============================================================================
+%% Rules this map asserts   (M1-M5 — the successors of R1-R4 in the pure-DDD version)
+%% =============================================================================
+%% M1. Aggregates reference each other BY IDENTITY, never by object reference.
+%%     Book holds ownerId : StudentId, not a Student. Enrollment holds
+%%     studentId : StudentId and courseId : CourseId, not the aggregates. There
+%%     is no @ManyToOne and no @ManyToMany anywhere in this system.
+%% ---
+%% M2. A module publishes only what another module needs. Entities and
+%%     repositories live in internal/ and are unreachable from outside. A module
+%%     that needs data from another asks its SERVICE and receives a DTO or a
+%%     value object — never an entity. This is enforced, not requested.
+%% ---
+%% M3. The solid dependency graph is acyclic, and stays that way because
+%%     cross-module CLEANUP travels as an event along an edge that already
+%%     exists, in the reverse direction. student never imports book; book
+%%     imports student.StudentDeleted, which M-edge book==>student already
+%%     allows.
+%% ---
+%% M4. Those events are SYNCHRONOUS and IN-TRANSACTION: plain @EventListener,
+%%     published before the parent row is removed. One transaction, one
+%%     rollback, correct FK ordering. NOT @ApplicationModuleListener, NOT
+%%     @TransactionalEventListener — see the ordering note in
+%%     ../sequences/delete-student.mmd, which is the reason.
+%% ---
+%% M5. shared is a leaf. It depends on no module and contains no business rule.
+%%     Anything that knows what a Student IS does not belong there.
+%% ---
+%% =============================================================================
+%% Why five modules and not two
+%% =============================================================================
+%% The pure-DDD version of these documents grouped the same four aggregates into
+%% two modules, academic (Student, Course, Enrollment) and library (Book), and
+%% enforced the split by review. Two things changed:
+%%   - Modulith can only enforce boundaries it can see. Folding Enrollment into
+%%     an academic module hides the most interesting boundary in the system —
+%%     enrollment reaches into two peers — inside a package where nothing checks
+%%     it.
+%%   - One module per aggregate makes the module graph and the aggregate graph
+%%     the same picture, so there is one fewer mapping to keep in your head.
+%% ---
+%% =============================================================================
+%% Deferred, NOT current design
+%% =============================================================================
+%% Asynchronous events, @ApplicationModuleListener, the event_publication
+%% registry (spring-modulith-starter-jpa) and eventual consistency are
+%% deliberately out of scope. They buy resilience this system does not need and
+%% cost an outbox table, a retry story, and an FK that must become
+%% ON DELETE SET NULL. If these modules are ever split into separate
+%% deployables, that is the moment to adopt them — not before.

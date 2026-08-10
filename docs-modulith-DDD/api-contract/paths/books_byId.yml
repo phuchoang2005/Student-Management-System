@@ -1,0 +1,51 @@
+parameters:
+  - $ref: "../components/parameters/BookIdParam.yml"
+get:
+  tags: [Books]
+  summary: Get a book by ID
+  operationId: getBookById
+  responses:
+    "200":
+      description: Book found
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/book/BookResponse.yml"
+    "404":
+      $ref: "../components/responses/BookNotFound.yml"
+put:
+  tags: [Books]
+  summary: Update a book
+  description: |
+    Updates only book information. Ownership is not changed here; it is
+    controlled through the Student Books relationship endpoints.
+  operationId: updateBook
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../components/schemas/book/BookUpdateRequest.yml"
+  responses:
+    "200":
+      description: Book updated
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/book/BookResponse.yml"
+    "400":
+      $ref: "../components/responses/ValidationError.yml"
+    "404":
+      $ref: "../components/responses/BookNotFound.yml"
+    "409":
+      $ref: "../components/responses/DuplicateResource.yml"
+delete:
+  tags: [Books]
+  summary: Delete a book
+  description: Deleting a book also removes its relationship with any student.
+  operationId: deleteBook
+  responses:
+    "204":
+      description: Book deleted successfully
+    "404":
+      $ref: "../components/responses/BookNotFound.yml"

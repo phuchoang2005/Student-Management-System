@@ -1,0 +1,108 @@
+%% Sequence: Enroll Student in Course
+%% Contract: POST /students/{studentId}/courses/{courseId}  (operationId enrollStudentInCourse)
+%% Success 201 EnrollmentResponse | 404 student or course missing | 409 already enrolled
+%% ---
+%% The enrollment module is the only one that depends on TWO peers, so this is
+%% the diagram where the module graph is most visible: two cross-module calls,
+%% both read-only, both returning primitives, before any local work happens.
+
+sequenceDiagram
+  autonumber
+  actor Admin as Academic Admin
+
+  box rgb(255, 244, 224) module: enrollment
+    participant C as StudentCourseController
+    participant S as EnrollmentService
+    participant ER as EnrollmentRepository
+    participant E as Enrollment «Aggregate»
+  end
+
+  box rgb(238, 238, 255) module: student
+    participant SS as StudentService
+  end
+
+  box rgb(238, 238, 255) module: course
+    participant CS as CourseService
+  end
+
+  Admin->>C: POST /students/{studentId}/courses/{courseId}
+  C->>S: enroll(StudentId, CourseId)
+
+  activate S
+  Note over S: @Transactional boundary opens here
+
+  S->>SS: exists(studentId)
+  SS-->>S: false
+  alt student not found
+    S-->>C: throw ResourceNotFoundException
+    C-->>Admin: 404 ErrorResponse (code STUDENT_NOT_FOUND)
+  else student exists
+    S->>CS: exists(courseId)
+    CS-->>S: false
+    alt course not found
+      S-->>C: throw ResourceNotFoundException
+      C-->>Admin: 404 ErrorResponse (code COURSE_NOT_FOUND)
+    else course exists
+
+      rect rgb(255, 248, 235)
+        Note over S,ER: The no-duplicate-enrolment invariant. It lives in the SERVICE,<br/>not on the entity, because answering it needs a repository.
+        S->>ER: existsById(new EnrollmentId(studentId, courseId))
+        ER-->>S: true
+        alt already enrolled
+          S-->>C: throw DuplicateResourceException
+          C-->>Admin: 409 ErrorResponse (code ALREADY_ENROLLED)
+        else not yet enrolled
+          S->>E: Enrollment.open(studentId, courseId)
+          E-->>S: id := (studentId, courseId), enrolledAt := now()
+          S->>ER: save(enrollment)
+          ER-->>S: persisted
+          Note over S: @Transactional boundary commits here
+          S-->>C: EnrollmentResponse
+          C-->>Admin: 201 EnrollmentResponse
+        end
+      end
+    end
+  end
+  deactivate S
+
+  Note over S,ER: Checked in the service AND backed by the composite PRIMARY KEY on<br/>student_courses(student_id, course_id), so a concurrent insert surfaces<br/>as the same 409 rather than a 500.
+
+%% =============================================================================
+%% Why this rule did NOT move onto the aggregate
+%% =============================================================================
+%% assign-book.mmd moved the single-owner rule out of a policy and onto
+%% Book.assignTo(), because the book could answer the question from its own
+%% state. This rule cannot make that move: "is this pair already enrolled?" is a
+%% question about the TABLE, not about the Enrollment being created. An entity
+%% that holds a repository is not an entity.
+%% ---
+%% So the two modules land in different places on purpose:
+%%   book        invariant on the AGGREGATE   (reads its own state)
+%%   enrollment  invariant in the SERVICE     (needs a repository)
+%% ---
+%% Being able to explain that difference is worth more than the consistency of
+%% putting both in a policy class, which is what the pure-DDD version did.
+%% EnrollmentPolicy.assertNotEnrolled() held a repository and a throw, and it
+%% was called from exactly one place.
+%% ---
+%% =============================================================================
+%% Two cross-module calls, zero cross-module writes
+%% =============================================================================
+%% enrollment reads from student and course; it never writes to either, and
+%% neither knows this operation happened. The enrollment row is the only thing
+%% created, and it lives in the enrollment module's own table. No event is
+%% published, because nothing downstream needs to react — see the symmetry note
+%% in delete-course.mmd.
+%% ---
+%% Both calls return a boolean rather than an entity. StudentService.exists()
+%% and CourseService.exists() are published precisely so that this module never
+%% needs to see a Student or a Course, both of which are internal to their own
+%% modules and unreachable from here.
+%% ---
+%% =============================================================================
+%% Status code: 201, not 200
+%% =============================================================================
+%% Enrolling CREATES a resource — a row in student_courses with its own
+%% enrolledAt. Contrast assign-book.mmd, which returns 200 because it modifies
+%% an existing Book rather than creating anything. Both are POST; the status
+%% codes differ because the effects do.

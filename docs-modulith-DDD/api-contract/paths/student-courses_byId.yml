@@ -1,0 +1,37 @@
+parameters:
+  - $ref: "../components/parameters/StudentIdParam.yml"
+  - $ref: "../components/parameters/CourseIdParam.yml"
+post:
+  tags: [Student Courses]
+  summary: Enroll a student in a course
+  description: A student cannot enroll in the same course twice.
+  operationId: enrollStudentInCourse
+  responses:
+    "201":
+      description: Student enrolled successfully
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/EnrollmentResponse.yml"
+    "404":
+      $ref: "../components/responses/ResourceNotFound.yml"
+    "409":
+      description: Student is already enrolled in this course
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/ErrorResponse.yml"
+delete:
+  tags: [Student Courses]
+  summary: Unenroll a student from a course
+  description: Removes only the enrollment. Both the student and course remain.
+  operationId: unenrollStudentFromCourse
+  responses:
+    "204":
+      description: Student unenrolled successfully
+    "404":
+      description: Enrollment not found
+      content:
+        application/json:
+          schema:
+            $ref: "../components/schemas/ErrorResponse.yml"

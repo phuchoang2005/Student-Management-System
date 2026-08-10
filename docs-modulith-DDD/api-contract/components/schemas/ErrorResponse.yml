@@ -1,0 +1,22 @@
+type: object
+required: [timestamp, status, error, code, message, path]
+properties:
+  timestamp:
+    type: string
+    format: date-time
+    example: "2026-07-25T10:15:30Z"
+  status:
+    type: integer
+    example: 404
+  error:
+    type: string
+    example: Not Found
+  code:
+    type: string
+    example: STUDENT_NOT_FOUND
+  message:
+    type: string
+    example: Student with id 100 was not found
+  path:
+    type: string
+    example: /api/v1/students/100
