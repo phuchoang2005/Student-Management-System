@@ -1,21 +1,25 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: management-postgres
+  mysql:
+    image: mysql:8.4
+    container_name: management-mysql
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-management}
-      POSTGRES_USER: ${POSTGRES_USER:-management}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-management}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-management}
+      MYSQL_USER: ${MYSQL_USER:-management}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-management}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-management}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${MYSQL_PORT:-3306}:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-management} -d ${POSTGRES_DB:-management}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u${MYSQL_USER:-management} -p${MYSQL_PASSWORD:-management}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  postgres_data:
+  mysql_data:

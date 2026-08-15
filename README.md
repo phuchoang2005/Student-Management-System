@@ -2,32 +2,26 @@
 
 A production-oriented **Student Management System** backend, built as a portfolio-grade Spring Boot REST API. It manages students, books, and courses with proper layered architecture, validation, exception handling, and relational data integrity.
 
-> **New here? Read the docs in order:** [docs-modulith-DDD/READING-ORDER.md](./docs-modulith-DDD/READING-ORDER.md)
-> Full requirements: [req.md](./docs-modulith-DDD/req.md)
-> API contract: [api-contract/openapi.yml](./docs-modulith-DDD/api-contract/openapi.yml)
-> Database schema: [database/schema.mermaid](./docs-modulith-DDD/database/schema.mermaid)
-
-### Two documentation folders
-
-| Folder | Status |
-| --- | --- |
-| [docs-modulith-DDD/](./docs-modulith-DDD/) | **Current design** — Spring Modulith application modules + light DDD. Start here. |
-| [docs-DDD/](./docs-DDD/) | Archived pure-DDD version — one bounded context, hexagonal layering, policy domain services. Kept for comparison. |
-
-Both describe the same 23 operations, the same status codes, the same database schema and the same OpenAPI contract. What differs is where the code lives and what enforces the boundaries.
+> **New here? Read the docs in order:**
+> Business requirements: [docs/BA-docs/req.md](./docs/BA-docs/req.md)
+> Use cases: [docs/BA-docs/use-cases.md](./docs/BA-docs/use-cases.md)
+> Solution architecture: [docs/SA-docs/](./docs/SA-docs/)
 
 ## Tech Stack
 
 - Java 21 + Spring Boot 4.1
 - Spring Modulith (application modules + build-time boundary verification)
-- Spring Web MVC, Spring Data JPA
-- PostgreSQL + Hibernate, Flyway
+- Spring Web MVC
+- Spring Security (authentication/authorization)
+- Spring Data JDBC (explicit aggregate persistence, no lazy loading, no implicit cascades)
+- MySQL 8 + Flyway (versioned schema, since Spring Data JDBC does not auto-generate DDL)
+- MapStruct (compile-time mapping between domain model and DTOs, where a mapping isn't trivial enough for a plain constructor call)
 - Jakarta Bean Validation
 - JUnit 5, Mockito, MockMvc, `@ApplicationModuleTest`, Testcontainers
 
 ## Architecture
 
-One Spring Boot process, one PostgreSQL schema, **five Spring Modulith application modules** — vertical slices, one aggregate and one table each:
+One Spring Boot process, one MySQL schema, **five Spring Modulith application modules** — vertical slices, one aggregate and one table each:
 
 ```text
 org.phuchoang2005.management
@@ -38,11 +32,23 @@ org.phuchoang2005.management
 └── enrollment/  → shared, student, course
 ```
 
-Each module contains its own controller, service, DTOs, entity and repository. Entities and repositories live in `module/internal/` and are **unreachable from any other module** — a boundary enforced by `ApplicationModules.verify()` running as a JUnit test, not by review. The dependency graph is acyclic; cross-module cleanup (deleting a student releases their books and drops their enrollments) travels backwards along the same edges as **synchronous, in-transaction domain events**.
+Spring Modulith draws the **outer** boundary (which module may depend on which). Inside each module, a light **Clean/Hexagonal** layering draws the **inner** boundary (domain stays ignorant of frameworks):
 
-Business logic lives on the aggregate where it inspects only its own state, and in the service where it needs a repository. Controllers stay thin, and JPA entities are never exposed over the API (DTOs only).
+```text
+module/
+├── domain/       ← aggregate root + value objects; plain Java, no Spring/JDBC imports
+├── application/  ← use-case services; orchestrate the domain and repository ports
+├── port/         ← repository interfaces the domain/application layer depends on
+├── web/          ← REST controller + request/response DTOs (driving adapter)
+└── internal/     ← Spring Data JDBC repository + persistence model (driven adapter);
+                     unreachable from any other module
+```
 
-See [module-map.mmd](./docs-modulith-DDD/diagram/modules/module-map.mmd) for the full picture and [modulith-verification.md](./docs-modulith-DDD/modulith-verification.md) for how it is enforced.
+The domain layer has no knowledge of Spring, JDBC, or HTTP — it depends only on the ports it defines. `internal/` implements those ports against Spring Data JDBC and is where the only framework-aware persistence code lives. This is what "Spring Modulith + DDD + Hexagonal" means concretely here: Modulith enforces module-to-module boundaries at build time via `ApplicationModules.verify()` running as a JUnit test; the domain/port split enforces the dependency-inversion boundary within a module at code-review time.
+
+Business logic lives on the aggregate where it inspects only its own state, and in the application service where it needs a port. Controllers stay thin, and persistence entities are never exposed over the API (DTOs only, mapped with MapStruct where the mapping isn't a trivial constructor call). Cross-module cleanup (deleting a student releases their books and drops their enrollments) travels backwards along the same edges as **synchronous, in-transaction domain events**.
+
+See [docs/SA-docs/](./docs/SA-docs/) for the system overview, component, and sequence diagrams.
 
 ## Domain Model
 
@@ -54,9 +60,7 @@ Student 1 ─────────── N Book
 Student N ─────────── N Course
 ```
 
-Aggregates reference each other **by identity only** — `Book` holds an `ownerId : StudentId`, never a `Student`. There is no `@ManyToOne` and no `@ManyToMany` in the codebase; that rule is what lets each aggregate live in its own module.
-
-See [database/schema.mermaid](./docs-modulith-DDD/database/schema.mermaid) for the full ER diagram.
+Aggregates reference each other **by identity only** — `Book` holds an `ownerId : StudentId`, never a `Student`. There is no `@ManyToOne` and no `@ManyToMany` in the codebase; that rule is what lets each aggregate live in its own module, and it's a natural fit for Spring Data JDBC, which persists aggregates as a whole and does not silently traverse relationships the way JPA does.
 
 ## API Overview
 
@@ -70,7 +74,7 @@ Base path: `/api/v1`
 | Student–Book | `POST /students/{studentId}/books/{bookId}` (assign), `GET /students/{studentId}/books`, `GET /books/{bookId}/owner`, `DELETE /students/{studentId}/books/{bookId}` (unassign) |
 | Student–Course | `POST /students/{studentId}/courses/{courseId}` (enroll), `GET /students/{studentId}/courses`, `GET /courses/{courseId}/students`, `DELETE /students/{studentId}/courses/{courseId}` (unenroll) |
 
-Full request/response schemas are defined in [api-contract/openapi.yml](./docs-modulith-DDD/api-contract/openapi.yml), and every operation is traced to its module, sequence diagram and business rule in [traceability.md](./docs-modulith-DDD/diagram/traceability.md).
+Endpoints that mutate state require an authenticated principal (Spring Security); read endpoints exposed to the `Student` actor are scoped to that student's own data.
 
 ## Key Business Rules
 
@@ -89,25 +93,35 @@ Full request/response schemas are defined in [api-contract/openapi.yml](./docs-m
 | Duplicate enrollment | 409 |
 | Invalid relationship | 409 |
 
+## Database & MySQL Optimization
+
+The schema is hand-written and versioned with **Flyway** (`src/main/resources/db/migration`), since Spring Data JDBC has no `ddl-auto` — this is treated as a feature, not a gap: every constraint and index is explicit and reviewable. For a system of this size, "optimization" means getting the fundamentals right rather than premature tuning:
+
+- **`utf8mb4` / `utf8mb4_0900_ai_ci`** everywhere (set at the database and connection level) — correct Unicode storage (names, titles) and case-insensitive comparison for lookups like email/title search, without extra `LOWER()` calls.
+- **InnoDB** (MySQL 8 default) for every table — row-level locking and real foreign-key constraints, which is what lets the database itself enforce "a book's owner must exist" and "an enrollment must reference a real student and course" alongside the application-level checks.
+- **Explicit indexes** matched to the actual access patterns from the use cases: `UNIQUE` on `student_code`, `email`, `isbn`, `course_code` (uniqueness constraints already create these); a secondary index on `book.student_id` for "books owned by student" and "unassign on student delete"; the `enrollment` composite primary key `(student_id, course_code)` already covers "is this pair enrolled" and "roster for a course" lookups without an extra index.
+- **No N+1 by construction**: Spring Data JDBC doesn't lazy-load, so a roster or "student detail with books + enrollments" view is written as one explicit query (or one query per aggregate collection) rather than triggering one row-by-row.
+- **HikariCP** (Spring Boot default) left at its default pool size — right for a system with modest concurrency; only worth revisiting once real load-testing says otherwise.
+
 ## Development Phases
 
-Built as **vertical slices** — one module end to end (entity → repository → service → controller → tests) before starting the next, so there is a working endpoint after phase 2 rather than after phase 6.
+Built as **vertical slices** — one module end to end (domain → port → JDBC adapter → application service → controller → tests) before starting the next, so there is a working endpoint early rather than after every module is scaffolded.
 
 1. Skeleton: Modulith dependencies, five module declarations, the verification test, Flyway `V1__init.sql`
-2. `shared`: exception hierarchy, error envelopes, global handler
+2. `shared`: exception hierarchy, error envelopes, global handler, Spring Security baseline
 3. `student`: the reference module, operations 1–5, plus the cross-module API and `StudentDeleted`
-4. `course`: structurally a twin of `student`, operations 11–15
-5. `book`: operations 6–10 and 16–19, the first cross-module edge, the `StudentDeleted` listener
-6. `enrollment`: operations 20–23, two cross-module dependencies, both cleanup listeners
-7. Cross-cutting: pagination, sorting, search, `Documenter` output, Swagger/OpenAPI
+4. `course`: structurally a twin of `student`, operations 8–10
+5. `book`: the first cross-module edge, the `StudentDeleted` listener
+6. `enrollment`: two cross-module dependencies, both cleanup listeners
+7. Cross-cutting: pagination, sorting, search, Swagger/OpenAPI
 8. Testing (module slices, integration, Testcontainers)
 
-Full sequencing and rationale in [plan-modulithDdd.prompt.md](./docs-modulith-DDD/plan-modulithDdd.prompt.md).
+Full sequencing and rationale in [docs/SA-docs/](./docs/SA-docs/).
 
 ## Roadmap
 
-**MVP**: Student/Book/Course CRUD, Student–Book (1:N), Student–Course (N:M), DTOs, validation, exception handling.
+**MVP**: Student/Book/Course CRUD, Student–Book (1:N), Student–Course (N:M), DTOs, validation, exception handling, authentication.
 
-**Internship-ready**: MVP + pagination, search, filtering, unit/integration tests, Testcontainers, Docker Compose, Swagger/OpenAPI, explicit `Enrollment` aggregate in place of a plain `@ManyToMany`. A later extension would give `Enrollment` a `status` (`ENROLLED` / `DROPPED` / `COMPLETED`) and a `finalGrade`.
+**Internship-ready**: MVP + pagination, search, filtering, unit/integration tests, Testcontainers, Docker Compose, Swagger/OpenAPI. A later extension would give `Enrollment` a `status` (`ENROLLED` / `DROPPED` / `COMPLETED`) and a `finalGrade`.
 
-For full detail and rationale behind each decision, see [req.md](./docs-modulith-DDD/req.md).
+For full detail and rationale behind each decision, see [docs/BA-docs/req.md](./docs/BA-docs/req.md).
