@@ -1,126 +1,43 @@
-# Student Management System — REST API
+# Student Management System
 
-A production-oriented **Student Management System** backend, built as a portfolio-grade Spring Boot REST API. It manages students, books, and courses with proper layered architecture, validation, exception handling, and relational data integrity.
+## What is this?
 
-> **New here? Read the docs in order:**
-> Business requirements: [docs/BA-docs/req.md](./docs/BA-docs/req.md)
-> Use cases: [docs/BA-docs/use-cases.md](./docs/BA-docs/use-cases.md)
-> Solution architecture: [docs/SA-docs/](./docs/SA-docs/)
+This is a system for keeping track of **students, the books they borrow, and the courses they take** — the kind of record-keeping a school, training center, or library would need day to day.
 
-## Tech Stack
+Think of it as the digital version of three linked ledgers:
 
-- Java 21 + Spring Boot 4.1
-- Spring Modulith (application modules + build-time boundary verification)
-- Spring Web MVC
-- Spring Security (authentication/authorization)
-- Spring Data JDBC (explicit aggregate persistence, no lazy loading, no implicit cascades)
-- MySQL 8 + Flyway (versioned schema, since Spring Data JDBC does not auto-generate DDL)
-- MapStruct (compile-time mapping between domain model and DTOs, where a mapping isn't trivial enough for a plain constructor call)
-- Jakarta Bean Validation
+- **A student register** — who is enrolled, with their contact details and a unique student code.
+- **A book log** — which books exist, and which student (if any) currently has each one checked out.
+- **A course catalog** — which courses are offered, and who is enrolled in each one.
 
-## Architecture
+The system makes sure these three records stay consistent with each other automatically. For example, if a student leaves the school and their record is deleted, any book they had is automatically marked as "returned" (no longer assigned to them) and they're automatically removed from any course rosters — without anyone needing to update those records by hand.
 
-One Spring Boot process, one MySQL schema, **five Spring Modulith application modules** — vertical slices, one aggregate and one table each:
+## Who is it for, and what problem does it solve?
 
-```text
-org.phuchoang.management
-├── shared/      ← open module: exceptions, error envelopes, config
-├── student/     → shared
-├── course/      → shared
-├── book/        → shared, student          (Book.ownerId : StudentId)
-└── enrollment/  → shared, student, course
-```
+Anywhere that manually tracks "which student has which book" or "who's enrolled in which course" using spreadsheets runs into the same problems over time: duplicate entries, forgotten updates, and records that quietly go out of sync with each other (e.g., a book still shown as "borrowed" by a student who left months ago).
 
-Spring Modulith draws the **outer** boundary (which module may depend on which). Inside each module, a light **Clean/Hexagonal** layering draws the **inner** boundary (domain stays ignorant of frameworks):
+This system exists to prevent that by enforcing a few simple rules automatically:
 
-```text
-module/
-├── domain/       ← aggregate root + value objects; plain Java, no Spring/JDBC imports
-├── application/  ← use-case services; orchestrate the domain and repository ports
-├── port/         ← repository interfaces the domain/application layer depends on
-├── web/          ← REST controller + request/response DTOs (driving adapter)
-└── internal/     ← Spring Data JDBC repository + persistence model (driven adapter);
-                     unreachable from any other module
-```
+- Every student, book, and course has a unique identifying code — no accidental duplicates.
+- A student can't be enrolled in the same course twice.
+- Returning a book or leaving a course never deletes the book or course itself — only the link between it and the student is removed.
+- Removing a student or a course automatically cleans up everything connected to it, in one safe step, so nothing is left dangling.
 
-The domain layer has no knowledge of Spring, JDBC, or HTTP — it depends only on the ports it defines. `internal/` implements those ports against Spring Data JDBC and is where the only framework-aware persistence code lives. This is what "Spring Modulith + DDD + Hexagonal" means concretely here: Modulith enforces module-to-module boundaries at build time via `ApplicationModules.verify()` running as a JUnit test; the domain/port split enforces the dependency-inversion boundary within a module at code-review time.
+## What can it actually do?
 
-Business logic lives on the aggregate where it inspects only its own state, and in the application service where it needs a port. Controllers stay thin, and persistence entities are never exposed over the API (DTOs only, mapped with MapStruct where the mapping isn't a trivial constructor call). Cross-module cleanup (deleting a student releases their books and drops their enrollments) travels backwards along the same edges as **synchronous, in-transaction domain events**.
+In plain terms, the system supports:
 
-See [docs/SA-docs/](./docs/SA-docs/) for the system overview, component, and sequence diagrams.
+- **Adding, viewing, updating, and removing** students, books, and courses.
+- **Assigning a book to a student** (and later marking it returned/unassigned).
+- **Enrolling a student in a course** (and later unenrolling them).
+- **Looking things up**, such as "which books does this student have?" or "who is enrolled in this course?"
 
-## Domain Model
+Only authorized, logged-in users can make changes (add, edit, delete). A student can look up their own information, but not anyone else's.
 
-- **Student → Book**: one-to-many. A student can own many books; a book belongs to at most one student (`student_id` is nullable).
-- **Student ↔ Course**: many-to-many via a `student_courses` join table, modelled as an explicit `Enrollment` aggregate with a composite primary key.
+If someone tries to do something that doesn't make sense — like enrolling in the same course twice, or looking up a student that doesn't exist — the system rejects the request with a clear explanation rather than silently doing the wrong thing.
 
-```text
-Student 1 ─────────── N Book
-Student N ─────────── N Course
-```
+## How is it built? (for technical readers)
 
-Aggregates reference each other **by identity only** — `Book` holds an `ownerId : StudentId`, never a `Student`. There is no `@ManyToOne` and no `@ManyToMany` in the codebase; that rule is what lets each aggregate live in its own module, and it's a natural fit for Spring Data JDBC, which persists aggregates as a whole and does not silently traverse relationships the way JPA does.
+Under the hood, this is a Java/Spring Boot REST API — a backend service that other applications (a web dashboard, a mobile app, etc.) would talk to. It's built as a portfolio-grade example of clean, modular backend architecture, with layered code, input validation, proper error handling, and a real relational database (MySQL) enforcing data integrity.
 
-## API Overview
-
-Base path: `/api/v1`
-
-| Resource       | Endpoints                                                                                                                                                                                       |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Students       | `POST /students`, `GET /students`, `GET /students/{id}`, `PUT /students/{id}`, `DELETE /students/{id}`                                                                                          |
-| Books          | `POST /books`, `GET /books`, `GET /books/{id}`, `PUT /books/{id}`, `DELETE /books/{id}`                                                                                                         |
-| Courses        | `POST /courses`, `GET /courses`, `GET /courses/{id}`, `PUT /courses/{id}`, `DELETE /courses/{id}`                                                                                               |
-| Student–Book   | `POST /students/{studentId}/books/{bookId}` (assign), `GET /students/{studentId}/books`, `GET /books/{bookId}/owner`, `DELETE /students/{studentId}/books/{bookId}` (unassign)                  |
-| Student–Course | `POST /students/{studentId}/courses/{courseId}` (enroll), `GET /students/{studentId}/courses`, `GET /courses/{courseId}/students`, `DELETE /students/{studentId}/courses/{courseId}` (unenroll) |
-
-Endpoints that mutate state require an authenticated principal (Spring Security); read endpoints exposed to the `Student` actor are scoped to that student's own data.
-
-## Key Business Rules
-
-- `studentCode`, `email`, `isbn`, and `courseCode` must each be unique.
-- A student cannot enroll in the same course twice (`409 Conflict`).
-- Unassigning a book or unenrolling a student never deletes the underlying entity — only the relationship.
-- Deleting a student sets `books.student_id = NULL` for their books and removes their course enrollments; the books and courses themselves remain. This happens via a `StudentDeleted` domain event handled by the `book` and `enrollment` modules **before** the student row is removed — all in one transaction, so a failure anywhere rolls the whole delete back.
-- Deleting a course removes its `student_courses` enrollment records the same way, via `CourseDeleted`; students remain.
-- Deleting a book publishes nothing — ownership is a column on the book, so the link dies with the row.
-
-| Exception            | HTTP Status |
-| -------------------- | ----------- |
-| Resource not found   | 404         |
-| Validation failed    | 400         |
-| Duplicate resource   | 409         |
-| Duplicate enrollment | 409         |
-| Invalid relationship | 409         |
-
-## Database & MySQL Optimization
-
-The schema is hand-written and versioned with **Flyway** (`src/main/resources/db/migration`), since Spring Data JDBC has no `ddl-auto` — this is treated as a feature, not a gap: every constraint and index is explicit and reviewable. For a system of this size, "optimization" means getting the fundamentals right rather than premature tuning:
-
-- **`utf8mb4` / `utf8mb4_0900_ai_ci`** everywhere (set at the database and connection level) — correct Unicode storage (names, titles) and case-insensitive comparison for lookups like email/title search, without extra `LOWER()` calls.
-- **InnoDB** (MySQL 8 default) for every table — row-level locking and real foreign-key constraints, which is what lets the database itself enforce "a book's owner must exist" and "an enrollment must reference a real student and course" alongside the application-level checks.
-- **Explicit indexes** matched to the actual access patterns from the use cases: `UNIQUE` on `student_code`, `email`, `isbn`, `course_code` (uniqueness constraints already create these); a secondary index on `book.student_id` for "books owned by student" and "unassign on student delete"; the `enrollment` composite primary key `(student_id, course_code)` already covers "is this pair enrolled" and "roster for a course" lookups without an extra index.
-- **No N+1 by construction**: Spring Data JDBC doesn't lazy-load, so a roster or "student detail with books + enrollments" view is written as one explicit query (or one query per aggregate collection) rather than triggering one row-by-row.
-- **HikariCP** (Spring Boot default) left at its default pool size — right for a system with modest concurrency; only worth revisiting once real load-testing says otherwise.
-
-## Development Phases
-
-Built as **vertical slices** — one module end to end (domain → port → JDBC adapter → application service → controller → tests) before starting the next, so there is a working endpoint early rather than after every module is scaffolded.
-
-1. Skeleton: Modulith dependencies, five module declarations, the verification test, Flyway `V1__init.sql`
-2. `shared`: exception hierarchy, error envelopes, global handler, Spring Security baseline
-3. `student`: the reference module, operations 1–5, plus the cross-module API and `StudentDeleted`
-4. `course`: structurally a twin of `student`, operations 8–10
-5. `book`: the first cross-module edge, the `StudentDeleted` listener
-6. `enrollment`: two cross-module dependencies, both cleanup listeners
-7. Cross-cutting: pagination, sorting, search, Swagger/OpenAPI
-8. Testing (module slices, integration, Testcontainers)
-
-Full sequencing and rationale in [docs/SA-docs/](./docs/SA-docs/).
-
-## Roadmap
-
-**MVP**: Student/Book/Course CRUD, Student–Book (1:N), Student–Course (N:M), DTOs, validation, exception handling, authentication.
-
-**Internship-ready**: MVP + pagination, search, filtering, unit/integration tests, Testcontainers, Docker Compose, Swagger/OpenAPI. A later extension would give `Enrollment` a `status` (`ENROLLED` / `DROPPED` / `COMPLETED`) and a `finalGrade`.
-
-For full detail and rationale behind each decision, see [docs/BA-docs/req.md](./docs/BA-docs/req.md).
+For architecture details, module boundaries, database design, and the technical roadmap, see the documentation: [Document](docs/).
