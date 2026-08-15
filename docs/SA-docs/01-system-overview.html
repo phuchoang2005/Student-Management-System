@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Overview — Student Management System SA Docs</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1c1e21;
+    --muted: #57606a;
+    --border: #d8dee4;
+    --code-bg: #f6f8fa;
+    --link: #0969da;
+    --table-stripe: #f6f8fa;
+    --header-bg: #f6f8fa;
+    --pill-bg: #eef2ff;
+    --pill-fg: #3730a3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --fg: #e6edf3;
+      --muted: #9198a1;
+      --border: #30363d;
+      --code-bg: #161b22;
+      --link: #4493f8;
+      --table-stripe: #161b22;
+      --header-bg: #161b22;
+      --pill-bg: #1c2333;
+      --pill-fg: #a5b4fc;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 5rem;
+  }
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.6rem;
+  }
+  h2 {
+    font-size: 1.4rem;
+    margin-top: 2.6rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.1rem;
+    margin-top: 1.8rem;
+    color: var(--fg);
+  }
+  p { color: var(--fg); }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin-top: 0;
+  }
+  .doc-nav {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0.6rem 0 1.6rem;
+  }
+  .doc-nav .pill {
+    background: var(--pill-bg);
+    color: var(--pill-fg);
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .doc-nav a { color: var(--link); text-decoration: none; }
+  .doc-nav a:hover { text-decoration: underline; }
+  a { color: var(--link); }
+  code {
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.2rem 0;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.55rem 0.8rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--header-bg);
+    font-weight: 600;
+  }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .mermaid-wrap {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    margin: 1.4rem 0 0.5rem;
+    overflow-x: auto;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .mermaid-wrap.zoomable { cursor: zoom-in; }
+  .mermaid-wrap.zoomable:hover {
+    border-color: var(--link);
+    box-shadow: 0 0 0 1px var(--link);
+  }
+  .mermaid { display: flex; justify-content: center; }
+  .fig-caption {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.82rem;
+    margin-top: 0;
+    margin-bottom: 1.4rem;
+  }
+  ul, ol { padding-left: 1.4rem; }
+  li { margin: 0.3rem 0; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  em { color: var(--muted); }
+
+  /* Diagram lightbox */
+  .lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.86);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .lightbox-overlay.open { display: flex; }
+  .lightbox-viewport {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+  }
+  .lightbox-viewport.grabbing { cursor: grabbing; }
+  .lightbox-stage {
+    transform-origin: center center;
+    will-change: transform;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 1.25rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+  .lightbox-stage svg.lightbox-svg {
+    display: block;
+  }
+  .lightbox-toolbar {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    display: flex;
+    gap: 0.5rem;
+    z-index: 1001;
+  }
+  .lightbox-toolbar button {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.05rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .lightbox-toolbar button:hover { background: rgba(255, 255, 255, 0.28); }
+  #lightbox-reset { width: auto; padding: 0 0.8rem; font-size: 0.85rem; }
+  .lightbox-hint {
+    position: absolute;
+    bottom: 1.1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<h1>System Overview</h1>
+<p class="subtitle">Solution Architecture Document — Part 1 of 3</p>
+<nav class="doc-nav">
+  <span class="pill">Part 1</span> System Overview
+  &nbsp;→&nbsp;
+  <a href="./02-component-diagram.html">Component Diagram</a>
+  &nbsp;→&nbsp;
+  <a href="./03-sequence-diagrams.md">Sequence Diagram</a>
+</nav>
+
+<p>Derived from <a href="../BA-docs/use-cases.md">use-cases.md</a> and <a href="../BA-docs/req.md">req.md</a>. This document answers <em>what the system is, who talks to it, and what it depends on</em> — not how a request is handled internally (Component Diagram) or in what order (Sequence Diagram).</p>
+
+<hr>
+
+<h2 id="scope">1. Scope</h2>
+<p>The Student Management System is a <strong>single-deployable, backend-only REST API</strong>. There is no bundled frontend; any HTTP client (Swagger UI, a future SPA, <code>curl</code>) reaches it the same way. There are <strong>no external system integrations</strong> in the current scope — no email/notification service, no payment gateway, no third-party identity provider. The only runtime dependency outside the application process is its own database.</p>
+
+<h2 id="actors">2. Actors</h2>
+<table>
+  <thead>
+    <tr><th>Actor</th><th>Description</th><th>Source</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Registrar</strong></td><td>Manages student records and enrollments.</td><td>use-cases.md UC-1–3, 11–13, 17, 20</td></tr>
+    <tr><td><strong>Librarian</strong></td><td>Manages the book catalog and book ownership assignments.</td><td>use-cases.md UC-4–7, 14, 18</td></tr>
+    <tr><td><strong>Course Administrator</strong></td><td>Manages course offerings.</td><td>use-cases.md UC-8–10, 15, 19</td></tr>
+    <tr><td><strong>Student</strong></td><td>Looks up their own books/courses; may self-enroll if self-service is enabled.</td><td>use-cases.md UC-16, 18–20</td></tr>
+  </tbody>
+</table>
+<p>All four are <strong>human actors interacting over HTTPS</strong>; none is a system-to-system integration. They are distinguished by <strong>authorization scope</strong>, not by transport or protocol — every actor hits the same API through the same security gateway, and Spring Security narrows what each role/principal may do or see (e.g., a Student principal can only read their own records).</p>
+
+<h2 id="context-diagram">3. System Context Diagram</h2>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+flowchart TB
+    Registrar["Registrar"]
+    Librarian["Librarian"]
+    CourseAdmin["Course Administrator"]
+    Student["Student"]
+
+    subgraph SMS["Student Management System (single Spring Boot process)"]
+        direction TB
+        Gateway["Spring Security\nauthentication + role-based authorization"]
+        subgraph Modules["Spring Modulith application modules"]
+            direction LR
+            Shared["shared"]
+            StudentMod["student"]
+            CourseMod["course"]
+            BookMod["book"]
+            EnrollmentMod["enrollment"]
+        end
+        Gateway --> Modules
+    end
+
+    DB[("MySQL 8\nschema versioned by Flyway")]
+
+    Registrar -- "HTTPS / JSON (REST)" --> Gateway
+    Librarian -- "HTTPS / JSON (REST)" --> Gateway
+    CourseAdmin -- "HTTPS / JSON (REST)" --> Gateway
+    Student -- "HTTPS / JSON (REST)" --> Gateway
+
+    Modules -- "Spring Data JDBC\n(one connection pool, one schema)" --> DB
+</pre>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+
+<h2 id="elements">4. Elements</h2>
+
+<h3>4.1 Actors → System</h3>
+<p>Every actor talks to the same single entry point (<code>/api/v1/**</code>) over HTTPS. There is no per-actor endpoint or gateway split — role information (Registrar / Librarian / Course Administrator / Student) is carried on the authenticated principal and enforced by Spring Security at the module boundary, not by routing to different systems.</p>
+
+<h3>4.2 Spring Security gateway</h3>
+<p>Every inbound request is authenticated and authorized before it reaches a module's controller. This is the one cross-cutting concern that sits <em>outside</em> the five application modules (alongside error handling, which lives in <code>shared</code>). The concrete authentication scheme (session vs. token) is an implementation decision for the Component Diagram / build phase, not fixed at this level — what's architecturally fixed is that <strong>authorization is role-based and enforced centrally</strong>, once, not re-implemented per module.</p>
+
+<h3>4.3 The system: one Spring Boot process, five Spring Modulith modules</h3>
+<p>The system is a <strong>modular monolith</strong> — one deployable JAR, one running process, one database schema — not a set of independently deployable services. <code>shared</code>, <code>student</code>, <code>course</code>, <code>book</code>, and <code>enrollment</code> are Spring Modulith <em>application modules</em>: they are enforced at build time (<code>ApplicationModules.verify()</code>), but they communicate <strong>in-process</strong>, not over a network. This matters at the overview level because it rules out the failure modes a distributed system would have (partial network failure, eventual consistency between modules) — cross-module effects (e.g., deleting a student clearing their books) happen synchronously, inside one database transaction. Module-to-module dependencies and the internal hexagonal layering of each module are detailed in the <a href="./02-component-diagram.html">Component Diagram</a>.</p>
+
+<h3>4.4 MySQL database</h3>
+<p>A single MySQL 8 schema, owned entirely by this application — no other system reads or writes it directly. The schema is version-controlled via Flyway migrations (<code>src/main/resources/db/migration</code>), since Spring Data JDBC does not generate DDL. All five modules share one schema and one connection pool; module boundaries are a code/build-time concept, not a database-per-module split.</p>
+
+<h2 id="deployment">5. Deployment Characteristics</h2>
+<table>
+  <thead><tr><th>Property</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Deployable unit</td><td>Single Spring Boot fat JAR (or container image built from it)</td></tr>
+    <tr><td>Process topology</td><td>One process, no clustering/sharding for this scope</td></tr>
+    <tr><td>State</td><td>Stateless application tier; all persistent state lives in MySQL</td></tr>
+    <tr><td>Data store topology</td><td>One schema, one connection pool, shared by all modules</td></tr>
+    <tr><td>External integrations</td><td>None</td></tr>
+    <tr><td>Local/dev orchestration</td><td><code>docker-compose.yml</code> — application container + MySQL container</td></tr>
+  </tbody>
+</table>
+
+<h2 id="out-of-scope">6. Out of Scope (this document)</h2>
+<ul>
+  <li>Internal request flow through a module's layers (controller → service → domain → repository) — see <a href="./02-component-diagram.html">Component Diagram</a>.</li>
+  <li>Ordering of calls and cross-module event handling for a specific use case — see <a href="./03-sequence-diagrams.md">Sequence Diagram</a>.</li>
+  <li>API request/response shapes — tracked separately in an OpenAPI contract, not in this document.</li>
+</ul>
+
+<div id="diagram-lightbox" class="lightbox-overlay">
+  <div class="lightbox-toolbar">
+    <button id="lightbox-zoom-out" title="Zoom out">−</button>
+    <button id="lightbox-reset" title="Reset zoom">100%</button>
+    <button id="lightbox-zoom-in" title="Zoom in">+</button>
+    <button id="lightbox-close" title="Close (Esc)">✕</button>
+  </div>
+  <div id="lightbox-viewport" class="lightbox-viewport">
+    <div id="lightbox-stage" class="lightbox-stage"></div>
+  </div>
+  <p class="lightbox-hint">Scroll to zoom · Drag to pan · Double-click to reset · Esc to close</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+  (async function () {
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: prefersDark ? "dark" : "default",
+      securityLevel: "strict",
+      flowchart: { htmlLabels: true, curve: "basis" }
+    });
+    await mermaid.run();
+    initDiagramLightbox();
+  })();
+
+  function initDiagramLightbox() {
+    const overlay = document.getElementById("diagram-lightbox");
+    const viewport = document.getElementById("lightbox-viewport");
+    const stage = document.getElementById("lightbox-stage");
+    const zoomInBtn = document.getElementById("lightbox-zoom-in");
+    const zoomOutBtn = document.getElementById("lightbox-zoom-out");
+    const resetBtn = document.getElementById("lightbox-reset");
+    const closeBtn = document.getElementById("lightbox-close");
+
+    const MIN_SCALE = 0.15;
+    const MAX_SCALE = 10;
+    let scale = 1, panX = 0, panY = 0;
+    let baseWidth = 800, baseHeight = 600;
+    let currentSvg = null;
+    let dragging = false, moved = false, startX = 0, startY = 0, startPanX = 0, startPanY = 0;
+    let applyQueued = false;
+
+    // Resizes the SVG's actual width/height (not a CSS transform: scale) so the
+    // browser re-renders the vector at the target resolution instead of stretching
+    // a rasterized layer, which is what caused blur on zoom.
+    function apply() {
+      if (applyQueued) return;
+      applyQueued = true;
+      requestAnimationFrame(() => {
+        applyQueued = false;
+        if (currentSvg) {
+          currentSvg.style.width = Math.round(baseWidth * scale) + "px";
+          currentSvg.style.height = Math.round(baseHeight * scale) + "px";
+        }
+        stage.style.transform = `translate(${panX}px, ${panY}px)`;
+        resetBtn.textContent = Math.round(scale * 100) + "%";
+      });
+    }
+    function resetView() {
+      scale = 1; panX = 0; panY = 0;
+      apply();
+    }
+    function zoomBy(factor) {
+      scale = Math.min(Math.max(scale * factor, MIN_SCALE), MAX_SCALE);
+      apply();
+    }
+    function openLightbox(svg) {
+      stage.innerHTML = "";
+      const clone = svg.cloneNode(true);
+      clone.classList.add("lightbox-svg");
+      clone.removeAttribute("style");
+      clone.removeAttribute("width");
+      clone.removeAttribute("height");
+
+      let vbWidth = 800, vbHeight = 600;
+      const vb = clone.getAttribute("viewBox");
+      if (vb) {
+        const parts = vb.trim().split(/\s+/).map(Number);
+        if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+          vbWidth = parts[2];
+          vbHeight = parts[3];
+        }
+      }
+      const stagePadding = 40;
+      const maxW = window.innerWidth * 0.9 - stagePadding;
+      const maxH = window.innerHeight * 0.78 - stagePadding;
+      const fitScale = Math.min(maxW / vbWidth, maxH / vbHeight, 1);
+      baseWidth = Math.round(vbWidth * fitScale);
+      baseHeight = Math.round(vbHeight * fitScale);
+      clone.style.width = baseWidth + "px";
+      clone.style.height = baseHeight + "px";
+
+      stage.appendChild(clone);
+      currentSvg = clone;
+      resetView();
+      overlay.classList.add("open");
+      document.body.style.overflow = "hidden";
+    }
+    function closeLightbox() {
+      overlay.classList.remove("open");
+      document.body.style.overflow = "";
+    }
+
+    document.querySelectorAll(".mermaid-wrap").forEach((wrap) => {
+      wrap.classList.add("zoomable");
+      wrap.addEventListener("click", () => {
+        const svg = wrap.querySelector("svg");
+        if (svg) openLightbox(svg);
+      });
+    });
+
+    closeBtn.addEventListener("click", closeLightbox);
+    resetBtn.addEventListener("click", resetView);
+    zoomInBtn.addEventListener("click", () => zoomBy(1.3));
+    zoomOutBtn.addEventListener("click", () => zoomBy(1 / 1.3));
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && overlay.classList.contains("open")) closeLightbox();
+    });
+
+    viewport.addEventListener("click", (e) => {
+      if (!moved && e.target === viewport) closeLightbox();
+    });
+
+    viewport.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12);
+    }, { passive: false });
+
+    viewport.addEventListener("dblclick", resetView);
+
+    viewport.addEventListener("pointerdown", (e) => {
+      dragging = true; moved = false;
+      startX = e.clientX; startY = e.clientY;
+      startPanX = panX; startPanY = panY;
+      viewport.classList.add("grabbing");
+      viewport.setPointerCapture(e.pointerId);
+    });
+    viewport.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+      panX = startPanX + dx;
+      panY = startPanY + dy;
+      apply();
+    });
+    viewport.addEventListener("pointerup", () => {
+      dragging = false;
+      viewport.classList.remove("grabbing");
+    });
+  }
+</script>
+
+</body>
+</html>
