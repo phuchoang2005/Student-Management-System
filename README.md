@@ -17,14 +17,13 @@ A production-oriented **Student Management System** backend, built as a portfoli
 - MySQL 8 + Flyway (versioned schema, since Spring Data JDBC does not auto-generate DDL)
 - MapStruct (compile-time mapping between domain model and DTOs, where a mapping isn't trivial enough for a plain constructor call)
 - Jakarta Bean Validation
-- JUnit 5, Mockito, MockMvc, `@ApplicationModuleTest`, Testcontainers
 
 ## Architecture
 
 One Spring Boot process, one MySQL schema, **five Spring Modulith application modules** — vertical slices, one aggregate and one table each:
 
 ```text
-org.phuchoang2005.management
+org.phuchoang.management
 ├── shared/      ← open module: exceptions, error envelopes, config
 ├── student/     → shared
 ├── course/      → shared
@@ -66,12 +65,12 @@ Aggregates reference each other **by identity only** — `Book` holds an `ownerI
 
 Base path: `/api/v1`
 
-| Resource | Endpoints |
-| --- | --- |
-| Students | `POST /students`, `GET /students`, `GET /students/{id}`, `PUT /students/{id}`, `DELETE /students/{id}` |
-| Books | `POST /books`, `GET /books`, `GET /books/{id}`, `PUT /books/{id}`, `DELETE /books/{id}` |
-| Courses | `POST /courses`, `GET /courses`, `GET /courses/{id}`, `PUT /courses/{id}`, `DELETE /courses/{id}` |
-| Student–Book | `POST /students/{studentId}/books/{bookId}` (assign), `GET /students/{studentId}/books`, `GET /books/{bookId}/owner`, `DELETE /students/{studentId}/books/{bookId}` (unassign) |
+| Resource       | Endpoints                                                                                                                                                                                       |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Students       | `POST /students`, `GET /students`, `GET /students/{id}`, `PUT /students/{id}`, `DELETE /students/{id}`                                                                                          |
+| Books          | `POST /books`, `GET /books`, `GET /books/{id}`, `PUT /books/{id}`, `DELETE /books/{id}`                                                                                                         |
+| Courses        | `POST /courses`, `GET /courses`, `GET /courses/{id}`, `PUT /courses/{id}`, `DELETE /courses/{id}`                                                                                               |
+| Student–Book   | `POST /students/{studentId}/books/{bookId}` (assign), `GET /students/{studentId}/books`, `GET /books/{bookId}/owner`, `DELETE /students/{studentId}/books/{bookId}` (unassign)                  |
 | Student–Course | `POST /students/{studentId}/courses/{courseId}` (enroll), `GET /students/{studentId}/courses`, `GET /courses/{courseId}/students`, `DELETE /students/{studentId}/courses/{courseId}` (unenroll) |
 
 Endpoints that mutate state require an authenticated principal (Spring Security); read endpoints exposed to the `Student` actor are scoped to that student's own data.
@@ -85,13 +84,13 @@ Endpoints that mutate state require an authenticated principal (Spring Security)
 - Deleting a course removes its `student_courses` enrollment records the same way, via `CourseDeleted`; students remain.
 - Deleting a book publishes nothing — ownership is a column on the book, so the link dies with the row.
 
-| Exception | HTTP Status |
-| --- | --- |
-| Resource not found | 404 |
-| Validation failed | 400 |
-| Duplicate resource | 409 |
-| Duplicate enrollment | 409 |
-| Invalid relationship | 409 |
+| Exception            | HTTP Status |
+| -------------------- | ----------- |
+| Resource not found   | 404         |
+| Validation failed    | 400         |
+| Duplicate resource   | 409         |
+| Duplicate enrollment | 409         |
+| Invalid relationship | 409         |
 
 ## Database & MySQL Optimization
 

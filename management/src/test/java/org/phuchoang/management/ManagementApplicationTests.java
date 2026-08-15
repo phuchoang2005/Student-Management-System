@@ -1,4 +1,4 @@
-package org.phuchoang2005.management;
+package org.phuchoang.management;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

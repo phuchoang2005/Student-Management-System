@@ -1,4 +1,4 @@
-package org.phuchoang2005.management;
+package org.phuchoang.management;
 
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
