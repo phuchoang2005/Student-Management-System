@@ -1,6 +1,0 @@
-name: search
-in: query
-description: Free-text search term
-schema:
-  type: string
-  example: john

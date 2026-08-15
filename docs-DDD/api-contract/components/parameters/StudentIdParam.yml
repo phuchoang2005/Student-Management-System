@@ -1,8 +1,0 @@
-name: studentId
-in: path
-required: true
-description: Student identifier
-schema:
-  type: integer
-  format: int64
-  example: 1

@@ -1,8 +1,0 @@
-allOf:
-  - $ref: "./PageMetadata.yml"
-  - type: object
-    properties:
-      content:
-        type: array
-        items:
-          $ref: "./course/CourseResponse.yml"
