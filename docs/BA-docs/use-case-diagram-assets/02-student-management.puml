@@ -1,0 +1,30 @@
+@startuml
+left to right direction
+skinparam backgroundColor transparent
+skinparam usecase {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+}
+skinparam actor {
+  BackgroundColor #EEF2FF
+  BorderColor #3730A3
+}
+
+actor Registrar
+
+rectangle "Student Management" {
+  usecase "UC-1\nRegister Student" as UC1
+  usecase "UC-2\nUpdate Student Details" as UC2
+  usecase "UC-3\nRemove Student" as UC3
+  usecase "UC-13\nView/Search Students" as UC13
+  usecase "UC-17\nView Student Detail" as UC17
+}
+
+Registrar --> UC1
+Registrar --> UC2
+Registrar --> UC3
+Registrar --> UC13
+Registrar --> UC17
+
+UC17 ..> UC13 : <<extend>>
+@enduml

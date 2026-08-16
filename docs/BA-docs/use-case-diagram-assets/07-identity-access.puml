@@ -1,0 +1,37 @@
+@startuml
+left to right direction
+skinparam backgroundColor transparent
+skinparam nodesep 35
+skinparam ranksep 90
+skinparam usecase {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+}
+skinparam actor {
+  BackgroundColor #EEF2FF
+  BorderColor #3730A3
+}
+
+actor Registrar
+actor Librarian
+actor "Course Administrator" as CourseAdmin
+actor Student
+
+rectangle "Identity & Access" {
+  usecase "UC-23\nView Student's\nInitial Password" as UC23
+  usecase "UC-22\nChange Password" as UC22
+  usecase "UC-21\nLogin" as UC21
+}
+
+Registrar --> UC21
+Registrar --> UC22
+Registrar --> UC23
+Librarian --> UC21
+Librarian --> UC22
+CourseAdmin --> UC21
+CourseAdmin --> UC22
+Student --> UC21
+Student --> UC22
+
+UC22 ..> UC21 : requires active session
+@enduml

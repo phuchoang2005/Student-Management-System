@@ -1,0 +1,35 @@
+@startuml
+left to right direction
+skinparam backgroundColor transparent
+skinparam nodesep 40
+skinparam ranksep 120
+skinparam usecase {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+}
+skinparam actor {
+  BackgroundColor #EEF2FF
+  BorderColor #3730A3
+}
+
+actor Registrar
+actor "Course Administrator" as CourseAdmin
+actor Student
+
+rectangle "Student Self-Service" {
+  usecase "UC-16\nView Own Books, Courses\n& Enrollments" as UC16
+  usecase "UC-20\nView Enrollment Detail" as UC20
+}
+
+usecase "UC-17\nView Student Detail\n(see Student Management)" as UC17ext #line.dashed
+usecase "UC-19\nView Course Detail\n(see Course Management)" as UC19ext #line.dashed
+
+Student --> UC16
+Student --> UC20
+Registrar --> UC20
+CourseAdmin --> UC20
+
+UC20 ..> UC16 : <<extend>>
+UC20 ..> UC17ext : <<extend>>
+UC20 ..> UC19ext : <<extend>>
+@enduml

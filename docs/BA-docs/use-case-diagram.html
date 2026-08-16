@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Use Case Diagrams — Student Management System BA Docs</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1c1e21;
+    --muted: #57606a;
+    --border: #d8dee4;
+    --code-bg: #f6f8fa;
+    --link: #0969da;
+    --table-stripe: #f6f8fa;
+    --header-bg: #f6f8fa;
+    --pill-bg: #eef2ff;
+    --pill-fg: #3730a3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --fg: #e6edf3;
+      --muted: #9198a1;
+      --border: #30363d;
+      --code-bg: #161b22;
+      --link: #4493f8;
+      --table-stripe: #161b22;
+      --header-bg: #161b22;
+      --pill-bg: #1c2333;
+      --pill-fg: #a5b4fc;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 5rem;
+  }
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.6rem;
+  }
+  h2 {
+    font-size: 1.4rem;
+    margin-top: 2.6rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.1rem;
+    margin-top: 1.8rem;
+    color: var(--fg);
+  }
+  p { color: var(--fg); }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin-top: 0;
+  }
+  .doc-nav {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0.6rem 0 1.6rem;
+  }
+  .doc-nav .pill {
+    background: var(--pill-bg);
+    color: var(--pill-fg);
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .doc-nav a { color: var(--link); text-decoration: none; }
+  .doc-nav a:hover { text-decoration: underline; }
+  a { color: var(--link); }
+  code {
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.2rem 0;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.55rem 0.8rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--header-bg);
+    font-weight: 600;
+  }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .diagram-wrap {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    margin: 1.4rem 0 0.5rem;
+    overflow-x: auto;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .diagram-wrap.zoomable { cursor: zoom-in; }
+  .diagram-wrap.zoomable:hover {
+    border-color: var(--link);
+    box-shadow: 0 0 0 1px var(--link);
+  }
+  .diagram-wrap svg {
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    height: auto;
+  }
+  /* PlantUML renders black-on-transparent; invert text/strokes for dark mode legibility */
+  @media (prefers-color-scheme: dark) {
+    .diagram-wrap svg { filter: invert(0.92) hue-rotate(180deg); }
+  }
+  .fig-caption {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.82rem;
+    margin-top: 0;
+    margin-bottom: 1.4rem;
+  }
+  ul, ol { padding-left: 1.4rem; }
+  li { margin: 0.3rem 0; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  em { color: var(--muted); }
+
+  /* Diagram lightbox */
+  .lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.86);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .lightbox-overlay.open { display: flex; }
+  .lightbox-viewport {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+  }
+  .lightbox-viewport.grabbing { cursor: grabbing; }
+  .lightbox-stage {
+    transform-origin: center center;
+    will-change: transform;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 1.25rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+  .lightbox-stage svg.lightbox-svg {
+    display: block;
+  }
+  .lightbox-toolbar {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    display: flex;
+    gap: 0.5rem;
+    z-index: 1001;
+  }
+  .lightbox-toolbar button {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.05rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .lightbox-toolbar button:hover { background: rgba(255, 255, 255, 0.28); }
+  #lightbox-reset { width: auto; padding: 0 0.8rem; font-size: 0.85rem; }
+  .lightbox-hint {
+    position: absolute;
+    bottom: 1.1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<h1>Use Case Diagrams</h1>
+<p class="subtitle">Business Analysis Document — Use Case Diagrams</p>
+<nav class="doc-nav">
+  <a href="./req.md">Requirements</a>
+  &nbsp;→&nbsp;
+  <a href="./user-stories.md">User Stories</a>
+  &nbsp;→&nbsp;
+  <a href="./use-cases.md">Use Cases</a>
+  &nbsp;→&nbsp;
+  <span class="pill">Diagrams</span> Use Case Diagrams
+</nav>
+
+<p>Derived from <a href="./use-cases.md">use-cases.md</a>, which remains the authoritative source (actors, flows, business-rule traceability). This document is the visual companion: a system-wide <strong>Overview</strong> diagram followed by one <strong>detail diagram per functional area</strong>, so that no single diagram has to carry all 23 use cases at once.</p>
+
+<p>Diagrams are drawn in standard UML use-case notation (stick-figure actors, oval use cases, a system-boundary rectangle) using <a href="https://plantuml.com/use-case-diagram">PlantUML</a>, rendered locally to SVG — nothing is fetched from a diagram server at view time. Each diagram's <code>.puml</code> source lives in <a href="./use-case-diagram-assets/">use-case-diagram-assets/</a>; edit it and re-render with <code>plantuml -tsvg *.puml</code> to update. The <a href="./use-case-diagram.md">Markdown version</a> of this document embeds the same SVGs as static images; here they're interactive — click any diagram to zoom and drag-pan.</p>
+
+<hr>
+
+<h2 id="notation">Notation</h2>
+<table>
+  <thead><tr><th>Symbol</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td>Stick figure</td><td>Actor</td></tr>
+    <tr><td>Oval, e.g. <code>UC-1 Register Student</code></td><td>A use case</td></tr>
+    <tr><td>Solid line, no arrowhead</td><td>Association — actor participates in the use case</td></tr>
+    <tr><td>Dashed arrow labeled <code>«extend»</code></td><td>One use case optionally extends another (arrow points at the base use case)</td></tr>
+    <tr><td>Dashed-border oval</td><td>An "external" reference to a use case drawn in full in a different diagram</td></tr>
+    <tr><td>Dashed arrow, other label</td><td>A dependency that isn't a formal extend, e.g. "requires active session"</td></tr>
+  </tbody>
+</table>
+
+<p>The six functional areas group the 23 use cases as follows:</p>
+<table>
+  <thead><tr><th>Area</th><th>Use Cases</th></tr></thead>
+  <tbody>
+    <tr><td>Student Management</td><td>UC-1, UC-2, UC-3, UC-13, UC-17</td></tr>
+    <tr><td>Book Management</td><td>UC-4, UC-5, UC-6, UC-7, UC-14, UC-18</td></tr>
+    <tr><td>Course Management</td><td>UC-8, UC-9, UC-10, UC-15, UC-19</td></tr>
+    <tr><td>Enrollment Management</td><td>UC-11, UC-12</td></tr>
+    <tr><td>Student Self-Service</td><td>UC-16, UC-20</td></tr>
+    <tr><td>Identity &amp; Access</td><td>UC-21, UC-22, UC-23</td></tr>
+  </tbody>
+</table>
+
+<h2 id="overview">1. System Overview</h2>
+<p>Shows which functional areas each actor touches. The Student's reach into Book Management and Course Management is indirect — only through UC-16 ("my books / my courses") — so it's drawn as a dashed line rather than a direct association.</p>
+<div class="diagram-wrap">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" data-diagram-type="DESCRIPTION" height="765px" preserveAspectRatio="none" style="width:557px;height:765px;" version="1.1" viewBox="0 0 557 765" width="557px" zoomAndPan="magnify"><?plantuml 1.2026.6?><defs/><g><!--cluster Student Management System--><g class="cluster" data-qualified-name="Student Management System" data-source-line="23" id="ent0005"><rect fill="none" height="549" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:1;" width="224" x="319.79" y="61.31"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="700" lengthAdjust="spacing" textLength="208.4209" x="327.5796" y="76.8452">Student Management System</text></g><!--entity G1--><g class="entity" data-qualified-name="Student Management System.G1" data-source-line="24" id="ent0006"><ellipse cx="431.2895" cy="116.3099" fill="#F6F8FA" rx="85.9495" ry="19.5899" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="143.9648" x="359.3071" y="121.054">Student Management</text></g><!--entity G4--><g class="entity" data-qualified-name="Student Management System.G4" data-source-line="25" id="ent0007"><ellipse cx="431.2867" cy="310.3143" fill="#F6F8FA" rx="62.6567" ry="25.4743" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="73.4932" x="394.5401" y="305.598">Enrollment</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="87.5342" x="387.5196" y="322.0863">Management</text></g><!--entity G6--><g class="entity" data-qualified-name="Student Management System.G6" data-source-line="26" id="ent0008"><ellipse cx="431.2942" cy="210.3111" fill="#F6F8FA" rx="55.6242" ry="24.7011" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="52.001" x="405.2937" y="204.4321">Student</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="79.9668" x="391.3108" y="220.9204">Self-Service</text></g><!--entity G5--><g class="entity" data-qualified-name="Student Management System.G5" data-source-line="27" id="ent0009"><ellipse cx="431.2897" cy="403.3099" fill="#F6F8FA" rx="74.0997" ry="17.2199" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="115.8623" x="373.3585" y="408.0541">Identity &amp; Access</text></g><!--entity G3--><g class="entity" data-qualified-name="Student Management System.G3" data-source-line="28" id="ent0010"><ellipse cx="431.2944" cy="489.3129" fill="#F6F8FA" rx="84.0644" ry="19.2129" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="139.6035" x="361.4926" y="494.057">Course Management</text></g><!--entity G2--><g class="entity" data-qualified-name="Student Management System.G2" data-source-line="29" id="ent0011"><ellipse cx="431.2856" cy="576.3071" fill="#F6F8FA" rx="78.0356" ry="18.0071" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="125.3984" x="368.5864" y="581.0513">Book Management</text></g><!--entity Registrar--><g class="entity" data-qualified-name="Registrar" data-source-line="18" id="ent0001"><ellipse cx="78.8951" cy="49.56" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M78.8951,57.56 L78.8951,84.56 M65.8951,65.56 L91.8951,65.56 M78.8951,84.56 L65.8951,99.56 M78.8951,84.56 L91.8951,99.56" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="60.9902" x="48.4" y="114.5952">Registrar</text></g><!--entity CourseAdmin--><g class="entity" data-qualified-name="CourseAdmin" data-source-line="19" id="ent0002"><ellipse cx="78.895" cy="356.56" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M78.895,364.56 L78.895,391.56 M65.895,372.56 L91.895,372.56 M78.895,391.56 L65.895,406.56 M78.895,391.56 L91.895,406.56" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="145.79" x="6" y="421.5952">Course Administrator</text></g><!--entity Student--><g class="entity" data-qualified-name="Student" data-source-line="20" id="ent0003"><ellipse cx="78.8905" cy="482.56" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M78.8905,490.56 L78.8905,517.56 M65.8905,498.56 L91.8905,498.56 M78.8905,517.56 L65.8905,532.56 M78.8905,517.56 L91.8905,532.56" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="52.001" x="52.89" y="547.5952">Student</text></g><!--entity Librarian--><g class="entity" data-qualified-name="Librarian" data-source-line="21" id="ent0004"><ellipse cx="78.8993" cy="683.56" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M78.8993,691.56 L78.8993,718.56 M65.8993,699.56 L91.8993,699.56 M78.8993,718.56 L65.8993,733.56 M78.8993,718.56 L91.8993,733.56" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="59.9785" x="48.91" y="748.5952">Librarian</text></g><!--link Registrar to G1--><g class="link" data-entity-1="ent0001" data-entity-2="ent0006" data-link-type="dependency" data-source-line="32" id="lnk12"><path d="M109.88,60.42 C149.17,38.09 220.21,6 280.79,23.31 C331.05,37.66 377.0165,71.144 404.5565,93.914" fill="none" id="Registrar-to-G1" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="408.41,97.1,404.0226,88.2824,404.5565,93.914,398.9249,94.4479,408.41,97.1" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Registrar to G4--><g class="link" data-entity-1="ent0001" data-entity-2="ent0007" data-link-type="dependency" data-source-line="33" id="lnk13"><path d="M109.85,104.3 C162.48,147.93 269.95,235.74 311.79,260.31 C334.22,273.48 356.1197,283.2086 378.3997,291.8686" fill="none" id="Registrar-to-G4" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="383.06,293.68,376.1205,286.6912,378.3997,291.8686,373.2223,294.1477,383.06,293.68" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Registrar to G6--><g class="link" data-entity-1="ent0001" data-entity-2="ent0008" data-link-type="dependency" data-source-line="34" id="lnk14"><path d="M109.55,69.88 C151.68,58.45 229.44,44.79 280.79,80.31 C312.49,102.23 284.9,133.69 311.79,161.31 C330.27,180.29 352.4062,190.723 375.9062,198.043" fill="none" id="Registrar-to-G6" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="380.68,199.53,373.2768,193.0344,375.9062,198.043,370.8976,200.6725,380.68,199.53" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Registrar to G5--><g class="link" data-entity-1="ent0001" data-entity-2="ent0009" data-link-type="dependency" data-source-line="35" id="lnk15"><path d="M101.26,117.79 C136.92,178.47 214.36,296.07 311.79,360.31 C332.25,373.8 352.7201,382.2107 374.6401,389.1007" fill="none" id="Registrar-to-G5" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="379.41,390.6,372.0236,384.0853,374.6401,389.1007,369.6247,391.7172,379.41,390.6" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link CourseAdmin to G3--><g class="link" data-entity-1="ent0002" data-entity-2="ent0010" data-link-type="dependency" data-source-line="37" id="lnk16"><path d="M152.07,407.52 C219.49,427.34 313.663,455.0199 373.603,472.6399" fill="none" id="CourseAdmin-to-G3" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="378.4,474.05,370.8935,467.6741,373.603,472.6399,368.6372,475.3494,378.4,474.05" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link CourseAdmin to G6--><g class="link" data-entity-1="ent0002" data-entity-2="ent0008" data-link-type="dependency" data-source-line="38" id="lnk17"><path d="M92.67,347.56 C110.21,301.46 146.61,226.67 206.79,194.31 C263.66,163.72 335.9919,178.0249 383.1619,192.9149" fill="none" id="CourseAdmin-to-G6" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="387.93,194.42,380.5516,187.8963,383.1619,192.9149,378.1434,195.5252,387.93,194.42" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link CourseAdmin to G5--><g class="link" data-entity-1="ent0002" data-entity-2="ent0009" data-link-type="dependency" data-source-line="39" id="lnk18"><path d="M152.07,389.81 C212.37,392.73 292.9359,396.6373 353.2159,399.5673" fill="none" id="CourseAdmin-to-G5" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="358.21,399.81,349.4148,395.3778,353.2159,399.5673,349.0264,403.3683,358.21,399.81" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Student to G4--><g class="link" data-entity-1="ent0003" data-entity-2="ent0007" data-link-type="dependency" data-source-line="41" id="lnk19"><path d="M105.23,493.19 C146.73,462.49 232.54,401.55 311.79,361.31 C335.65,349.19 358.4381,339.1773 380.8781,329.9173" fill="none" id="Student-to-G4" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="385.5,328.01,375.6547,327.7455,380.8781,329.9173,378.7063,335.1406,385.5,328.01" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Student to G6--><g class="link" data-entity-1="ent0003" data-entity-2="ent0008" data-link-type="dependency" data-source-line="42" id="lnk20"><path d="M105.15,493.19 C119.73,481.45 137.88,465.58 151.79,449.31 C181.52,414.54 177.96,397.82 206.79,362.31 C247.79,311.79 257.55,296.24 311.79,260.31 C334.5,245.26 357.7886,234.9293 380.8486,226.4293" fill="none" id="Student-to-G6" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="385.54,224.7,375.712,224.0596,380.8486,226.4293,378.4788,231.5659,385.54,224.7" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Student to G5--><g class="link" data-entity-1="ent0003" data-entity-2="ent0009" data-link-type="dependency" data-source-line="43" id="lnk21"><path d="M105.38,504.38 C164.43,486.01 306.5056,441.8151 380.8656,418.6851" fill="none" id="Student-to-G5" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="385.64,417.2,375.8581,416.0537,380.8656,418.6851,378.2342,423.6926,385.64,417.2" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Student to G2--><g class="link" data-entity-1="ent0003" data-entity-2="ent0011" data-link-type="dependency" data-source-line="44" id="lnk22"><path d="M105.32,547.47 C128.2,575.87 164.65,613.74 206.79,630.31 C274.78,657.03 355.4252,620.4244 398.3752,595.9644" fill="none" id="Student-to-G2" style="stroke:#181818;stroke-width:1;stroke-dasharray:7,7;"/><polygon fill="#181818" points="402.72,593.49,392.9198,594.468,398.3752,595.9644,396.8788,601.4197,402.72,593.49" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="64.5557" x="211.6113" y="611.8784">views own</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="72.1982" x="207.79" y="627.1889">(via UC-16)</text></g><!--link Student to G3--><g class="link" data-entity-1="ent0003" data-entity-2="ent0010" data-link-type="dependency" data-source-line="45" id="lnk23"><path d="M105.36,532.63 C144.55,561.26 221.32,606.74 280.79,576.31 C301.76,565.57 293.05,547.58 311.79,533.31 C329.51,519.81 347.0659,511.6791 367.5259,504.8691" fill="none" id="Student-to-G3" style="stroke:#181818;stroke-width:1;stroke-dasharray:7,7;"/><polygon fill="#181818" points="372.27,503.29,362.4674,502.337,367.5259,504.8691,364.9938,509.9276,372.27,503.29" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="64.5557" x="211.6113" y="557.8784">views own</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="72.1982" x="207.79" y="573.1889">(via UC-16)</text></g><!--link Librarian to G2--><g class="link" data-entity-1="ent0004" data-entity-2="ent0011" data-link-type="dependency" data-source-line="47" id="lnk24"><path d="M109.36,705.86 C148.99,695.47 221.35,675.2 280.79,651.31 C323.49,634.14 366.2458,611.8839 395.9558,595.5939" fill="none" id="Librarian-to-G2" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="400.34,593.19,390.5253,594.0096,395.9558,595.5939,394.3715,601.0243,400.34,593.19" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Librarian to G5--><g class="link" data-entity-1="ent0004" data-entity-2="ent0009" data-link-type="dependency" data-source-line="48" id="lnk25"><path d="M109.37,679.81 C148.7,635.02 220.4,553.05 280.79,482.31 C294.72,465.99 294.17,457.54 311.79,445.31 C331.33,431.73 350.9284,423.5715 372.4884,416.9815" fill="none" id="Librarian-to-G5" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="377.27,415.52,367.4938,414.3255,372.4884,416.9815,369.8323,421.9761,377.27,415.52" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><?plantuml-src TPB1Zjem48RlUOeHbThk8GZ89bkrKgKi8bMbzhAeDox66HABP8ni1qIhldl7IK0Xq5Co_tp-PppZ2dSEd0QZYj91hWnAfpG5Tg_e88oeuI3aNXIuTkSAmQS55HKEW2q3XT4DvKjTQGFE2BASGd83YdIE5WyGpmOYatilpkT3jR4eXKNu4m2yZipVPKdsAKjzHfiSJQ_6ByaiIOE_0nSX7MSUUgnMsIBBnXxHIpHB8_O8Fa3Q7XQK-sR2jfiSPSN6VZhG7eCjLle4oe8ijKM2ZqSbO6iQX-5E6udi8ussLb4HIYxlmA8midpo0wyLgLhzHX36iCi5jB3p8opPjHPq3fqE_PUjTe92tRWle7XF6YrFr04XvgsRSBBaOzXVksjGSQUi6TwhA7WcTXfqwJSibEKzcJwUB7LZ-8vfxjlo6LOd82nqYLRlsRLhSh_QBlgXjcoZ10N1zMt0f6VWfo1-EhN_NP-jmthIBkIou0TSM_JRV0YjoEYgyiaDZS7d1suRMcEr2zTeZafYnoL3xhkdb3l3UzwpH6ix9Xuo_K36zQ8Xywhr_evO-0TqdI-4uLT_dP7mF1QIiH07mM3qdHRTIyczn2SlO-rhtOJ9RHXVm-cKmmLyXgF2amLzeWsrB_hNCfmdJxTSz7ykk3w9hi9YBCJ_0000?></g></svg>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+
+<h2 id="student-management">2. Student Management</h2>
+<div class="diagram-wrap">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" data-diagram-type="DESCRIPTION" height="445px" preserveAspectRatio="none" style="width:672px;height:445px;" version="1.1" viewBox="0 0 672 445" width="672px" zoomAndPan="magnify"><defs/><g><g class="cluster" data-qualified-name="Student Management" id="ent0002"><rect fill="none" height="348" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:1;" width="544.87" x="113.99" y="7"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="700" lengthAdjust="spacing" textLength="152.2773" x="310.2863" y="22.5352">Student Management</text></g><g class="entity" data-qualified-name="Student Management.UC1" id="ent0003"><ellipse cx="230.7765" cy="66.0048" fill="#F6F8FA" rx="73.7465" ry="23.8748" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="36.3398" x="212.6066" y="58.8185">UC-1</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="111.7607" x="174.8962" y="75.3068">Register Student</text></g><g class="entity" data-qualified-name="Student Management.UC2" id="ent0004"><ellipse cx="230.7781" cy="148.9963" fill="#F6F8FA" rx="100.7881" ry="23.7463" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="36.3398" x="212.6082" y="141.5996">UC-2</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="155.4355" x="153.0603" y="158.0878">Update Student Details</text></g><g class="entity" data-qualified-name="Student Management.UC3" id="ent0005"><ellipse cx="230.7767" cy="232.0044" fill="#F6F8FA" rx="72.5367" ry="23.8844" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="36.3398" x="212.6068" y="224.8339">UC-3</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="109.7988" x="175.8773" y="241.3221">Remove Student</text></g><g class="entity" data-qualified-name="Student Management.UC13" id="ent0006"><ellipse cx="546.707" cy="309.9953" fill="#F6F8FA" rx="96.147" ry="23.8453" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="524.1108" y="302.7609">UC-13</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="147.3555" x="473.0292" y="319.2492">View/Search Students</text></g><g class="entity" data-qualified-name="Student Management.UC17" id="ent0007"><ellipse cx="230.7817" cy="315.0038" fill="#F6F8FA" rx="86.6717" ry="23.9038" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="208.1855" y="307.865">UC-17</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="131.9951" x="164.7842" y="324.3533">View Student Detail</text></g><g class="entity" data-qualified-name="Registrar" id="ent0001"><ellipse cx="36.4951" cy="202.26" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M36.4951,210.26 L36.4951,237.26 M23.4951,218.26 L49.4951,218.26 M36.4951,237.26 L23.4951,252.26 M36.4951,237.26 L49.4951,252.26" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="60.9902" x="6" y="267.2952">Registrar</text></g><g class="link" data-entity-1="ent0001" data-entity-2="ent0003" data-link-type="dependency" id="lnk8"><path d="M50.21,193.47 C61.06,166.11 79.2,130.41 105.99,108 C123.14,93.66 140.6216,85.579 161.5516,79.289" fill="none" id="Registrar-to-UC1" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="166.34,77.85,156.5696,76.6095,161.5516,79.289,158.872,84.271,166.34,77.85" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><g class="link" data-entity-1="ent0001" data-entity-2="ent0004" data-link-type="dependency" id="lnk9"><path d="M67.43,212.21 C79.15,204.96 92.91,197.05 105.99,191 C125.15,182.14 141.9751,175.7568 161.6851,169.2068" fill="none" id="Registrar-to-UC2" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="166.43,167.63,156.6278,166.6724,161.6851,169.2068,159.1507,174.2641,166.43,167.63" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><g class="link" data-entity-1="ent0001" data-entity-2="ent0005" data-link-type="dependency" id="lnk10"><path d="M67.12,232 C91.35,232 121.63,232 153.15,232" fill="none" id="Registrar-to-UC3" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="158.15,232,149.15,228,153.15,232,149.15,236,158.15,232" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><g class="link" data-entity-1="ent0001" data-entity-2="ent0006" data-link-type="dependency" id="lnk11"><path d="M47.34,270.61 C57.01,299.73 74.96,337.69 105.99,356 C232.75,430.8 411.73,369.723 495.89,333.363" fill="none" id="Registrar-to-UC13" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="500.48,331.38,490.6317,331.2775,495.89,333.363,493.8045,338.6214,500.48,331.38" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><g class="link" data-entity-1="ent0001" data-entity-2="ent0007" data-link-type="dependency" id="lnk12"><path d="M67.43,251.8 C79.15,259.05 92.91,266.95 105.99,273 C126.38,282.44 144.7582,289.2944 165.4682,296.0744" fill="none" id="Registrar-to-UC17" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="170.22,297.63,162.9112,291.0284,165.4682,296.0744,160.4222,298.6313,170.22,297.63" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><g class="link" data-entity-1="ent0007" data-entity-2="ent0006" data-link-type="dependency" id="lnk13"><path d="M317.56,313.64 C358.68,312.98 403.0706,312.2804 445.3606,311.6004" fill="none" id="UC17-to-UC13" style="stroke:#181818;stroke-width:1;stroke-dasharray:7,7;"/><polygon fill="#181818" points="450.36,311.52,441.2969,307.6652,445.3606,311.6004,441.4255,315.6642,450.36,311.52" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="57.1924" x="362.57" y="308.6284">&#171;extend&#187;</text></g></g></svg>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<p>Registrar-only. UC-17 extends UC-13: selecting one result from a student search continues into the full detail view.</p>
+
+<h2 id="book-management">3. Book Management</h2>
+<div class="diagram-wrap">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" data-diagram-type="DESCRIPTION" height="633px" preserveAspectRatio="none" style="width:692px;height:633px;" version="1.1" viewBox="0 0 692 633" width="692px" zoomAndPan="magnify"><?plantuml 1.2026.6?><defs/><g><!--cluster Book Management--><g class="cluster" data-qualified-name="Book Management" data-source-line="15" id="ent0003"><rect fill="none" height="431" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:1;" width="553.17" x="112.98" y="84.17"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="700" lengthAdjust="spacing" textLength="132.624" x="323.253" y="99.7052">Book Management</text></g><!--entity UC4--><g class="entity" data-qualified-name="Book Management.UC4" data-source-line="16" id="ent0004"><ellipse cx="231.3255" cy="143.1745" fill="#F6F8FA" rx="45.2855" ry="24.4045" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="36.3398" x="213.1556" y="136.8351">UC-4</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="65.1465" x="198.7523" y="153.3234">Add Book</text></g><!--entity UC5--><g class="entity" data-qualified-name="Book Management.UC5" data-source-line="17" id="ent0005"><ellipse cx="231.3343" cy="226.172" fill="#F6F8FA" rx="102.3543" ry="23.742" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="36.3398" x="213.1644" y="218.7681">UC-5</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="157.958" x="152.3553" y="235.2564">Assign Book to Student</text></g><!--entity UC6--><g class="entity" data-qualified-name="Book Management.UC6" data-source-line="18" id="ent0006"><ellipse cx="231.3337" cy="309.1734" fill="#F6F8FA" rx="66.3337" ry="23.9434" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="36.3398" x="213.1638" y="302.0987">UC-6</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="99.7227" x="181.4724" y="318.587">Unassign Book</text></g><!--entity UC7--><g class="entity" data-qualified-name="Book Management.UC7" data-source-line="19" id="ent0007"><ellipse cx="231.3339" cy="392.1693" fill="#F6F8FA" rx="61.1239" ry="24.0093" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="36.3398" x="213.164" y="385.2012">UC-7</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="91.2324" x="185.7177" y="401.6895">Remove Book</text></g><!--entity UC14--><g class="entity" data-qualified-name="Book Management.UC14" data-source-line="20" id="ent0008"><ellipse cx="565.4479" cy="224.1688" fill="#F6F8FA" rx="84.6979" ry="23.9188" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="542.8517" y="217.0543">UC-14</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="128.7891" x="501.0534" y="233.5426">View/Search Books</text></g><!--entity UC18--><g class="entity" data-qualified-name="Book Management.UC18" data-source-line="21" id="ent0009"><ellipse cx="231.3258" cy="475.1695" fill="#F6F8FA" rx="75.2658" ry="24.0095" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="208.7296" y="468.2017">UC-18</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="113.4287" x="174.6114" y="484.69">View Book Detail</text></g><!--entity Librarian--><g class="entity" data-qualified-name="Librarian" data-source-line="12" id="ent0001"><ellipse cx="35.9893" cy="238.43" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M35.9893,246.43 L35.9893,273.43 M22.9893,254.43 L48.9893,254.43 M35.9893,273.43 L22.9893,288.43 M35.9893,273.43 L48.9893,288.43" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="59.9785" x="6" y="303.4652">Librarian</text></g><!--entity Student--><g class="entity" data-qualified-name="Student" data-source-line="13" id="ent0002"><ellipse cx="35.9905" cy="445.43" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M35.9905,453.43 L35.9905,480.43 M22.9905,461.43 L48.9905,461.43 M35.9905,480.43 L22.9905,495.43 M35.9905,480.43 L48.9905,495.43" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="52.001" x="9.99" y="510.4652">Student</text></g><!--entity UC16ext--><g class="entity" data-qualified-name="UC16ext" data-source-line="24" id="ent0010"><ellipse cx="565.4476" cy="575.1702" fill="#F6F8FA" rx="112.7676" ry="44.3202" style="stroke:#57606A;stroke-width:1;stroke-dasharray:7,7;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="542.8514" y="547.7233">UC-16</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="175.2051" x="477.845" y="564.2115">View Own Books, Courses</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="94.8213" x="518.0369" y="580.6998">&amp; Enrollments</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="172.6689" x="479.1131" y="597.1881">(see Student Self-Service)</text></g><!--link Librarian to UC4--><g class="link" data-entity-1="ent0001" data-entity-2="ent0004" data-link-type="dependency" data-source-line="26" id="lnk11"><path d="M61.34,229.75 C72.92,214.07 87.96,196.91 104.98,185.17 C129.92,167.97 157.6122,158.5242 183.2922,152.2642" fill="none" id="Librarian-to-UC4" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="188.15,151.08,178.4587,149.3253,183.2922,152.2642,180.3534,157.0977,188.15,151.08" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Librarian to UC5--><g class="link" data-entity-1="ent0001" data-entity-2="ent0005" data-link-type="dependency" data-source-line="27" id="lnk12"><path d="M66.35,261.79 C90.02,256.65 119.4741,250.2519 150.6241,243.4819" fill="none" id="Librarian-to-UC5" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="155.51,242.42,145.8658,240.4226,150.6241,243.4819,147.5648,248.2401,155.51,242.42" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Librarian to UC6--><g class="link" data-entity-1="ent0001" data-entity-2="ent0006" data-link-type="dependency" data-source-line="28" id="lnk13"><path d="M66.35,274.4 C94.67,280.4 133.3788,288.6124 168.4988,296.0624" fill="none" id="Librarian-to-UC6" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="173.39,297.1,165.416,291.3195,168.4988,296.0624,163.7559,299.1453,173.39,297.1" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Librarian to UC7--><g class="link" data-entity-1="ent0001" data-entity-2="ent0007" data-link-type="dependency" data-source-line="29" id="lnk14"><path d="M61.74,306.54 C73.29,321.91 88.2,338.67 104.98,350.17 C126.28,364.77 148.2428,373.3105 171.5828,379.8005" fill="none" id="Librarian-to-UC7" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="176.4,381.14,168.8006,374.8751,171.5828,379.8005,166.6574,382.5827,176.4,381.14" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Librarian to UC14--><g class="link" data-entity-1="ent0001" data-entity-2="ent0008" data-link-type="dependency" data-source-line="30" id="lnk15"><path d="M40.57,229.7 C46.55,189.93 62.51,129.73 104.98,101.17 C246.48,6 454.6577,141.4164 531.4177,198.4964" fill="none" id="Librarian-to-UC14" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="535.43,201.48,530.5948,192.8997,531.4177,198.4964,525.8211,199.3194,535.43,201.48" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Librarian to UC18--><g class="link" data-entity-1="ent0001" data-entity-2="ent0009" data-link-type="dependency" data-source-line="31" id="lnk16"><path d="M43.18,306.73 C51.16,344.23 68.6,400.34 104.98,434.17 C120.99,449.06 137.7005,457.1482 158.3805,463.1882" fill="none" id="Librarian-to-UC18" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="163.18,464.59,155.6624,458.2272,158.3805,463.1882,153.4195,465.9064,163.18,464.59" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Student to UC18--><g class="link" data-entity-1="ent0002" data-entity-2="ent0009" data-link-type="dependency" data-source-line="32" id="lnk17"><path d="M62.27,475.17 C86.01,475.17 117.75,475.17 150.82,475.17" fill="none" id="Student-to-UC18" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="155.82,475.17,146.82,471.17,150.82,475.17,146.82,479.17,155.82,475.17" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link UC18 to UC14--><g class="link" data-entity-1="ent0009" data-entity-2="ent0008" data-link-type="dependency" data-source-line="34" id="lnk18"><path d="M284.84,458 C301.09,451.63 318.66,443.62 333.69,434.17 C421.04,379.24 502.8411,293.4918 540.6811,251.3118" fill="none" id="UC18-to-UC14" style="stroke:#181818;stroke-width:1;stroke-dasharray:7,7;"/><polygon fill="#181818" points="544.02,247.59,535.0326,251.6182,540.6811,251.3118,540.9875,256.9604,544.02,247.59" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="57.1924" x="364.69" y="363.9984">&#171;extend&#187;</text></g><!--link UC18 to UC16ext--><g class="link" data-entity-1="ent0009" data-entity-2="ent0010" data-link-type="dependency" data-source-line="35" id="lnk19"><path d="M287.18,491.68 C338.21,507.05 410.3921,528.7891 470.3021,546.8191" fill="none" id="UC18-to-UC16ext" style="stroke:#181818;stroke-width:1;stroke-dasharray:7,7;"/><polygon fill="#181818" points="475.09,548.26,467.6246,541.836,470.3021,546.8191,465.3191,549.4966,475.09,548.26" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="57.1924" x="364.69" y="512.7784">&#171;extend&#187;</text></g><?plantuml-src RP5VQy8m5CNV-oak5SO6qzcfhGmHrDcdZS74FVKbDjSQh3SZINKmzjsN_dFQxgMGStxtvEGsnQq18q69P6U02uMn4P8SlHVqoHGxm8R5-qJ9ZFX2fbA1KOoqjP3C1PLfZ9b6-7O0ves9JkY7ut2MEr9nL9Kw2lo-FtD-Bb9ORAppRyPo6Jw6OJDZ40pwiu7DSChH5x5HJ0b6rNbbCfuNTV9tCKfI17SkvHvU6R443zPpY_lg_kvwqHr6DECSSiu5fc6z63Q8aIMq5WaLKBw_wgAA7pLuFw8riR-92lCRM13HEnxa4I-Xe05vjjw7mDF32fcATmMgAzPh5lN69LpsV4R3H5gputnjLx1VmM-digQ-XuNCb4OTqGqiISaqpLTcZxSQiNuqh33TTbUeZYB6kphUnoy3dLGGzZZJE-IES_uxqErEYxKsbL5ByLjAq5AyTf1zNTtkB3Zv5tgzSWIUO3An7P7uT7fb5SqltLy0?></g></svg>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<p>Librarian owns write access and search; UC-18 (View Book Detail) is also reachable directly by the Student, and extends both UC-14 (search results) and UC-16 (a student's own book list, detailed in §5).</p>
+
+<h2 id="course-management">4. Course Management</h2>
+<div class="diagram-wrap">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" data-diagram-type="DESCRIPTION" height="482px" preserveAspectRatio="none" style="width:939px;height:482px;" version="1.1" viewBox="0 0 939 482" width="939px" zoomAndPan="magnify"><?plantuml 1.2026.6?><defs/><g><!--cluster Course Management--><g class="cluster" data-qualified-name="Course Management" data-source-line="17" id="ent0003"><rect fill="none" height="333" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:1;" width="625.2" x="296.79" y="31.55"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="700" lengthAdjust="spacing" textLength="147.6563" x="535.5619" y="47.0852">Course Management</text></g><!--entity UC8--><g class="entity" data-qualified-name="Course Management.UC8" data-source-line="18" id="ent0004"><ellipse cx="396.779" cy="90.5497" fill="#F6F8FA" rx="64.079" ry="23.9697" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="36.3398" x="378.6091" y="83.5176">UC-8</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="96.0518" x="348.7531" y="100.0059">Create Course</text></g><!--entity UC9--><g class="entity" data-qualified-name="Course Management.UC9" data-source-line="19" id="ent0005"><ellipse cx="396.7826" cy="168.5504" fill="#F6F8FA" rx="66.6026" ry="23.9404" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="36.3398" x="378.6127" y="161.471">UC-9</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="100.1602" x="346.7025" y="177.9592">Update Course</text></g><!--entity UC10--><g class="entity" data-qualified-name="Course Management.UC10" data-source-line="20" id="ent0006"><ellipse cx="396.7791" cy="246.5534" fill="#F6F8FA" rx="70.3791" ry="24.0734" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="374.1829" y="239.6886">UC-10</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="105.4375" x="344.0603" y="256.1769">Remove Course</text></g><!--entity UC15--><g class="entity" data-qualified-name="Course Management.UC15" data-source-line="21" id="ent0007"><ellipse cx="812.5338" cy="147.55" fill="#F6F8FA" rx="93.4538" ry="23.86" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="789.9376" y="140.3396">UC-15</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="142.9941" x="741.0368" y="156.8279">View/Search Courses</text></g><!--entity UC19--><g class="entity" data-qualified-name="Course Management.UC19" data-source-line="22" id="ent0008"><ellipse cx="396.7771" cy="324.5545" fill="#F6F8FA" rx="83.9871" ry="23.9245" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="374.1809" y="317.4492">UC-19</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="127.6338" x="332.9602" y="333.9375">View Course Detail</text></g><!--entity CourseAdmin--><g class="entity" data-qualified-name="CourseAdmin" data-source-line="14" id="ent0001"><ellipse cx="78.895" cy="138.81" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M78.895,146.81 L78.895,173.81 M65.895,154.81 L91.895,154.81 M78.895,173.81 L65.895,188.81 M78.895,173.81 L91.895,188.81" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="145.79" x="6" y="203.8452">Course Administrator</text></g><!--entity Student--><g class="entity" data-qualified-name="Student" data-source-line="15" id="ent0002"><ellipse cx="78.8905" cy="294.81" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M78.8905,302.81 L78.8905,329.81 M65.8905,310.81 L91.8905,310.81 M78.8905,329.81 L65.8905,344.81 M78.8905,329.81 L91.8905,344.81" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="52.001" x="52.89" y="359.8452">Student</text></g><!--entity UC16ext--><g class="entity" data-qualified-name="UC16ext" data-source-line="25" id="ent0009"><ellipse cx="812.5276" cy="424.5502" fill="#F6F8FA" rx="112.7676" ry="44.3202" style="stroke:#57606A;stroke-width:1;stroke-dasharray:7,7;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="789.9314" y="397.1033">UC-16</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="175.2051" x="724.925" y="413.5915">View Own Books, Courses</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="94.8213" x="765.1169" y="430.0798">&amp; Enrollments</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="172.6689" x="726.1931" y="446.5681">(see Student Self-Service)</text></g><!--link CourseAdmin to UC8--><g class="link" data-entity-1="ent0001" data-entity-2="ent0004" data-link-type="dependency" data-source-line="27" id="lnk10"><path d="M151.97,150.75 C210.06,136.41 285.5458,117.7685 337.8758,104.8485" fill="none" id="CourseAdmin-to-UC8" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="342.73,103.65,333.0336,101.9239,337.8758,104.8485,334.9512,109.6907,342.73,103.65" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link CourseAdmin to UC9--><g class="link" data-entity-1="ent0001" data-entity-2="ent0005" data-link-type="dependency" data-source-line="28" id="lnk11"><path d="M151.97,168.55 C205.5,168.55 272.95,168.55 324.93,168.55" fill="none" id="CourseAdmin-to-UC9" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="329.93,168.55,320.93,164.55,324.93,168.55,320.93,172.55,329.93,168.55" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link CourseAdmin to UC10--><g class="link" data-entity-1="ent0001" data-entity-2="ent0006" data-link-type="dependency" data-source-line="29" id="lnk12"><path d="M151.97,186.35 C208.6,200.33 281.5357,218.3419 333.8857,231.2619" fill="none" id="CourseAdmin-to-UC10" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="338.74,232.46,330.9606,226.42,333.8857,231.2619,329.0437,234.187,338.74,232.46" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link CourseAdmin to UC15--><g class="link" data-entity-1="ent0001" data-entity-2="ent0007" data-link-type="dependency" data-source-line="30" id="lnk13"><path d="M131.18,129.93 C171.61,102.04 230.67,66.72 288.79,51.55 C463.33,6 671.5807,83.9799 762.4207,124.3399" fill="none" id="CourseAdmin-to-UC15" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="766.99,126.37,760.3894,119.0603,762.4207,124.3399,757.1411,126.3712,766.99,126.37" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link CourseAdmin to UC19--><g class="link" data-entity-1="ent0001" data-entity-2="ent0008" data-link-type="dependency" data-source-line="31" id="lnk14"><path d="M142.51,207.12 C183.3,231.36 238.16,262.33 288.79,285.55 C305.32,293.13 319.0858,298.6056 335.9658,304.6856" fill="none" id="CourseAdmin-to-UC19" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="340.67,306.38,333.558,299.5668,335.9658,304.6856,330.847,307.0934,340.67,306.38" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Student to UC19--><g class="link" data-entity-1="ent0002" data-entity-2="ent0008" data-link-type="dependency" data-source-line="32" id="lnk15"><path d="M105.21,324.55 C149.64,324.55 238.5,324.55 307.57,324.55" fill="none" id="Student-to-UC19" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="312.57,324.55,303.57,320.55,307.57,324.55,303.57,328.55,312.57,324.55" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link UC19 to UC15--><g class="link" data-entity-1="ent0008" data-entity-2="ent0007" data-link-type="dependency" data-source-line="34" id="lnk16"><path d="M444.44,304.59 C523.48,270.78 678.3229,204.5364 758.5329,170.2264" fill="none" id="UC19-to-UC15" style="stroke:#181818;stroke-width:1;stroke-dasharray:7,7;"/><polygon fill="#181818" points="763.13,168.26,753.2821,168.1219,758.5329,170.2264,756.4284,175.4772,763.13,168.26" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="57.1924" x="561.76" y="227.3084">&#171;extend&#187;</text></g><!--link UC19 to UC16ext--><g class="link" data-entity-1="ent0008" data-entity-2="ent0009" data-link-type="dependency" data-source-line="35" id="lnk17"><path d="M461.97,340.07 C529.84,356.47 632.7899,381.3555 710.7499,400.1955" fill="none" id="UC19-to-UC16ext" style="stroke:#181818;stroke-width:1;stroke-dasharray:7,7;"/><polygon fill="#181818" points="715.61,401.37,707.8014,395.3678,710.7499,400.1955,705.9222,403.144,715.61,401.37" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="57.1924" x="561.76" y="362.1584">&#171;extend&#187;</text></g><?plantuml-src RP1FQy904CNl-oa6XT92jR5YD4K4cvfRALJiAPTjTeoBSLPsLosKVlTk_acCNW9vxpTlPrw6QmjMWPRfneAG6XCh5J6pbRJdck_WcoVRLAi3YL1bIeFLd8opa6o38YNGu1w6NaDqv3ON1tvJFHXCk47uPG2lhV1kv4UJQ9uxIWlKbJeQ-vu_Pt-D59vOvzpCM2oYvoXgPmp7Gsy-T1ci7Es4wg3T6dEnaoIDEykf7U06IgFGAtPf3oA_b-NrS4epF8-_S-8fxfpRARQfh-kimjuafb0ZjrX55kchSDB2WfXMUt651IriuCNqYJjrR743hmsEOlgIU7fQ8jV9fg9DZO_QU53Y5GTlQBdCQZh86xl0_Gh_E95hM6tDO_r2J7Um8AsoBE_3_TuRnBeyM6AsxYrH7sM23tMyZpyMkfaax0jkDYWOQzGFlTwiAEnQ2sveheaRukYM6B1whRF0yY_q--KGlC1qwfP34hFPXLMit7J_0G00?></g></svg>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<p>Mirrors Book Management's shape: Course Administrator owns write access and search; UC-19 (View Course Detail) is also reachable by the Student and extends both UC-15 and UC-16.</p>
+
+<h2 id="enrollment-management">5. Enrollment Management</h2>
+<div class="diagram-wrap">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" data-diagram-type="DESCRIPTION" height="225px" preserveAspectRatio="none" style="width:460px;height:225px;" version="1.1" viewBox="0 0 460 225" width="460px" zoomAndPan="magnify"><?plantuml 1.2026.6?><defs/><g><!--cluster Enrollment Management--><g class="cluster" data-qualified-name="Enrollment Management" data-source-line="15" id="ent0003"><rect fill="none" height="182" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:1;" width="245.33" x="200.99" y="7"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="700" lengthAdjust="spacing" textLength="175.7246" x="235.7927" y="22.5352">Enrollment Management</text></g><!--entity UC11--><g class="entity" data-qualified-name="Enrollment Management.UC11" data-source-line="16" id="ent0004"><ellipse cx="323.6564" cy="65.9988" fill="#F6F8FA" rx="106.6664" ry="23.7988" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="301.0602" y="58.6884">UC-11</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="164.3633" x="241.4748" y="75.1767">Enroll Student in Course</text></g><!--entity UC12--><g class="entity" data-qualified-name="Enrollment Management.UC12" data-source-line="17" id="ent0005"><ellipse cx="323.6585" cy="148.9959" fill="#F6F8FA" rx="68.8985" ry="24.0959" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="301.0623" y="142.1672">UC-12</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="103.0107" x="272.1532" y="158.6555">End Enrollment</text></g><!--entity Registrar--><g class="entity" data-qualified-name="Registrar" data-source-line="12" id="ent0001"><ellipse cx="36.4951" cy="15.26" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M36.4951,23.26 L36.4951,50.26 M23.4951,31.26 L49.4951,31.26 M36.4951,50.26 L23.4951,65.26 M36.4951,50.26 L49.4951,65.26" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="60.9902" x="6" y="80.2952">Registrar</text></g><!--entity Student--><g class="entity" data-qualified-name="Student" data-source-line="13" id="ent0002"><ellipse cx="36.4905" cy="134.26" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M36.4905,142.26 L36.4905,169.26 M23.4905,150.26 L49.4905,150.26 M36.4905,169.26 L23.4905,184.26 M36.4905,169.26 L49.4905,184.26" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="52.001" x="10.49" y="199.2952">Student</text></g><!--link Registrar to UC11--><g class="link" data-entity-1="ent0001" data-entity-2="ent0004" data-link-type="dependency" data-source-line="20" id="lnk6"><path d="M67.49,44 C97.33,43.29 144.39,42.93 184.99,46 C201.97,47.28 215.086,48.703 232.356,51.063" fill="none" id="Registrar-to-UC11" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="237.31,51.74,228.9345,46.5583,232.356,51.063,227.8513,54.4846,237.31,51.74" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Registrar to UC12--><g class="link" data-entity-1="ent0001" data-entity-2="ent0005" data-link-type="dependency" data-source-line="21" id="lnk7"><path d="M67.2,45.95 C99.9,48.53 152.17,57.4 184.99,87 C192.1,93.41 186,100.46 192.99,107 C211.05,123.89 231.1412,132.7307 254.3112,138.7607" fill="none" id="Registrar-to-UC12" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="259.15,140.02,251.4476,133.8822,254.3112,138.7607,249.4327,141.6243,259.15,140.02" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Student to UC11--><g class="link" data-entity-1="ent0002" data-entity-2="ent0004" data-link-type="dependency" data-source-line="22" id="lnk8"><path d="M62.96,154.26 C93.65,142.62 146.87,122.74 192.99,107 C214.55,99.64 233.5096,93.5079 254.7196,86.8479" fill="none" id="Student-to-UC11" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="259.49,85.35,249.705,84.2299,254.7196,86.8479,252.1017,91.8625,259.49,85.35" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="86.1567" x="97.99" y="91.4584">if self-service</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="49.8545" x="116.1411" y="106.7689">enabled</text></g><!--link Student to UC12--><g class="link" data-entity-1="ent0002" data-entity-2="ent0005" data-link-type="dependency" data-source-line="23" id="lnk9"><path d="M62.78,180.6 C72.97,186.35 85.11,192.09 96.99,195 C160.88,210.65 231.219,189.0996 276.639,170.3296" fill="none" id="Student-to-UC12" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="281.26,168.42,271.4146,168.1606,276.639,170.3296,274.47,175.5541,281.26,168.42" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="86.1567" x="97.99" y="176.5684">if self-service</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="49.8545" x="116.1411" y="191.8789">enabled</text></g><?plantuml-src VK-zJiCm4Dxz5ASmHseIaI86f1356mkeMnStlhXMtJCwEoo8ToSc3LG1iTdV_paS8aGFRCqnWhQCVRIUH3XPUbMipd1G_Scm7qcttdc6o8h2H275AzKOi5S1uLq0FAuSDxAMTx99Z6UDV45lj_McRiJ7LOhguyJycT5rifHodL5jgqrJJHbYjZwZiM5Qo9V_Innr6YhINOgCGyWwOk_SUOBXIP4oc9xPL-joHRPhywBOqonTKi0Ij7xaW1ce0BksADQUCdaq_5GioZ9j_5u7UVum-tz1fLZQ5WtSWnqWe1loWFncUzmJaZeur6jj-O_s4m00?></g></svg>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<p>UC-11 (Enroll Student in Course) and UC-12 (End Enrollment) are Registrar actions by default, with Student self-service as a policy-gated alternative.</p>
+
+<h2 id="student-self-service">6. Student Self-Service</h2>
+<div class="diagram-wrap">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" data-diagram-type="DESCRIPTION" height="403px" preserveAspectRatio="none" style="width:898px;height:403px;" version="1.1" viewBox="0 0 898 403" width="898px" zoomAndPan="magnify"><?plantuml 1.2026.6?><defs/><g><!--cluster Student Self-Service--><g class="cluster" data-qualified-name="Student Self-Service" data-source-line="18" id="ent0004"><rect fill="none" height="111" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:1;" width="625.66" x="256.79" y="198.15"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="700" lengthAdjust="spacing" textLength="146.4053" x="496.4174" y="213.6852">Student Self-Service</text></g><!--entity UC16--><g class="entity" data-qualified-name="Student Self-Service.UC16" data-source-line="19" id="ent0005"><ellipse cx="768.1683" cy="263.1495" fill="#F6F8FA" rx="98.2783" ry="29.8995" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="745.5721" y="250.0057">UC-16</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="175.2051" x="680.5658" y="266.494">View Own Books, Courses</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="94.8213" x="720.7577" y="282.9823">&amp; Enrollments</text></g><!--entity UC20--><g class="entity" data-qualified-name="Student Self-Service.UC20" data-source-line="20" id="ent0006"><ellipse cx="372.7267" cy="257.1467" fill="#F6F8FA" rx="99.9367" ry="23.8267" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="350.1305" y="249.882">UC-20</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="153.4873" x="295.983" y="266.3703">View Enrollment Detail</text></g><!--entity Registrar--><g class="entity" data-qualified-name="Registrar" data-source-line="14" id="ent0001"><ellipse cx="78.8951" cy="90.4" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M78.8951,98.4 L78.8951,125.4 M65.8951,106.4 L91.8951,106.4 M78.8951,125.4 L65.8951,140.4 M78.8951,125.4 L91.8951,140.4" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="60.9902" x="48.4" y="155.4352">Registrar</text></g><!--entity CourseAdmin--><g class="entity" data-qualified-name="CourseAdmin" data-source-line="15" id="ent0002"><ellipse cx="78.895" cy="206.4" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M78.895,214.4 L78.895,241.4 M65.895,222.4 L91.895,222.4 M78.895,241.4 L65.895,256.4 M78.895,241.4 L91.895,256.4" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="145.79" x="6" y="271.4352">Course Administrator</text></g><!--entity Student--><g class="entity" data-qualified-name="Student" data-source-line="16" id="ent0003"><ellipse cx="78.8905" cy="322.4" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M78.8905,330.4 L78.8905,357.4 M65.8905,338.4 L91.8905,338.4 M78.8905,357.4 L65.8905,372.4 M78.8905,357.4 L91.8905,372.4" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="52.001" x="52.89" y="387.4352">Student</text></g><!--entity UC17ext--><g class="entity" data-qualified-name="UC17ext" data-source-line="23" id="ent0007"><ellipse cx="768.1732" cy="40.1503" fill="#F6F8FA" rx="116.5032" ry="34.1503" style="stroke:#57606A;stroke-width:1;stroke-dasharray:7,7;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="745.577" y="22.6118">UC-17</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="131.9951" x="702.1757" y="39.1001">View Student Detail</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="180.2363" x="678.0551" y="55.5884">(see Student Management)</text></g><!--entity UC19ext--><g class="entity" data-qualified-name="UC19ext" data-source-line="24" id="ent0008"><ellipse cx="768.1689" cy="148.1522" fill="#F6F8FA" rx="113.7989" ry="34.1622" style="stroke:#57606A;stroke-width:1;stroke-dasharray:7,7;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="745.5727" y="130.6332">UC-19</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="127.6338" x="704.352" y="147.1215">View Course Detail</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="175.875" x="680.2314" y="163.6098">(see Course Management)</text></g><!--link Student to UC16--><g class="link" data-entity-1="ent0003" data-entity-2="ent0005" data-link-type="dependency" data-source-line="26" id="lnk9"><path d="M105.17,348.87 C197.38,336.93 513.5814,295.9822 672.1814,275.4422" fill="none" id="Student-to-UC16" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="677.14,274.8,667.7008,271.989,672.1814,275.4422,668.7283,279.9228,677.14,274.8" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Student to UC20--><g class="link" data-entity-1="ent0003" data-entity-2="ent0006" data-link-type="dependency" data-source-line="27" id="lnk10"><path d="M105.28,343.88 C151.11,328.96 244.0455,298.7076 307.5455,278.0376" fill="none" id="Student-to-UC20" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="312.3,276.49,302.5039,275.4722,307.5455,278.0376,304.9801,283.0793,312.3,276.49" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Registrar to UC20--><g class="link" data-entity-1="ent0001" data-entity-2="ent0006" data-link-type="dependency" data-source-line="28" id="lnk11"><path d="M109.75,134.16 C160.89,158.17 261.0137,205.1758 321.4237,233.5258" fill="none" id="Registrar-to-UC20" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="325.95,235.65,319.5019,228.2054,321.4237,233.5258,316.1032,235.4475,325.95,235.65" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link CourseAdmin to UC20--><g class="link" data-entity-1="ent0002" data-entity-2="ent0006" data-link-type="dependency" data-source-line="29" id="lnk12"><path d="M152.03,241.34 C189.59,244.04 231.0029,247.0214 271.4729,249.9314" fill="none" id="CourseAdmin-to-UC20" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="276.46,250.29,267.7701,245.6548,271.4729,249.9314,267.1963,253.6342,276.46,250.29" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link UC20 to UC16--><g class="link" data-entity-1="ent0006" data-entity-2="ent0005" data-link-type="dependency" data-source-line="31" id="lnk13"><path d="M472.75,258.66 C533.08,259.58 604.8306,260.6742 664.8406,261.5842" fill="none" id="UC20-to-UC16" style="stroke:#181818;stroke-width:1;stroke-dasharray:7,7;"/><polygon fill="#181818" points="669.84,261.66,660.9017,257.524,664.8406,261.5842,660.7804,265.5231,669.84,261.66" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="57.1924" x="533.66" y="256.1784">&#171;extend&#187;</text></g><!--link UC20 to UC17ext--><g class="link" data-entity-1="ent0006" data-entity-2="ent0007" data-link-type="dependency" data-source-line="32" id="lnk14"><path d="M409.54,234.69 C461.9,202.2 562.78,140.86 651.66,94.15 C668.12,85.5 681.6924,78.8316 698.5724,70.9216" fill="none" id="UC20-to-UC17ext" style="stroke:#181818;stroke-width:1;stroke-dasharray:7,7;"/><polygon fill="#181818" points="703.1,68.8,693.2531,68.9969,698.5724,70.9216,696.6477,76.241,703.1,68.8" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="57.1924" x="533.66" y="124.4584">&#171;extend&#187;</text></g><!--link UC20 to UC19ext--><g class="link" data-entity-1="ent0006" data-entity-2="ent0008" data-link-type="dependency" data-source-line="33" id="lnk15"><path d="M439.14,239.02 C506.11,220.47 605.6314,192.8946 678.6014,172.6846" fill="none" id="UC20-to-UC19ext" style="stroke:#181818;stroke-width:1;stroke-dasharray:7,7;"/><polygon fill="#181818" points="683.42,171.35,673.6789,169.8974,678.6014,172.6846,675.8142,177.6071,683.42,171.35" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="57.1924" x="533.66" y="195.9484">&#171;extend&#187;</text></g><?plantuml-src TP51JuD048Nl_8e9JOmcqj1MgJLD4yHoCoOszTJBoaxf1hhRx2xMnFZVNM1f0Uk5XFTclfatc-DMWnOWMRhJG9d4H3F17PKnVY2IxE6395agHS5f978XGKl2bR6GwrOL5nGL7k3ERuccCYl5qRYj5WeJeX2-7O2d7dmG1_5379QEa1IbLU-dWH-4pa-BGX9jd8kCvJ8Unt6VCPbE_71Y64xT-eOfKoQCjFzk90ffrWhfdl7ACQeBH45jLBgjNUc2blcTybo4fpc2QpLOORxrLYW_MO9kjM0Js5r7tYZOy7U6HtWzShEVoDIjvQiDlu8bboBFzuQZgj7hQ1Jq26FV4iwry8oQiDnsc6ERa9sXKzlIx5ZNR_YrGZo9BuIJ54lUJJDxYbyQ1ZdZEAH4xP1siJEBjPVhKArs0Jhx0tMQ5JnlKKVk2YRHwRNEKkjPpg9JVc4uh3dm2FEv6OUSBXOTgqhshplhkxy0?></g></svg>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<p>UC-16 (View Own Books, Courses &amp; Enrollments) is Student-only. UC-20 (View Enrollment Detail) is shared by all three actors and extends UC-16, plus UC-17 and UC-19 from the Student Management and Course Management diagrams.</p>
+
+<h2 id="identity">7. Identity &amp; Access</h2>
+<div class="diagram-wrap">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" data-diagram-type="DESCRIPTION" height="461px" preserveAspectRatio="none" style="width:733px;height:461px;" version="1.1" viewBox="0 0 733 461" width="733px" zoomAndPan="magnify"><defs/><g><!--cluster Identity & Access--><g class="cluster" data-qualified-name="Identity . Access" id="ent0005"><rect fill="none" height="204" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:1;" width="492.37" x="226.79" y="96.75"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="700" lengthAdjust="spacing" textLength="124.2773" x="410.8363" y="112.2852">Identity &amp; Access</text></g><!--entity UC23--><g class="entity" data-qualified-name="Identity . Access.UC23" id="ent0006"><ellipse cx="321.7295" cy="166.7536" fill="#F6F8FA" rx="70.6795" ry="34.6036" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="299.1334" y="149.9517">UC-23</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="98.5605" x="272.4493" y="166.44">View Student's</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="105.9297" x="268.7647" y="182.9283">Initial Password</text></g><!--entity UC22--><g class="entity" data-qualified-name="Identity . Access.UC22" id="ent0007"><ellipse cx="321.7318" cy="260.7498" fill="#F6F8FA" rx="78.9418" ry="23.9698" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="299.1356" y="253.7181">UC-22</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="119.4238" x="262.0199" y="270.2063">Change Password</text></g><!--entity UC21--><g class="entity" data-qualified-name="Identity . Access.UC21" id="ent0008"><ellipse cx="669.411" cy="249.7515" fill="#F6F8FA" rx="33.741" ry="25.4315" style="stroke:#57606A;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="45.1924" x="646.8149" y="247.5309">UC-21</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="37.5293" x="650.6464" y="264.0192">Login</text></g><!--entity Registrar--><g class="entity" data-qualified-name="Registrar" id="ent0001"><ellipse cx="78.8951" cy="14" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M78.8951,22 L78.8951,49 M65.8951,30 L91.8951,30 M78.8951,49 L65.8951,64 M78.8951,49 L91.8951,64" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="60.9902" x="48.4" y="79.0352">Registrar</text></g><!--entity Librarian--><g class="entity" data-qualified-name="Librarian" id="ent0002"><ellipse cx="78.8993" cy="130" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M78.8993,138 L78.8993,165 M65.8993,146 L91.8993,146 M78.8993,165 L65.8993,180 M78.8993,165 L91.8993,180" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="59.9785" x="48.91" y="195.0352">Librarian</text></g><!--entity CourseAdmin--><g class="entity" data-qualified-name="CourseAdmin" id="ent0003"><ellipse cx="78.895" cy="380" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M78.895,388 L78.895,415 M65.895,396 L91.895,396 M78.895,415 L65.895,430 M78.895,415 L91.895,430" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="145.79" x="6" y="445.0352">Course Administrator</text></g><!--entity Student--><g class="entity" data-qualified-name="Student" id="ent0004"><ellipse cx="78.8905" cy="250" fill="#EEF2FF" rx="8" ry="8" style="stroke:#3730A3;stroke-width:0.5;"/><path d="M78.8905,258 L78.8905,285 M65.8905,266 L91.8905,266 M78.8905,285 L65.8905,300 M78.8905,285 L91.8905,300" fill="none" style="stroke:#3730A3;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="52.001" x="52.89" y="315.0352">Student</text></g><!--link Registrar to UC21--><g class="link" data-entity-1="ent0001" data-entity-2="ent0008" data-link-type="dependency" id="lnk9"><path d="M109.75,40.97 C194.03,34.72 437.62,27.81 590.67,137.75 C622.2,160.39 643.0427,195.4987 655.5327,221.0287" fill="none" id="Registrar-to-UC21" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="657.73,225.52,657.3679,215.6778,655.5327,221.0287,650.1818,219.1934,657.73,225.52" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Registrar to UC22--><g class="link" data-entity-1="ent0001" data-entity-2="ent0007" data-link-type="dependency" id="lnk10"><path d="M109.61,64.75 C123.44,75.43 139.52,89.22 151.79,103.75 C154.18,106.57 216,216.32 218.79,218.75 C231.41,229.75 242.6876,236.2583 258.1476,242.5383" fill="none" id="Registrar-to-UC22" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="262.78,244.42,255.9471,237.327,258.1476,242.5383,252.9363,244.7388,262.78,244.42" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Registrar to UC23--><g class="link" data-entity-1="ent0001" data-entity-2="ent0006" data-link-type="dependency" id="lnk11"><path d="M109.43,58.83 C150,79.55 219.0276,114.7949 267.7376,139.6849" fill="none" id="Registrar-to-UC23" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="272.19,141.96,265.9958,134.3029,267.7376,139.6849,262.3556,141.4267,272.19,141.96" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Librarian to UC21--><g class="link" data-entity-1="ent0002" data-entity-2="ent0008" data-link-type="dependency" id="lnk12"><path d="M109.31,147.23 C136.97,136.18 179.86,120.9 218.79,114.75 C298.64,102.13 322.03,96.04 400.67,114.75 C497.4,137.75 594.7013,198.7598 639.9813,229.6898" fill="none" id="Librarian-to-UC21" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="644.11,232.51,638.9345,224.1306,639.9813,229.6898,634.4221,230.7365,644.11,232.51" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Librarian to UC22--><g class="link" data-entity-1="ent0002" data-entity-2="ent0007" data-link-type="dependency" id="lnk13"><path d="M109.12,172.27 C137.2,184.28 180.84,202.87 218.79,218.75 C236.62,226.21 251.6258,232.4183 268.8658,239.5083" fill="none" id="Librarian-to-UC22" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="273.49,241.41,266.6878,234.2875,268.8658,239.5083,263.645,241.6863,273.49,241.41" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link CourseAdmin to UC21--><g class="link" data-entity-1="ent0003" data-entity-2="ent0008" data-link-type="dependency" id="lnk14"><path d="M152.08,404.3 C253.64,394.58 442.83,368.87 590.67,304.75 C611.3,295.8 628.0721,283.9962 642.9021,271.9262" fill="none" id="CourseAdmin-to-UC21" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="646.78,268.77,637.2748,271.3488,642.9021,271.9262,642.3247,277.5535,646.78,268.77" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link CourseAdmin to UC22--><g class="link" data-entity-1="ent0003" data-entity-2="ent0007" data-link-type="dependency" id="lnk15"><path d="M142.23,371.18 C187.94,342.9 244.0881,308.1609 281.5981,284.9509" fill="none" id="CourseAdmin-to-UC22" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="285.85,282.32,276.0919,283.6542,281.5981,284.9509,280.3014,290.4571,285.85,282.32" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Student to UC21--><g class="link" data-entity-1="ent0004" data-entity-2="ent0008" data-link-type="dependency" id="lnk16"><path d="M105.35,285.01 C133.1,290.46 178.87,298.6 218.79,301.75 C299.38,308.09 320.21,309.49 400.67,301.75 C487.16,293.42 582.3792,271.5322 632.1192,259.1022" fill="none" id="Student-to-UC21" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="636.97,257.89,627.2687,256.1913,632.1192,259.1022,629.2083,263.9527,636.97,257.89" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link Student to UC22--><g class="link" data-entity-1="ent0004" data-entity-2="ent0007" data-link-type="dependency" id="lnk17"><path d="M105.21,277.75 C138.06,275.16 191.8455,270.9134 239.7355,267.1334" fill="none" id="Student-to-UC22" style="stroke:#181818;stroke-width:1;"/><polygon fill="#181818" points="244.72,266.74,235.4332,263.4606,239.7355,267.1334,236.0626,271.4358,244.72,266.74" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/></g><!--link UC22 to UC21--><g class="link" data-entity-1="ent0007" data-entity-2="ent0008" data-link-type="dependency" id="lnk18"><path d="M400.74,258.26 C474.62,255.91 576.9826,252.6597 630.5026,250.9497" fill="none" id="UC22-to-UC21" style="stroke:#181818;stroke-width:1;stroke-dasharray:7,7;"/><polygon fill="#181818" points="635.5,250.79,626.3769,247.0794,630.5026,250.9497,626.6323,255.0754,635.5,250.79" style="stroke:#181818;stroke-width:1;stroke-linejoin:miter;stroke-miterlimit:10;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="143.3491" x="446.67" y="248.9684">requires active session</text></g></g></svg>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<p>All four actors share Login and Change Password. UC-23 (View Student's Initial Password) is Registrar-only. UC-22 depends on an authenticated session from UC-21 — shown as a dependency rather than <code>«extend»</code>, since it's a precondition, not an optional insertion point.</p>
+
+<h2 id="coverage">Use Case Coverage</h2>
+<table>
+  <thead><tr><th>Use Case</th><th>Diagram</th><th>Primary Actor(s)</th></tr></thead>
+  <tbody>
+    <tr><td>UC-1 Register Student</td><td>§2 Student Management</td><td>Registrar</td></tr>
+    <tr><td>UC-2 Update Student Details</td><td>§2 Student Management</td><td>Registrar</td></tr>
+    <tr><td>UC-3 Remove Student</td><td>§2 Student Management</td><td>Registrar</td></tr>
+    <tr><td>UC-4 Add Book</td><td>§3 Book Management</td><td>Librarian</td></tr>
+    <tr><td>UC-5 Assign Book to Student</td><td>§3 Book Management</td><td>Librarian</td></tr>
+    <tr><td>UC-6 Unassign Book</td><td>§3 Book Management</td><td>Librarian</td></tr>
+    <tr><td>UC-7 Remove Book</td><td>§3 Book Management</td><td>Librarian</td></tr>
+    <tr><td>UC-8 Create Course</td><td>§4 Course Management</td><td>Course Administrator</td></tr>
+    <tr><td>UC-9 Update Course</td><td>§4 Course Management</td><td>Course Administrator</td></tr>
+    <tr><td>UC-10 Remove Course</td><td>§4 Course Management</td><td>Course Administrator</td></tr>
+    <tr><td>UC-11 Enroll Student in Course</td><td>§5 Enrollment Management</td><td>Registrar / Student</td></tr>
+    <tr><td>UC-12 End Enrollment</td><td>§5 Enrollment Management</td><td>Registrar / Student</td></tr>
+    <tr><td>UC-13 View/Search Students</td><td>§2 Student Management</td><td>Registrar</td></tr>
+    <tr><td>UC-14 View/Search Books</td><td>§3 Book Management</td><td>Librarian</td></tr>
+    <tr><td>UC-15 View/Search Courses</td><td>§4 Course Management</td><td>Course Administrator</td></tr>
+    <tr><td>UC-16 View Own Books, Courses &amp; Enrollments</td><td>§6 Student Self-Service</td><td>Student</td></tr>
+    <tr><td>UC-17 View Student Detail</td><td>§2 Student Management</td><td>Registrar</td></tr>
+    <tr><td>UC-18 View Book Detail</td><td>§3 Book Management</td><td>Librarian / Student</td></tr>
+    <tr><td>UC-19 View Course Detail</td><td>§4 Course Management</td><td>Course Administrator / Student</td></tr>
+    <tr><td>UC-20 View Enrollment Detail</td><td>§6 Student Self-Service</td><td>Registrar / Course Administrator / Student</td></tr>
+    <tr><td>UC-21 Login</td><td>§7 Identity &amp; Access</td><td>All actors</td></tr>
+    <tr><td>UC-22 Change Password</td><td>§7 Identity &amp; Access</td><td>All actors</td></tr>
+    <tr><td>UC-23 View Student's Initial Password</td><td>§7 Identity &amp; Access</td><td>Registrar</td></tr>
+  </tbody>
+</table>
+
+<div id="diagram-lightbox" class="lightbox-overlay">
+  <div class="lightbox-toolbar">
+    <button id="lightbox-zoom-out" title="Zoom out">−</button>
+    <button id="lightbox-reset" title="Reset zoom">100%</button>
+    <button id="lightbox-zoom-in" title="Zoom in">+</button>
+    <button id="lightbox-close" title="Close (Esc)">✕</button>
+  </div>
+  <div id="lightbox-viewport" class="lightbox-viewport">
+    <div id="lightbox-stage" class="lightbox-stage"></div>
+  </div>
+  <p class="lightbox-hint">Scroll to zoom · Drag to pan · Double-click to reset · Esc to close</p>
+</div>
+
+<script>
+  initDiagramLightbox();
+
+  function initDiagramLightbox() {
+    const overlay = document.getElementById("diagram-lightbox");
+    const viewport = document.getElementById("lightbox-viewport");
+    const stage = document.getElementById("lightbox-stage");
+    const zoomInBtn = document.getElementById("lightbox-zoom-in");
+    const zoomOutBtn = document.getElementById("lightbox-zoom-out");
+    const resetBtn = document.getElementById("lightbox-reset");
+    const closeBtn = document.getElementById("lightbox-close");
+
+    const MIN_SCALE = 0.15;
+    const MAX_SCALE = 10;
+    let scale = 1, panX = 0, panY = 0;
+    let baseWidth = 800, baseHeight = 600;
+    let currentSvg = null;
+    let dragging = false, moved = false, startX = 0, startY = 0, startPanX = 0, startPanY = 0;
+    let applyQueued = false;
+
+    // Resizes the SVG's actual width/height (not a CSS transform: scale) so the
+    // browser re-renders the vector at the target resolution instead of stretching
+    // a rasterized layer, which is what caused blur on zoom.
+    function apply() {
+      if (applyQueued) return;
+      applyQueued = true;
+      requestAnimationFrame(() => {
+        applyQueued = false;
+        if (currentSvg) {
+          currentSvg.style.width = Math.round(baseWidth * scale) + "px";
+          currentSvg.style.height = Math.round(baseHeight * scale) + "px";
+        }
+        stage.style.transform = `translate(${panX}px, ${panY}px)`;
+        resetBtn.textContent = Math.round(scale * 100) + "%";
+      });
+    }
+    function resetView() {
+      scale = 1; panX = 0; panY = 0;
+      apply();
+    }
+    function zoomBy(factor) {
+      scale = Math.min(Math.max(scale * factor, MIN_SCALE), MAX_SCALE);
+      apply();
+    }
+    function openLightbox(svg) {
+      stage.innerHTML = "";
+      const clone = svg.cloneNode(true);
+      clone.classList.add("lightbox-svg");
+      clone.removeAttribute("style");
+      clone.removeAttribute("width");
+      clone.removeAttribute("height");
+
+      let vbWidth = 800, vbHeight = 600;
+      const vb = clone.getAttribute("viewBox");
+      if (vb) {
+        const parts = vb.trim().split(/\s+/).map(Number);
+        if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+          vbWidth = parts[2];
+          vbHeight = parts[3];
+        }
+      }
+      const stagePadding = 40;
+      const maxW = window.innerWidth * 0.9 - stagePadding;
+      const maxH = window.innerHeight * 0.78 - stagePadding;
+      const fitScale = Math.min(maxW / vbWidth, maxH / vbHeight, 1);
+      baseWidth = Math.round(vbWidth * fitScale);
+      baseHeight = Math.round(vbHeight * fitScale);
+      clone.style.width = baseWidth + "px";
+      clone.style.height = baseHeight + "px";
+
+      stage.appendChild(clone);
+      currentSvg = clone;
+      resetView();
+      overlay.classList.add("open");
+      document.body.style.overflow = "hidden";
+    }
+    function closeLightbox() {
+      overlay.classList.remove("open");
+      document.body.style.overflow = "";
+    }
+
+    document.querySelectorAll(".diagram-wrap").forEach((wrap) => {
+      wrap.classList.add("zoomable");
+      wrap.addEventListener("click", () => {
+        const svg = wrap.querySelector("svg");
+        if (svg) openLightbox(svg);
+      });
+    });
+
+    closeBtn.addEventListener("click", closeLightbox);
+    resetBtn.addEventListener("click", resetView);
+    zoomInBtn.addEventListener("click", () => zoomBy(1.3));
+    zoomOutBtn.addEventListener("click", () => zoomBy(1 / 1.3));
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && overlay.classList.contains("open")) closeLightbox();
+    });
+
+    viewport.addEventListener("click", (e) => {
+      if (!moved && e.target === viewport) closeLightbox();
+    });
+
+    viewport.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12);
+    }, { passive: false });
+
+    viewport.addEventListener("dblclick", resetView);
+
+    viewport.addEventListener("pointerdown", (e) => {
+      dragging = true; moved = false;
+      startX = e.clientX; startY = e.clientY;
+      startPanX = panX; startPanY = panY;
+      viewport.classList.add("grabbing");
+      viewport.setPointerCapture(e.pointerId);
+    });
+    viewport.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+      panX = startPanX + dx;
+      panY = startPanY + dy;
+      apply();
+    });
+    viewport.addEventListener("pointerup", () => {
+      dragging = false;
+      viewport.classList.remove("grabbing");
+    });
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,25 @@
+@startuml
+left to right direction
+skinparam backgroundColor transparent
+skinparam usecase {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+}
+skinparam actor {
+  BackgroundColor #EEF2FF
+  BorderColor #3730A3
+}
+
+actor Registrar
+actor Student
+
+rectangle "Enrollment Management" {
+  usecase "UC-11\nEnroll Student in Course" as UC11
+  usecase "UC-12\nEnd Enrollment" as UC12
+}
+
+Registrar --> UC11
+Registrar --> UC12
+Student --> UC11 : if self-service\nenabled
+Student --> UC12 : if self-service\nenabled
+@enduml
