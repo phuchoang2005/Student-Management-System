@@ -39,7 +39,6 @@ CourseAdmin --> G3
 CourseAdmin --> G6
 CourseAdmin --> G5
 
-Student --> G4
 Student --> G6
 Student --> G5
 Student ..> G2 : views own\n(via UC-16)

@@ -11,7 +11,7 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 | **Registrar** | Manages student records and enrollments. |
 | **Librarian** | Manages the book catalog and book ownership assignments. |
 | **Course Administrator** | Manages course offerings. |
-| **Student** | May look up their own books/courses and self-enroll, depending on system policy. |
+| **Student** | May look up their own books, courses, and enrollments. Cannot enroll or end their own enrollment — that is Registrar-only. |
 
 ---
 
@@ -217,8 +217,10 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 
 ## UC-11: Enroll Student in Course
 
-- **Actor:** Registrar (or Student, if self-service is enabled)
+- **Actor:** Registrar
 - **Preconditions:** The student and course both exist.
+
+> Student self-service enrollment is out of scope — a Student may view their own enrollments (UC-16, UC-20) but cannot create one.
 - **Trigger:** Actor requests to enroll a student in a course.
 
 **Main Flow**
@@ -240,8 +242,10 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 
 ## UC-12: End Enrollment
 
-- **Actor:** Registrar (or Student, if self-service is enabled)
+- **Actor:** Registrar
 - **Preconditions:** An active enrollment exists for the (student, course) pair.
+
+> Student self-service withdrawal is out of scope — a Student may view their own enrollments (UC-16, UC-20) but cannot end one.
 - **Trigger:** Actor requests to withdraw a student from a course.
 
 **Main Flow**
@@ -513,8 +517,8 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 | UC-8 Create Course | Course Administrator | Course.1–3 |
 | UC-9 Update Course | Course Administrator | Course.2–3 |
 | UC-10 Remove Course | Course Administrator | §5 course removal |
-| UC-11 Enroll Student in Course | Registrar/Student | Enrollment.1–3 |
-| UC-12 End Enrollment | Registrar/Student | Enrollment.4 |
+| UC-11 Enroll Student in Course | Registrar | Enrollment.1–3 |
+| UC-12 End Enrollment | Registrar | Enrollment.4 |
 | UC-13 View/Search Students | Registrar | — (read-only) |
 | UC-14 View/Search Books | Librarian | — (read-only) |
 | UC-15 View/Search Courses | Course Administrator | — (read-only) |

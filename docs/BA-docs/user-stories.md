@@ -102,7 +102,7 @@ As a **course administrator**, I want to remove a course, so that it is no longe
 ## 4. Enrollment Management
 
 ### US-4.1 — Enroll a student in a course
-As a **registrar or student**, I want to enroll a student in a course, so that their participation is recorded.
+As a **registrar**, I want to enroll a student in a course, so that their participation is recorded.
 
 **Acceptance Criteria**
 - Given a student and course that both exist and no existing enrollment between them, when I enroll, then the enrollment is created. *(req.md §3 "Student ↔ Course", §4 Enrollment.2-3)*
@@ -111,7 +111,7 @@ As a **registrar or student**, I want to enroll a student in a course, so that t
 - Given a student that does not exist, when I try to enroll them in a course, then the operation is rejected. *(req.md §4 Enrollment.3)*
 
 ### US-4.2 — End an enrollment
-As a **registrar or student**, I want to remove a student's enrollment in a course, so that they are no longer counted as taking it.
+As a **registrar**, I want to remove a student's enrollment in a course, so that they are no longer counted as taking it.
 
 **Acceptance Criteria**
 - Given an active enrollment, when it is ended, then only the link between student and course is removed. *(req.md §4 Enrollment.4)*

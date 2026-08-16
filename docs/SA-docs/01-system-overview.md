@@ -17,7 +17,7 @@ The Student Management System is a **single-deployable, backend-only REST API**.
 | **Registrar**            | Manages student records and enrollments.                                      | use-cases.md UC-1–3, 11–13, 17, 20 |
 | **Librarian**            | Manages the book catalog and book ownership assignments.                      | use-cases.md UC-4–7, 14, 18        |
 | **Course Administrator** | Manages course offerings.                                                     | use-cases.md UC-8–10, 15, 19       |
-| **Student**              | Looks up their own books/courses; may self-enroll if self-service is enabled. | use-cases.md UC-16, 18–20          |
+| **Student**              | Looks up their own books/courses/enrollments (read-only). Cannot enroll or end an enrollment. | use-cases.md UC-16, 18–20          |
 
 All four are **human actors interacting over HTTPS**; none is a system-to-system integration. They are distinguished by **authorization scope**, not by transport or protocol — every actor hits the same API through the same security gateway, and Spring Security narrows what each role/principal may do or see (e.g., a Student principal can only read their own records).
 

@@ -66,7 +66,7 @@ Mirrors Book Management's shape: Course Administrator owns write access and sear
 
 ![Enrollment Management](./use-case-diagram-assets/05-enrollment-management.svg)
 
-UC-11 (Enroll Student in Course) and UC-12 (End Enrollment) are Registrar actions by default, with Student self-service as a policy-gated alternative.
+UC-11 (Enroll Student in Course) and UC-12 (End Enrollment) are Registrar-only. Student self-service enrollment and withdrawal are out of scope — a Student's involvement with enrollments is read-only, via UC-16/UC-20 in §6.
 
 ---
 
@@ -100,8 +100,8 @@ All four actors share Login and Change Password. UC-23 (View Student's Initial P
 | UC-8 Create Course | §4 Course Management | Course Administrator |
 | UC-9 Update Course | §4 Course Management | Course Administrator |
 | UC-10 Remove Course | §4 Course Management | Course Administrator |
-| UC-11 Enroll Student in Course | §5 Enrollment Management | Registrar / Student |
-| UC-12 End Enrollment | §5 Enrollment Management | Registrar / Student |
+| UC-11 Enroll Student in Course | §5 Enrollment Management | Registrar |
+| UC-12 End Enrollment | §5 Enrollment Management | Registrar |
 | UC-13 View/Search Students | §2 Student Management | Registrar |
 | UC-14 View/Search Books | §3 Book Management | Librarian |
 | UC-15 View/Search Courses | §4 Course Management | Course Administrator |

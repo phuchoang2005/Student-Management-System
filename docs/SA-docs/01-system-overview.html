@@ -231,7 +231,7 @@
     <tr><td><strong>Registrar</strong></td><td>Manages student records and enrollments.</td><td>use-cases.md UC-1–3, 11–13, 17, 20</td></tr>
     <tr><td><strong>Librarian</strong></td><td>Manages the book catalog and book ownership assignments.</td><td>use-cases.md UC-4–7, 14, 18</td></tr>
     <tr><td><strong>Course Administrator</strong></td><td>Manages course offerings.</td><td>use-cases.md UC-8–10, 15, 19</td></tr>
-    <tr><td><strong>Student</strong></td><td>Looks up their own books/courses; may self-enroll if self-service is enabled.</td><td>use-cases.md UC-16, 18–20</td></tr>
+    <tr><td><strong>Student</strong></td><td>Looks up their own books/courses/enrollments (read-only). Cannot enroll or end an enrollment.</td><td>use-cases.md UC-16, 18–20</td></tr>
   </tbody>
 </table>
 <p>All four are <strong>human actors interacting over HTTPS</strong>; none is a system-to-system integration. They are distinguished by <strong>authorization scope</strong>, not by transport or protocol — every actor hits the same API through the same security gateway, and Spring Security narrows what each role/principal may do or see (e.g., a Student principal can only read their own records).</p>

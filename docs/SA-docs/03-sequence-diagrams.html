@@ -852,11 +852,11 @@ sequenceDiagram
 <p>Owns UC-11, UC-12, UC-20.</p>
 
 <h3>5.1 UC-11: Enroll Student in Course</h3>
-<p>Registrar (or a Student, if self-service is enabled) enrolls a student in a course. Both cross-module existence checks run before the duplicate-enrollment check.</p>
+<p>Registrar enrolls a student in a course. Student self-service enrollment is out of scope. Both cross-module existence checks run before the duplicate-enrollment check.</p>
 <div class="mermaid-wrap">
 <pre class="mermaid">
 sequenceDiagram
-    actor Caller as Registrar / Student
+    actor Caller as Registrar
     participant Sec as Spring Security
     participant Ctrl as EnrollmentController
     participant Svc as EnrollmentService
@@ -905,11 +905,11 @@ sequenceDiagram
 <p class="fig-caption">Click diagram to zoom &amp; pan</p>
 
 <h3>5.2 UC-12: End Enrollment</h3>
-<p>Registrar (or a Student, if self-service is enabled) withdraws a student from a course. Only the enrollment link is removed — both the student and course records are unaffected.</p>
+<p>Registrar withdraws a student from a course. Student self-service withdrawal is out of scope. Only the enrollment link is removed — both the student and course records are unaffected.</p>
 <div class="mermaid-wrap">
 <pre class="mermaid">
 sequenceDiagram
-    actor Caller as Registrar / Student
+    actor Caller as Registrar
     participant Sec as Spring Security
     participant Ctrl as EnrollmentController
     participant Svc as EnrollmentService

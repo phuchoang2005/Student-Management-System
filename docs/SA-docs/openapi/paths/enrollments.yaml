@@ -4,11 +4,11 @@ collection:
     tags: [Enrollments]
     summary: Enroll a student in a course
     description: |
-      **Roles:** Registrar, or the Student being enrolled (self-service, if enabled).
+      **Roles:** Registrar. Student self-service enrollment is out of scope.
 
       Both `studentId` and `courseCode` are validated to exist before the duplicate-enrollment
       check runs.
-    x-roles: [REGISTRAR, STUDENT]
+    x-roles: [REGISTRAR]
     requestBody:
       required: true
       content:
@@ -71,9 +71,9 @@ item:
     tags: [Enrollments]
     summary: End an enrollment
     description: |
-      **Roles:** Registrar, or the enrolled Student themself. Removes only the
-      student–course link; neither the student nor the course record is affected.
-    x-roles: [REGISTRAR, STUDENT]
+      **Roles:** Registrar. Student self-service withdrawal is out of scope. Removes only
+      the student–course link; neither the student nor the course record is affected.
+    x-roles: [REGISTRAR]
     parameters:
       - $ref: '../components/parameters/common.yaml#/EnrollmentStudentIdPathParam'
       - $ref: '../components/parameters/common.yaml#/EnrollmentCourseCodePathParam'

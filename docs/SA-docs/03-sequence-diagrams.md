@@ -638,11 +638,11 @@ Owns UC-11, UC-12, UC-20.
 
 ### 5.1 UC-11: Enroll Student in Course
 
-Registrar (or a Student, if self-service is enabled) enrolls a student in a course. Both cross-module existence checks run before the duplicate-enrollment check.
+Registrar enrolls a student in a course. Student self-service enrollment is out of scope. Both cross-module existence checks run before the duplicate-enrollment check.
 
 ```mermaid
 sequenceDiagram
-    actor Caller as Registrar / Student
+    actor Caller as Registrar
     participant Sec as Spring Security
     participant Ctrl as EnrollmentController
     participant Svc as EnrollmentService
@@ -690,11 +690,11 @@ sequenceDiagram
 
 ### 5.2 UC-12: End Enrollment
 
-Registrar (or a Student, if self-service is enabled) withdraws a student from a course. Only the enrollment link is removed — both the student and course records are unaffected.
+Registrar withdraws a student from a course. Student self-service withdrawal is out of scope. Only the enrollment link is removed — both the student and course records are unaffected.
 
 ```mermaid
 sequenceDiagram
-    actor Caller as Registrar / Student
+    actor Caller as Registrar
     participant Sec as Spring Security
     participant Ctrl as EnrollmentController
     participant Svc as EnrollmentService
