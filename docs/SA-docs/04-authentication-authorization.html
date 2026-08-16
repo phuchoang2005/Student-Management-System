@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Authentication &amp; Authorization — Student Management System SA Docs</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1c1e21;
+    --muted: #57606a;
+    --border: #d8dee4;
+    --code-bg: #f6f8fa;
+    --link: #0969da;
+    --table-stripe: #f6f8fa;
+    --header-bg: #f6f8fa;
+    --pill-bg: #eef2ff;
+    --pill-fg: #3730a3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --fg: #e6edf3;
+      --muted: #9198a1;
+      --border: #30363d;
+      --code-bg: #161b22;
+      --link: #4493f8;
+      --table-stripe: #161b22;
+      --header-bg: #161b22;
+      --pill-bg: #1c2333;
+      --pill-fg: #a5b4fc;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 5rem;
+  }
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.6rem;
+  }
+  h2 {
+    font-size: 1.4rem;
+    margin-top: 2.6rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.1rem;
+    margin-top: 1.8rem;
+    color: var(--fg);
+  }
+  p { color: var(--fg); }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin-top: 0;
+  }
+  .doc-nav {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0.6rem 0 1.6rem;
+  }
+  .doc-nav .pill {
+    background: var(--pill-bg);
+    color: var(--pill-fg);
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .doc-nav a { color: var(--link); text-decoration: none; }
+  .doc-nav a:hover { text-decoration: underline; }
+  a { color: var(--link); }
+  code {
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.2rem 0;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.55rem 0.8rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--header-bg);
+    font-weight: 600;
+  }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .mermaid-wrap {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    margin: 1.4rem 0 0.5rem;
+    overflow-x: auto;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .mermaid-wrap.zoomable { cursor: zoom-in; }
+  .mermaid-wrap.zoomable:hover {
+    border-color: var(--link);
+    box-shadow: 0 0 0 1px var(--link);
+  }
+  .mermaid { display: flex; justify-content: center; }
+  .fig-caption {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.82rem;
+    margin-top: 0;
+    margin-bottom: 1.4rem;
+  }
+  ul, ol { padding-left: 1.4rem; }
+  li { margin: 0.3rem 0; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  em { color: var(--muted); }
+
+  /* Diagram lightbox */
+  .lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.86);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .lightbox-overlay.open { display: flex; }
+  .lightbox-viewport {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+  }
+  .lightbox-viewport.grabbing { cursor: grabbing; }
+  .lightbox-stage {
+    transform-origin: center center;
+    will-change: transform;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 1.25rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+  .lightbox-stage svg.lightbox-svg {
+    display: block;
+  }
+  .lightbox-toolbar {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    display: flex;
+    gap: 0.5rem;
+    z-index: 1001;
+  }
+  .lightbox-toolbar button {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.05rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .lightbox-toolbar button:hover { background: rgba(255, 255, 255, 0.28); }
+  #lightbox-reset { width: auto; padding: 0 0.8rem; font-size: 0.85rem; }
+  .lightbox-hint {
+    position: absolute;
+    bottom: 1.1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<h1>Authentication &amp; Authorization</h1>
+<p class="subtitle">Solution Architecture Document — Part 4 of 4</p>
+<nav class="doc-nav">
+  <a href="./01-system-overview.html">System Overview</a>
+  &nbsp;→&nbsp;
+  <a href="./02-component-diagram.html">Component Diagram</a>
+  &nbsp;→&nbsp;
+  <a href="./03-sequence-diagrams.html">Sequence Diagram</a>
+  &nbsp;→&nbsp;
+  <span class="pill">Part 4</span> Authentication &amp; Authorization
+</nav>
+
+<p>Derived from <a href="../BA-docs/use-cases.md">use-cases.md</a> (UC-1's account-provisioning step, UC-21 Login, UC-22 Change Password, UC-23 View Student's Initial Password) and <a href="../BA-docs/req.md">req.md</a> (the User Account entity and Identity.1–5 rules). This document settles what <code>01-system-overview.md</code> §4.2 and its Deployment Characteristics table originally left as "an implementation decision" — the authentication scheme, the identity/session model, and the <code>identity</code> module introduced in <code>02-component-diagram.md</code> §2.1/§2.4. It reuses the lifeline, arrow-style, and <code>alt</code>/<code>par</code> conventions defined once in <code>03-sequence-diagrams.md</code> §1 rather than restating them, and does not repeat request/response DTO shapes, which stay in the OpenAPI contract per <code>02-component-diagram.md</code> §5.</p>
+
+<hr>
+
+<h2 id="decisions">1. Decisions</h2>
+<table>
+  <thead><tr><th>Concern</th><th>Decision</th><th>Supersedes</th></tr></thead>
+  <tbody>
+    <tr><td>State management</td><td><strong>Session-based (stateful).</strong> Spring Security's default HTTP session management issues a server-side session (<code>JSESSIONID</code> cookie) on successful login.</td><td><code>01-system-overview.md</code> Deployment Characteristics "State" row, previously "Stateless"; §4.2, previously "an implementation decision... not fixed at this level."</td></tr>
+    <tr><td>Authorization model</td><td><strong>RBAC</strong>, using the same 4 roles already named throughout the doc set (Registrar, Librarian, Course Administrator, Student) — no new role is introduced.</td><td><code>02-component-diagram.md</code> §4's existing role/access table, which now has a concrete <code>role</code> column on <code>users</code> backing it instead of an abstract "authenticated principal."</td></tr>
+    <tr><td>Identity / SSO</td><td><strong>In-app identity.</strong> A dedicated <code>users</code> table owned by a new <code>identity</code> module; login and password logic are built into the application itself. No external IdP, no OAuth/OIDC.</td><td>— (no prior decision existed; this scope was entirely unaddressed before).</td></tr>
+  </tbody>
+</table>
+<p>Single-process deployment (<code>01-system-overview.md</code> Deployment Characteristics, "Process topology") makes an in-memory session store sufficient for this scope — no distributed session store is designed here (see §7).</p>
+
+<h2 id="identity-module">2. The <code>identity</code> module and the <code>users</code> table</h2>
+
+<h3>2.1 Module placement</h3>
+<p>A new Spring Modulith module, <code>identity</code>, mirroring <code>student</code>'s hexagonal shape (<code>web/</code> → <code>application/</code> → <code>domain/</code> → <code>port/</code> → <code>internal/</code>), not folded into <code>shared</code>. <code>shared</code> keeps owning the <em>mechanism</em> — the <code>SecurityFilterChain</code> and <code>PasswordEncoder</code> beans, alongside its existing global exception handler (<code>02-component-diagram.md</code> §4). <code>identity</code> owns the <em>domain</em> — a <code>User</code> aggregate with real invariants (unique username, hash-vs-encrypted-initial-password split, role/<code>student_id</code> co-invariant, must-change-password state), the same kind of thing <code>Student</code>/<code>Course</code>/<code>Book</code>/<code>Enrollment</code> already are, and so belongs in a module of its own by the same reasoning <code>02-component-diagram.md</code> §2.5 already applies to <code>StudentLookup</code>/<code>CourseLookup</code>.</p>
+
+<p>Published API (non-<code>internal</code>, consumed by other modules — see <code>02-component-diagram.md</code> §2.1, §2.2):</p>
+<ul>
+  <li><code>AccountProvisioning.provisionForStudent(studentId, email)</code> — called by <code>student</code> synchronously, in the same transaction as the student save (<code>03-sequence-diagrams.md</code> §2.1).</li>
+  <li><code>PrincipalStudentResolver.studentIdOf(Authentication)</code> — used wherever a module needs to resolve "own records only" scoping for a Student principal (<code>02-component-diagram.md</code> §4).</li>
+</ul>
+
+<p>This is the one place in the module graph where the dependency direction is inverted from the existing <code>book</code>/<code>enrollment</code> → <code>student</code>/<code>course</code> pattern: the <em>owning</em> module (<code>student</code>) calls out to <code>identity</code>, not the reverse.</p>
+
+<h3>2.2 <code>users</code> table schema</h3>
+<p>Conceptual schema — Flyway DDL is future build-phase work, same status as the rest of the schema (<code>01-system-overview.md</code> §4.4 notes Spring Data JDBC generates no DDL of its own).</p>
+<table>
+  <thead><tr><th>Column</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>id</code></td><td>Surrogate primary key.</td></tr>
+    <tr><td><code>username</code></td><td>Unique, not null. For a Student account this is always the student's email (already validated unique by Student.2) — if the student's email later changes, the username changes with it (req.md §3, Student ↔ User Account).</td></tr>
+    <tr><td><code>password_hash</code></td><td>BCrypt hash of the <strong>current</strong> password. One-way — used only to verify a login or a Change Password submission; never reversible, never displayed.</td></tr>
+    <tr><td><code>initial_password_encrypted</code></td><td>Nullable. A <strong>reversibly encrypted</strong> (AES) copy of the <em>original</em> system-generated password, populated at account creation. <strong>Cleared to <code>NULL</code> the instant the account holder completes their first password change.</strong> This is the only recoverable form of any password in this design, and it exists solely to satisfy UC-23.</td></tr>
+    <tr><td><code>role</code></td><td>One of <code>REGISTRAR</code>, <code>LIBRARIAN</code>, <code>COURSE_ADMINISTRATOR</code>, <code>STUDENT</code>.</td></tr>
+    <tr><td><code>student_id</code></td><td>Nullable FK to the <code>student</code> module's aggregate. Required if and only if <code>role = STUDENT</code>; must be <code>NULL</code> for the 3 staff roles — a domain invariant on <code>User</code>, enforced the same way Student.3/4 are enforced on <code>Student</code>.</td></tr>
+    <tr><td><code>must_change_password</code></td><td>Not null, default <code>false</code>. Set <code>true</code> at creation for auto-provisioned Student accounts (Identity.3); flips to <code>false</code> on the first successful Change Password (Identity.3–5).</td></tr>
+    <tr><td><code>created_at</code> / <code>updated_at</code></td><td>Timestamps.</td></tr>
+  </tbody>
+</table>
+<p><strong>Security note.</strong> Storing any reversible form of a password is a deliberate, narrow deviation from password-storage best practice, made only because Identity.5 requires the Registrar to be able to look up a student's still-active initial password. The deviation is scoped as tightly as the requirement allows: only the <em>original</em> system-generated password is ever recoverable (never one the account holder chose), only for as long as <code>must_change_password = true</code>, and only via <code>initial_password_encrypted</code> — <code>password_hash</code> itself is always one-way. The AES key used for this field is application-managed configuration (e.g. environment/secret store); its storage and rotation is a build/ops concern, out of scope here (§7).</p>
+<p><strong>Staff accounts (Registrar, Librarian, Course Administrator) are out of scope for auto-provisioning.</strong> No use case in <code>use-cases.md</code> defines who creates a staff account or through what flow — only UC-1 (Student registration) triggers auto-provisioning. Staff accounts are assumed pre-seeded by some out-of-band process (§7).</p>
+
+<h2 id="account-provisioning">3. Account provisioning (UC-1 tail)</h2>
+<p>Extends <code>03-sequence-diagrams.md</code> §2.1, immediately after <code>Svc->>Repo: save(student)</code> succeeds and before the <code>201 Created</code> response. Runs in the same transaction as the student save — if provisioning fails, the whole registration rolls back (<code>01-system-overview.md</code> §4.4: one schema, one connection pool).</p>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+sequenceDiagram
+    participant Svc as StudentService
+    participant IdentitySvc as IdentityService
+    participant Agg as User (aggregate)
+    participant Repo as JdbcUserRepository
+    participant DB as MySQL
+
+    Svc->>IdentitySvc: provisionForStudent(studentId, email)
+    IdentitySvc->>IdentitySvc: generate 8-char alphanumeric password (SecureRandom)
+    IdentitySvc->>Agg: create(username = email, role = STUDENT, studentId, plaintextPassword)
+    Agg->>Agg: hash(plaintextPassword) → passwordHash (BCrypt)
+    Agg->>Agg: encrypt(plaintextPassword) → initialPasswordEncrypted (AES)
+    Agg-->>IdentitySvc: User instance (mustChangePassword = true) (Identity.1, Identity.3)
+    IdentitySvc->>Repo: save(user)
+    Repo->>DB: INSERT INTO users (username, password_hash, initial_password_encrypted, role, student_id, must_change_password) ...
+    DB-->>Repo: OK
+    Repo-->>IdentitySvc: saved
+    IdentitySvc-->>Svc: ProvisionedAccount(username, plaintextPassword)
+</pre>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<p>No <code>alt</code> for a username collision is modeled — consistent with this doc set's rule of only modeling branches <code>use-cases.md</code> actually lists (<code>03-sequence-diagrams.md</code> §1): a collision is unreachable here since the username is always the already-Student.2-validated-unique email. The returned <code>plaintextPassword</code> is included once in UC-1's <code>201 Created</code> response (<code>03-sequence-diagrams.md</code> §2.1); after that response, it is retrievable again only through UC-23 (§5.3), and only until the student changes it.</p>
+
+<h2 id="login-gate">4. Login &amp; the must-change-password gate</h2>
+
+<h3>4.1 UC-21: Login</h3>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+sequenceDiagram
+    actor User
+    participant Sec as Spring Security
+    participant UDS as AppUserDetailsService
+    participant Repo as JdbcUserRepository
+    participant DB as MySQL
+
+    User->>Sec: POST /api/v1/auth/login {username, password}
+    Sec->>UDS: loadUserByUsername(username)
+    UDS->>Repo: findByUsername(username)
+    Repo->>DB: SELECT ... WHERE username = ?
+    DB-->>Repo: result
+    Repo-->>UDS: user or empty
+    alt username not found
+        UDS-->>Sec: UsernameNotFoundException
+        Sec-->>User: 401 Unauthorized
+    else user found
+        Sec->>Sec: PasswordEncoder.matches(password, user.passwordHash)
+        alt password mismatch
+            Sec-->>User: 401 Unauthorized
+        else password matches
+            Sec->>Sec: open HttpSession, store SecurityContext (JSESSIONID cookie)
+            Sec-->>User: 200 OK {role, mustChangePassword}
+        end
+    end
+</pre>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+
+<h3>4.2 Must-change-password gate</h3>
+<p>Sits behind the standard auth gate (<code>03-sequence-diagrams.md</code> §2.1) — a request must already be authenticated before this check runs.</p>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+sequenceDiagram
+    actor User
+    participant Sec as Spring Security
+    participant Gate as MustChangePasswordFilter
+    participant Ctrl as (target controller)
+
+    User->>Sec: any request (session cookie)
+    Sec->>Gate: resolved principal (auth gate as in 03-sequence-diagrams.md §2.1)
+    alt principal.mustChangePassword = true AND path != /api/v1/auth/password
+        Gate-->>User: 403 Forbidden
+    else mustChangePassword = false, or path is the Change Password endpoint
+        Gate->>Ctrl: forward request
+    end
+</pre>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<p>A newly provisioned Student account (§3) therefore cannot do anything except submit UC-22 until it does so — there is no way to "skip" the change and use the temporary password for ordinary access.</p>
+
+<h2 id="change-password">5. Change Password &amp; View Initial Password</h2>
+
+<h3>5.1 UC-22: Change Password</h3>
+<p>Three fields — Current Password, New Password, Re-type New Password — validated in that order (retype-match, then current-password match, then new-password policy), mirroring the cascading-<code>alt</code> style of UC-1.</p>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+sequenceDiagram
+    actor User
+    participant Sec as Spring Security
+    participant Ctrl as AuthController
+    participant Svc as IdentityService
+    participant Agg as User (aggregate)
+    participant Repo as JdbcUserRepository
+    participant DB as MySQL
+
+    User->>Sec: POST /api/v1/auth/password {currentPassword, newPassword, retypeNewPassword}
+    Sec->>Ctrl: forward request (auth gate as in 03-sequence-diagrams.md §2.1)
+    Ctrl->>Svc: changePassword(command)
+
+    alt newPassword != retypeNewPassword
+        Svc-->>Ctrl: ValidationException
+        Ctrl-->>User: 400 Bad Request
+    else retyped password matches
+        Svc->>Repo: findByUsername(principal.username)
+        Repo->>DB: SELECT ...
+        DB-->>Repo: user
+        Repo-->>Svc: user
+        Svc->>Svc: PasswordEncoder.matches(currentPassword, user.passwordHash)
+        alt current password mismatch
+            Svc-->>Ctrl: AuthenticationException
+            Ctrl-->>User: 401 Unauthorized
+        else current password matches
+            alt newPassword fails policy (§5.2) or equals currentPassword
+                Svc-->>Ctrl: ValidationException
+                Ctrl-->>User: 400 Bad Request
+            else newPassword valid
+                Svc->>Agg: changePassword(newPassword)
+                Agg->>Agg: hash(newPassword) → passwordHash, clear initialPasswordEncrypted, set mustChangePassword = false
+                Agg-->>Svc: updated User instance (Identity.3–5)
+                Svc->>Repo: save(user)
+                Repo->>DB: UPDATE users SET password_hash = ?, initial_password_encrypted = NULL, must_change_password = false ...
+                DB-->>Repo: OK
+                Repo-->>Svc: saved
+                Svc->>Sec: refresh cached principal in session (clears mustChangePassword without forcing re-login)
+                Svc-->>Ctrl: OK
+                Ctrl-->>User: 200 OK
+            end
+        end
+    end
+</pre>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<p>Clearing <code>initial_password_encrypted</code> in the same update is what makes the new password permanently unrecoverable — including to the Registrar (Identity.4).</p>
+
+<h3>5.2 Password policy</h3>
+<p>Kept minimal — this is a small internal system, not a public-facing one:</p>
+<ol>
+  <li>Minimum length <strong>8 characters</strong> (no regression versus the temp password).</li>
+  <li><strong>No mandatory composition rules</strong> (no forced upper/lower/digit/symbol mix) — favors length over complexity, per NIST 800-63B guidance for a system this size.</li>
+  <li>New password <strong>must differ</strong> from the current password — otherwise "changing" it could be a no-op that still clears <code>must_change_password</code>, defeating the gate in §4.2.</li>
+  <li>New and Re-type must match exactly (already enforced as the first check in §5.1).</li>
+  <li>Maximum length <strong>72 characters</strong> — BCrypt silently truncates beyond 72 bytes; capping input avoids that surprise.</li>
+  <li>No password history, expiry, or rotation policy — out of scope (§7).</li>
+</ol>
+
+<h3>5.3 UC-23: View Student's Initial Password</h3>
+<p>Registrar-only. Available only while the target account is still using its system-issued password.</p>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+sequenceDiagram
+    actor Registrar
+    participant Sec as Spring Security
+    participant Ctrl as AuthController
+    participant Svc as IdentityService
+    participant Repo as JdbcUserRepository
+    participant DB as MySQL
+
+    Registrar->>Sec: GET /api/v1/students/{code}/initial-password
+    Sec->>Ctrl: forward request (auth gate as in 03-sequence-diagrams.md §2.1, Registrar only)
+    Ctrl->>Svc: viewInitialPassword(studentCode)
+    Svc->>Repo: findByStudentCode(studentCode)
+    Repo->>DB: SELECT ... WHERE student_id = ?
+    DB-->>Repo: user
+    Repo-->>Svc: user
+    alt user.mustChangePassword = false
+        Svc-->>Ctrl: PasswordNoLongerAvailableException
+        Ctrl-->>Registrar: 404 Not Found (already changed, unavailable to anyone, per Identity.4)
+    else mustChangePassword = true
+        Svc->>Svc: decrypt(user.initialPasswordEncrypted)
+        Svc-->>Ctrl: plaintext initial password (Identity.5)
+        Ctrl-->>Registrar: 200 OK {username, initialPassword}
+    end
+</pre>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+
+<h2 id="rbac-summary">6. RBAC summary</h2>
+<p>Extends <code>02-component-diagram.md</code> §4's role/access table with the <code>identity</code>-specific permissions that table deliberately excludes (§4's closing note):</p>
+<table>
+  <thead><tr><th>Role</th><th>Can log in (UC-21)</th><th>Can change own password (UC-22)</th><th>Can view a student's initial password (UC-23)</th></tr></thead>
+  <tbody>
+    <tr><td>Registrar</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+    <tr><td>Librarian</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Course Administrator</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Student</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+  </tbody>
+</table>
+<p>No role may view or change another principal's <em>changed</em> password — that is never possible for anyone, by construction (§2.2, §5.1).</p>
+
+<h2 id="out-of-scope">7. Out of Scope (this document)</h2>
+<ul>
+  <li>SSO, OAuth/OIDC, or any external identity provider — identity is entirely in-app, per §1.</li>
+  <li>A "true" forgot-password flow for a user with no active session and no known current password (email/SMS/token-based reset) — not designed; an account holder who cannot authenticate at all must be handled operationally.</li>
+  <li>How staff (Registrar/Librarian/Course Administrator) accounts are created — assumed pre-seeded; no use case defines this flow (§2.2).</li>
+  <li>Horizontal scaling of the session store (Spring Session JDBC/Redis, sticky sessions) — the single-process deployment in <code>01-system-overview.md</code> makes this unnecessary for current scope.</li>
+  <li>Multi-factor authentication, password expiry/rotation, and password history beyond the single "must differ from current" check (§5.2).</li>
+  <li>AES key management/rotation for <code>initial_password_encrypted</code> — application configuration, a build/ops concern.</li>
+  <li>Flyway migration DDL and Java class implementation for the <code>identity</code> module — future build-phase work, same status as the rest of the schema (<code>01-system-overview.md</code> §4.4).</li>
+</ul>
+
+<div id="diagram-lightbox" class="lightbox-overlay">
+  <div class="lightbox-toolbar">
+    <button id="lightbox-zoom-out" title="Zoom out">−</button>
+    <button id="lightbox-reset" title="Reset zoom">100%</button>
+    <button id="lightbox-zoom-in" title="Zoom in">+</button>
+    <button id="lightbox-close" title="Close (Esc)">✕</button>
+  </div>
+  <div id="lightbox-viewport" class="lightbox-viewport">
+    <div id="lightbox-stage" class="lightbox-stage"></div>
+  </div>
+  <p class="lightbox-hint">Scroll to zoom · Drag to pan · Double-click to reset · Esc to close</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+  (async function () {
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: prefersDark ? "dark" : "default",
+      securityLevel: "strict",
+      sequence: { useMaxWidth: true, wrap: true, mirrorActors: false }
+    });
+    await mermaid.run();
+    initDiagramLightbox();
+  })();
+
+  function initDiagramLightbox() {
+    const overlay = document.getElementById("diagram-lightbox");
+    const viewport = document.getElementById("lightbox-viewport");
+    const stage = document.getElementById("lightbox-stage");
+    const zoomInBtn = document.getElementById("lightbox-zoom-in");
+    const zoomOutBtn = document.getElementById("lightbox-zoom-out");
+    const resetBtn = document.getElementById("lightbox-reset");
+    const closeBtn = document.getElementById("lightbox-close");
+
+    const MIN_SCALE = 0.15;
+    const MAX_SCALE = 10;
+    let scale = 1, panX = 0, panY = 0;
+    let baseWidth = 800, baseHeight = 600;
+    let currentSvg = null;
+    let dragging = false, moved = false, startX = 0, startY = 0, startPanX = 0, startPanY = 0;
+    let applyQueued = false;
+
+    // Resizes the SVG's actual width/height (not a CSS transform: scale) so the
+    // browser re-renders the vector at the target resolution instead of stretching
+    // a rasterized layer, which is what caused blur on zoom.
+    function apply() {
+      if (applyQueued) return;
+      applyQueued = true;
+      requestAnimationFrame(() => {
+        applyQueued = false;
+        if (currentSvg) {
+          currentSvg.style.width = Math.round(baseWidth * scale) + "px";
+          currentSvg.style.height = Math.round(baseHeight * scale) + "px";
+        }
+        stage.style.transform = `translate(${panX}px, ${panY}px)`;
+        resetBtn.textContent = Math.round(scale * 100) + "%";
+      });
+    }
+    function resetView() {
+      scale = 1; panX = 0; panY = 0;
+      apply();
+    }
+    function zoomBy(factor) {
+      scale = Math.min(Math.max(scale * factor, MIN_SCALE), MAX_SCALE);
+      apply();
+    }
+    function openLightbox(svg) {
+      stage.innerHTML = "";
+      const clone = svg.cloneNode(true);
+      clone.classList.add("lightbox-svg");
+      clone.removeAttribute("style");
+      clone.removeAttribute("width");
+      clone.removeAttribute("height");
+
+      let vbWidth = 800, vbHeight = 600;
+      const vb = clone.getAttribute("viewBox");
+      if (vb) {
+        const parts = vb.trim().split(/\s+/).map(Number);
+        if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+          vbWidth = parts[2];
+          vbHeight = parts[3];
+        }
+      }
+      const stagePadding = 40;
+      const maxW = window.innerWidth * 0.9 - stagePadding;
+      const maxH = window.innerHeight * 0.78 - stagePadding;
+      const fitScale = Math.min(maxW / vbWidth, maxH / vbHeight, 1);
+      baseWidth = Math.round(vbWidth * fitScale);
+      baseHeight = Math.round(vbHeight * fitScale);
+      clone.style.width = baseWidth + "px";
+      clone.style.height = baseHeight + "px";
+
+      stage.appendChild(clone);
+      currentSvg = clone;
+      resetView();
+      overlay.classList.add("open");
+      document.body.style.overflow = "hidden";
+    }
+    function closeLightbox() {
+      overlay.classList.remove("open");
+      document.body.style.overflow = "";
+    }
+
+    document.querySelectorAll(".mermaid-wrap").forEach((wrap) => {
+      wrap.classList.add("zoomable");
+      wrap.addEventListener("click", () => {
+        const svg = wrap.querySelector("svg");
+        if (svg) openLightbox(svg);
+      });
+    });
+
+    closeBtn.addEventListener("click", closeLightbox);
+    resetBtn.addEventListener("click", resetView);
+    zoomInBtn.addEventListener("click", () => zoomBy(1.3));
+    zoomOutBtn.addEventListener("click", () => zoomBy(1 / 1.3));
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && overlay.classList.contains("open")) closeLightbox();
+    });
+
+    viewport.addEventListener("click", (e) => {
+      if (!moved && e.target === viewport) closeLightbox();
+    });
+
+    viewport.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12);
+    }, { passive: false });
+
+    viewport.addEventListener("dblclick", resetView);
+
+    viewport.addEventListener("pointerdown", (e) => {
+      dragging = true; moved = false;
+      startX = e.clientX; startY = e.clientY;
+      startPanX = panX; startPanY = panY;
+      viewport.classList.add("grabbing");
+      viewport.setPointerCapture(e.pointerId);
+    });
+    viewport.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+      panX = startPanX + dx;
+      panY = startPanY + dy;
+      apply();
+    });
+    viewport.addEventListener("pointerup", () => {
+      dragging = false;
+      viewport.classList.remove("grabbing");
+    });
+  }
+</script>
+
+</body>
+</html>

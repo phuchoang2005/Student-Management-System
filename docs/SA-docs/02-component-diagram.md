@@ -1,6 +1,6 @@
 # Component Diagram
 
-Solution Architecture Document — Part 2 of 3 ([System Overview](./01-system-overview.md) → Component Diagram → [Sequence Diagram](./03-sequence-diagrams.md)).
+Solution Architecture Document — Part 2 of 4 ([System Overview](./01-system-overview.md) → Component Diagram → [Sequence Diagram](./03-sequence-diagrams.md) → [Authentication & Authorization](./04-authentication-authorization.md)).
 
 This document zooms into the single process shown in the System Overview and answers two questions the Context diagram deliberately left out: **how do the five Spring Modulith modules depend on each other**, and **what does the inside of one module look like** (the Clean/Hexagonal layering referenced in the README). Traceability back to [use-cases.md](../BA-docs/use-cases.md) is kept explicit throughout, since every component here exists to serve a specific UC.
 
@@ -61,10 +61,19 @@ flowchart TB
         EnrollInternal["internal:\nJdbcEnrollmentRepository"]
     end
 
+    subgraph Identity["identity module"]
+        direction TB
+        IdentityWeb["AuthController"]
+        IdentityApp["IdentityService\nlogin · changePassword\nviewInitialPassword"]
+        IdentityDomain["User\n(aggregate)"]
+        IdentityApi["AccountProvisioning ·\nPrincipalStudentResolver\n(public API — for student)"]
+        IdentityInternal["internal:\nJdbcUserRepository"]
+    end
+
     Shared["shared module\nexceptions · error envelope · global handler"]
     DB[("MySQL 8")]
 
-    Sec --> StudentWeb & CourseWeb & BookWeb & EnrollWeb
+    Sec --> StudentWeb & CourseWeb & BookWeb & EnrollWeb & IdentityWeb
 
     StudentWeb --> StudentApp --> StudentDomain
     StudentApp --> StudentInternal
@@ -80,17 +89,22 @@ flowchart TB
     EnrollWeb --> EnrollApp --> EnrollDomain
     EnrollApp --> EnrollInternal
 
-    Student & Course & Book & Enrollment --> Shared
-    StudentInternal & CourseInternal & BookInternal & EnrollInternal -- "Spring Data JDBC" --> DB
+    IdentityWeb --> IdentityApp --> IdentityDomain
+    IdentityApp --> IdentityInternal
+    IdentityApp -. "exposes" .-> IdentityApi
+
+    Student & Course & Book & Enrollment & Identity --> Shared
+    StudentInternal & CourseInternal & BookInternal & EnrollInternal & IdentityInternal -- "Spring Data JDBC" --> DB
 ```
 
 ### 2.2 Inter-module dependencies — public API calls
 
-The only two modules that call into another module at all: `book` and `enrollment`, each reading through a narrow public API bean (never through `internal/`). Solid arrows only — synchronous in-process calls.
+Three modules call into another module: `book` and `enrollment`, each reading through a narrow public API bean (never through `internal/`) — plus `student`, which now calls out to `identity` to provision a new student's login account as part of registration (UC-1). This last edge runs the opposite direction from the other two: the *owning* module (`student`) is the caller, not the dependent one. Solid arrows only — synchronous in-process calls.
 
 ```mermaid
 flowchart LR
     subgraph Student["student"]
+        StudentApp["StudentService"]
         StudentApi["StudentLookup"]
     end
     subgraph Course["course"]
@@ -102,15 +116,19 @@ flowchart LR
     subgraph Enrollment["enrollment"]
         EnrollApp["EnrollmentService"]
     end
+    subgraph Identity["identity"]
+        IdentityApi["AccountProvisioning"]
+    end
 
     BookApp -- "validates owner\n(Book.4)" --> StudentApi
     EnrollApp -- "validates student\n(Enrollment.3)" --> StudentApi
     EnrollApp -- "validates course\n(Enrollment.2)" --> CourseApi
+    StudentApp -- "provisions login account\n(Identity.1)" --> IdentityApi
 ```
 
 ### 2.3 Cross-module domain events
 
-The cleanup rules from req.md §5: when a `student` or `course` aggregate is deleted, dependent modules react asynchronously via a Spring Modulith event listener rather than a direct call. Dashed arrows only.
+The cleanup rules from req.md §5: when a `student` or `course` aggregate is deleted, dependent modules react asynchronously via a Spring Modulith event listener rather than a direct call. This now includes `identity`: removing a student also removes their user account (Identity — "when a student is removed"), so `identity` listens for `StudentDeleted` alongside `book` and `enrollment`. Dashed arrows only.
 
 ```mermaid
 flowchart LR
@@ -126,9 +144,13 @@ flowchart LR
     subgraph Enrollment["enrollment"]
         EnrollApp["EnrollmentService"]
     end
+    subgraph Identity["identity"]
+        IdentityApp["IdentityService"]
+    end
 
     StudentApp -. "StudentDeleted" .-> BookApp
     StudentApp -. "StudentDeleted" .-> EnrollApp
+    StudentApp -. "StudentDeleted" .-> IdentityApp
     CourseApp -. "CourseDeleted" .-> EnrollApp
 ```
 
@@ -136,17 +158,18 @@ flowchart LR
 
 | Module | Owns (UC) | Depends on (public API) | Publishes / listens |
 | --- | --- | --- | --- |
-| `student` | UC-1, 2, 3, 13, 17 | — | publishes `StudentDeleted` |
+| `student` | UC-1, 2, 3, 13, 17 | `identity.AccountProvisioning` (Identity.1) | publishes `StudentDeleted` |
 | `course` | UC-8, 9, 10, 15, 19 | — | publishes `CourseDeleted` |
 | `book` | UC-4, 5, 6, 7, 14, 18 | `student.StudentLookup` (Book.4) | listens for `StudentDeleted` |
 | `enrollment` | UC-11, 12, 20 | `student.StudentLookup` (Enrollment.3), `course.CourseLookup` (Enrollment.2) | listens for `StudentDeleted`, `CourseDeleted` |
+| `identity` | UC-21, 22, 23 (+ provisioning tail of UC-1) | — | listens for `StudentDeleted` |
 | `shared` | — (cross-cutting) | — | — |
 
 **UC-16** (Student's "my books / my courses / my enrollments") is a **read-side composition**, not a module of its own: the request lands on a thin composing endpoint (or the client makes three scoped calls) that reads from `book`, `enrollment`, and `student` independently — no new write dependency is introduced, and no module gains a new inbound edge beyond what the table above already shows.
 
 ### 2.5 Why `book`/`enrollment` depend on a public API, not a port
 
-A hexagonal *port* is owned and defined by the module that needs it, for infrastructure it plugs in itself (e.g., `student`'s own `StudentRepository` port, implemented by its own JDBC adapter). A cross-module dependency is different: `book` doesn't want to own persistence for students, it wants to ask a question of the `student` module. Spring Modulith's answer is a **published interface** — `student` exposes `StudentLookup` from its top-level (non-`internal`) package as a small, deliberately narrow read API (`existsById`, `summaryOf`). `book` and `enrollment` inject it like any other Spring bean. This keeps `Book.ownerId` a plain `StudentId` value (never a `Student` reference or `@ManyToOne`), while still letting `book` enforce Book.4 ("cannot be assigned to a student who does not exist").
+A hexagonal *port* is owned and defined by the module that needs it, for infrastructure it plugs in itself (e.g., `student`'s own `StudentRepository` port, implemented by its own JDBC adapter). A cross-module dependency is different: `book` doesn't want to own persistence for students, it wants to ask a question of the `student` module. Spring Modulith's answer is a **published interface** — `student` exposes `StudentLookup` from its top-level (non-`internal`) package as a small, deliberately narrow read API (`existsById`, `summaryOf`). `book` and `enrollment` inject it like any other Spring bean. This keeps `Book.ownerId` a plain `StudentId` value (never a `Student` reference or `@ManyToOne`), while still letting `book` enforce Book.4 ("cannot be assigned to a student who does not exist"). The same principle holds for `student`'s own outbound call into `identity.AccountProvisioning` (§2.2) even though the direction is inverted — `student` is asking `identity` to do something on its behalf, not the other way around, but it's still a narrow published interface, never a reach into `identity/internal/`.
 
 ## 3. Inside a Module: Hexagonal Layering (`student`, the reference module)
 
@@ -194,7 +217,7 @@ flowchart LR
 - **`internal/`** is the only place Spring Data JDBC appears: `JdbcStudentRepository` implements the port, `StudentRow` is the `@Table`-mapped persistence record. Nothing outside `student/` can import from here — enforced by `ApplicationModules.verify()`.
 - **`StudentLookup`** sits beside (not inside) `application/`: a thin façade over `StudentService`'s read path, exposed deliberately so `book` and `enrollment` have exactly one narrow, stable thing to depend on.
 
-`course`, `book`, and `enrollment` follow the identical five-folder shape; `book` and `enrollment` additionally hold a constructor-injected reference to `StudentLookup`/`CourseLookup` inside their `application/` service, per §2.
+`course`, `book`, `enrollment`, and `identity` follow the identical five-folder shape; `book` and `enrollment` additionally hold a constructor-injected reference to `StudentLookup`/`CourseLookup` inside their `application/` service, and `student` holds one to `identity`'s `AccountProvisioning`, per §2.
 
 ## 4. Security Component Placement
 
@@ -207,7 +230,7 @@ Spring Security's filter chain sits in front of every controller, not inside any
 | Course Administrator | `course` | all |
 | Student | none | own records only (`student`, `book`, `enrollment` scoped to `principal.studentId`) |
 
-The exact scoping check ("own records only") is implemented as a method-level authorization check in each module's `application/` service — it needs the authenticated principal's student identity compared against the aggregate being read, which is domain-specific logic, not something the filter chain alone can express.
+The exact scoping check ("own records only") is implemented as a method-level authorization check in each module's `application/` service — it needs the authenticated principal's student identity compared against the aggregate being read, which is domain-specific logic, not something the filter chain alone can express. `identity` doesn't fit this table's per-domain-module shape and isn't added as a row: every role may write to `identity`, but only ever their own credentials (UC-22) — no role may change another principal's password. The one asymmetric exception is UC-23: the Registrar additionally gets read access to a student's *initial* password, and only for as long as that student hasn't changed it yet — see [Authentication & Authorization](./04-authentication-authorization.md) §5.
 
 ## 5. Out of Scope (this document)
 

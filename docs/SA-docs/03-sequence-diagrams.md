@@ -1,6 +1,6 @@
 # Sequence Diagrams
 
-Solution Architecture Document — Part 3 of 3 ([System Overview](./01-system-overview.md) → [Component Diagram](./02-component-diagram.md) → Sequence Diagram).
+Solution Architecture Document — Part 3 of 4 ([System Overview](./01-system-overview.md) → [Component Diagram](./02-component-diagram.md) → Sequence Diagram → [Authentication & Authorization](./04-authentication-authorization.md)).
 
 This document shows, for every use case in [use-cases.md](../BA-docs/use-cases.md), the order of calls a request makes through the layers and modules described in the [Component Diagram](./02-component-diagram.md): Spring Security → Controller → Service → domain aggregate → repository → MySQL, plus the two synchronous cross-module lookups (`StudentLookup`, `CourseLookup`) and the two asynchronous cascade-delete events (`StudentDeleted`, `CourseDeleted`). Sections are grouped by owning module, matching the ownership table in `02-component-diagram.md` §2.4.
 
@@ -28,6 +28,8 @@ Actor → `Spring Security` → `<Module>Controller` → `<Module>Service` → `
 
 Every request passes through the same Spring Security filter chain before reaching a controller. The full authentication/authorization gate (`alt` block, 401/403 branch) is spelled out once, on UC-1's diagram (§2.1). Every other diagram keeps a single `Security` step with a note — *"auth gate as in §2.1"* — rather than repeating the same two branches twenty times.
 
+A second, narrower gate sits behind it: if the authenticated principal's account has `mustChangePassword = true`, every endpoint except Change Password (UC-22) is blocked with 403. This gate is spelled out once in [04-authentication-authorization.md](./04-authentication-authorization.md) §4 rather than repeated here.
+
 **Cross-module reads for detail/composition views (UC-16–UC-20)**
 
 `02-component-diagram.md` §2.2 graphs only the two *write-path* validation dependencies (`book`→`StudentLookup`, `enrollment`→`StudentLookup`/`CourseLookup`). The detail and composition use cases (UC-16 "my books/courses", UC-17 student detail, UC-18 book detail, UC-19 course detail, UC-20 enrollment detail) all need additional *read-path* calls across module boundaries — e.g., `StudentService` reading a student's owned books from `book`, or `CourseService` reading a course's roster from `enrollment`. These are modeled the same way as `StudentLookup`/`CourseLookup`: a narrow, read-only call into the owning module's service. `02-component-diagram.md` §2.4 flags UC-16 explicitly as this kind of "read-side composition, not a new write dependency"; the diagrams below extend that same reasoning to UC-17–UC-20 rather than inventing a different mechanism per use case.
@@ -50,6 +52,7 @@ sequenceDiagram
     participant Svc as StudentService
     participant Agg as Student (aggregate)
     participant Repo as JdbcStudentRepository
+    participant IdentitySvc as IdentityService
     participant DB as MySQL
 
     Registrar->>Sec: POST /api/v1/students
@@ -86,7 +89,10 @@ sequenceDiagram
                     Repo->>DB: INSERT INTO students ...
                     DB-->>Repo: OK
                     Repo-->>Svc: saved
-                    Svc-->>Ctrl: StudentResponse
+                    Svc->>IdentitySvc: provisionForStudent(code, email)
+                    Note over IdentitySvc,DB: full account-provisioning detail in<br/>04-authentication-authorization.md §2
+                    IdentitySvc-->>Svc: username, initial password (plaintext, one-time)
+                    Svc-->>Ctrl: StudentResponse + username + initial password
                     Ctrl-->>Registrar: 201 Created
                 end
             end
@@ -851,4 +857,5 @@ sequenceDiagram
 
 - Request/response DTO field lists and error envelope shape — tracked in the OpenAPI contract, per `02-component-diagram.md` §5.
 - Database schema / column-level design — tracked separately.
+- Login, the must-change-password gate, and the Change/Forgot Password and View Initial Password flows (UC-21, UC-22, UC-23) — see [04-authentication-authorization.md](./04-authentication-authorization.md).
 - Transaction isolation levels, retry policy, and timing/performance characteristics of the async event listeners in §6 — an implementation concern, not an architectural one at this level.

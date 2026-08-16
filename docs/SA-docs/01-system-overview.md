@@ -1,6 +1,6 @@
 # System Overview
 
-Solution Architecture Document — Part 1 of 3 (System Overview → [Component Diagram](./02-component-diagram.md) → [Sequence Diagram](./03-sequence-diagrams.md)).
+Solution Architecture Document — Part 1 of 4 (System Overview → [Component Diagram](./02-component-diagram.md) → [Sequence Diagram](./03-sequence-diagrams.md) → [Authentication & Authorization](./04-authentication-authorization.md)).
 
 Derived from [use-cases.md](../BA-docs/use-cases.md) and [req.md](../BA-docs/req.md). This document answers _what the system is, who talks to it, and what it depends on_ — not how a request is handled internally (Component Diagram) or in what order (Sequence Diagram).
 
@@ -62,7 +62,7 @@ Every actor talks to the same single entry point (`/api/v1/**`) over HTTPS. Ther
 
 ### 4.2 Spring Security gateway
 
-Every inbound request is authenticated and authorized before it reaches a module's controller. This is the one cross-cutting concern that sits _outside_ the five application modules (alongside error handling, which lives in `shared`). The concrete authentication scheme (session vs. token) is an implementation decision for the Component Diagram / build phase, not fixed at this level — what's architecturally fixed is that **authorization is role-based and enforced centrally**, once, not re-implemented per module.
+Every inbound request is authenticated and authorized before it reaches a module's controller. This is the one cross-cutting concern that sits _outside_ the five application modules (alongside error handling, which lives in `shared`). Authentication is **session-based**: Spring Security's default HTTP session management issues a server-side session (`JSESSIONID` cookie) on successful login, which carries the authenticated principal for subsequent requests — a decided choice, not deferred (see [Authentication & Authorization](./04-authentication-authorization.md)). What's architecturally fixed alongside it is that **authorization is role-based and enforced centrally**, once, not re-implemented per module.
 
 ### 4.3 The system: one Spring Boot process, five Spring Modulith modules
 
@@ -78,7 +78,7 @@ A single MySQL 8 schema, owned entirely by this application — no other system 
 | ----------------------- | --------------------------------------------------------------- |
 | Deployable unit         | Single Spring Boot fat JAR (or container image built from it)   |
 | Process topology        | One process, no clustering/sharding for this scope              |
-| State                   | Stateless application tier; all persistent state lives in MySQL |
+| State                   | Stateful application tier — a server-side HTTP session (Spring Security default, `JSESSIONID` cookie) holds the authenticated principal for the life of a login; all other persistent state lives in MySQL. The single-process topology (below) makes an in-memory session store sufficient for this scope; a shared session store (e.g. Spring Session JDBC/Redis) would be required before horizontal scaling — out of scope, see [Authentication & Authorization](./04-authentication-authorization.md) |
 | Data store topology     | One schema, one connection pool, shared by all modules          |
 | External integrations   | None                                                            |
 | Local/dev orchestration | `docker-compose.yml` — application container + MySQL container  |

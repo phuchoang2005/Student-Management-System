@@ -43,6 +43,17 @@ A course that students may take.
 | Description  | Description of the course content          |
 | Credits      | Number of credits the course is worth      |
 
+### User Account
+
+A login identity that lets an actor authenticate into the system. Every actor (Registrar, Librarian, Course Administrator, Student) acts through one of these; a Student's account is created automatically when they are registered (see Identity.1).
+
+| Attribute             | Business Meaning                                                                 |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| Username               | Unique login identifier; for a Student, this is always their email address        |
+| Password               | The account's current credential; never stored or displayed in recoverable form once chosen by the account holder |
+| Role                   | One of Registrar, Librarian, Course Administrator, Student — determines access    |
+| Must Change Password   | Whether the account is still using its system-issued initial password and must replace it before normal use |
+
 ---
 
 ## 3. Relationships
@@ -58,6 +69,11 @@ A course that students may take.
 - One student may enroll in many courses.
 - One course may have many students enrolled.
 - A student may not hold more than one enrollment in the same course.
+
+### Student ↔ User Account — Login Identity
+
+- Every student has **exactly one** associated user account, created automatically at registration.
+- The account's username is always the student's email; if the student's email changes, the account's username changes with it.
 
 ---
 
@@ -92,6 +108,14 @@ A course that students may take.
 3. A course cannot have an enrollment for a student who does not exist.
 4. Ending an enrollment removes only the link between the student and the course — neither the student nor the course is deleted as a result.
 
+### User Account (Identity)
+
+1. A user account is created automatically for a student the moment they are registered — never as a separate manual step.
+2. A user account's **username** must be unique across all accounts; for a Student account it equals the student's email.
+3. A newly created student account starts in a "must change password" state and cannot be used for anything beyond changing its own password until that password is replaced.
+4. Once an account holder replaces their initial password, the new password is never stored or displayed in a recoverable form again — not even to the Registrar.
+5. Until an account holder replaces their initial password, the Registrar may look up that initial password on demand. This access ends permanently the moment the password is replaced.
+
 ---
 
 ## 5. Lifecycle Rules
@@ -107,16 +131,18 @@ A course that students may take.
 ### When a student is removed
 - Every book the student owned becomes unassigned (ownership cleared); the books themselves are **not** deleted.
 - Every enrollment the student held is removed; the courses themselves are **not** affected.
+- The student's associated user account is also removed. *(Identity.1)*
 - The student record is removed.
 
 ---
 
 ## 6. Data Integrity Rules
 
-- Uniqueness must hold for: student code, student email, book ISBN, course code.
+- Uniqueness must hold for: student code, student email, book ISBN, course code, user account username.
 - A given (student, course) pairing may exist as an active enrollment at most once.
 - Every book's owner, if set, must reference a student that exists.
 - Every enrollment must reference a student and a course that both exist.
+- Every student has exactly one user account, created automatically and removed automatically with the student.
 
 ---
 

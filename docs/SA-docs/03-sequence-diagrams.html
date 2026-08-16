@@ -202,13 +202,15 @@
 <body>
 
 <h1>Sequence Diagrams</h1>
-<p class="subtitle">Solution Architecture Document — Part 3 of 3</p>
+<p class="subtitle">Solution Architecture Document — Part 3 of 4</p>
 <nav class="doc-nav">
   <a href="./01-system-overview.html">System Overview</a>
   &nbsp;→&nbsp;
   <a href="./02-component-diagram.html">Component Diagram</a>
   &nbsp;→&nbsp;
   <span class="pill">Part 3</span> Sequence Diagrams
+  &nbsp;→&nbsp;
+  <a href="./04-authentication-authorization.html">Authentication &amp; Authorization</a>
 </nav>
 
 <p>This document shows, for every use case in <a href="../BA-docs/use-cases.md">use-cases.md</a>, the order of calls a request makes through the layers and modules described in the <a href="./02-component-diagram.html">Component Diagram</a>: Spring Security → Controller → Service → domain aggregate → repository → MySQL, plus the two synchronous cross-module lookups (<code>StudentLookup</code>, <code>CourseLookup</code>) and the two asynchronous cascade-delete events (<code>StudentDeleted</code>, <code>CourseDeleted</code>). Sections are grouped by owning module, matching the ownership table in <code>02-component-diagram.md</code> §2.4.</p>
@@ -236,6 +238,8 @@
 <p><strong>Security gate</strong></p>
 <p>Every request passes through the same Spring Security filter chain before reaching a controller. The full authentication/authorization gate (<code>alt</code> block, 401/403 branch) is spelled out once, on UC-1's diagram (§2.1). Every other diagram keeps a single <code>Security</code> step with a note — <em>"auth gate as in §2.1"</em> — rather than repeating the same two branches twenty times.</p>
 
+<p>A second, narrower gate sits behind it: if the authenticated principal's account has <code>mustChangePassword = true</code>, every endpoint except Change Password (UC-22) is blocked with 403. This gate is spelled out once in <a href="./04-authentication-authorization.html">04-authentication-authorization.md</a> §4 rather than repeated here.</p>
+
 <p><strong>Cross-module reads for detail/composition views (UC-16–UC-20)</strong></p>
 <p><code>02-component-diagram.md</code> §2.2 graphs only the two <em>write-path</em> validation dependencies (<code>book</code>→<code>StudentLookup</code>, <code>enrollment</code>→<code>StudentLookup</code>/<code>CourseLookup</code>). The detail and composition use cases (UC-16 "my books/courses", UC-17 student detail, UC-18 book detail, UC-19 course detail, UC-20 enrollment detail) all need additional <em>read-path</em> calls across module boundaries — e.g., <code>StudentService</code> reading a student's owned books from <code>book</code>, or <code>CourseService</code> reading a course's roster from <code>enrollment</code>. These are modeled the same way as <code>StudentLookup</code>/<code>CourseLookup</code>: a narrow, read-only call into the owning module's service. <code>02-component-diagram.md</code> §2.4 flags UC-16 explicitly as this kind of "read-side composition, not a new write dependency"; the diagrams below extend that same reasoning to UC-17–UC-20 rather than inventing a different mechanism per use case.</p>
 
@@ -253,6 +257,7 @@ sequenceDiagram
     participant Svc as StudentService
     participant Agg as Student (aggregate)
     participant Repo as JdbcStudentRepository
+    participant IdentitySvc as IdentityService
     participant DB as MySQL
 
     Registrar->>Sec: POST /api/v1/students
@@ -289,7 +294,10 @@ sequenceDiagram
                     Repo->>DB: INSERT INTO students ...
                     DB-->>Repo: OK
                     Repo-->>Svc: saved
-                    Svc-->>Ctrl: StudentResponse
+                    Svc->>IdentitySvc: provisionForStudent(code, email)
+                    Note over IdentitySvc,DB: full account-provisioning detail in<br/>04-authentication-authorization.md §2
+                    IdentitySvc-->>Svc: username, initial password (plaintext, one-time)
+                    Svc-->>Ctrl: StudentResponse + username + initial password
                     Ctrl-->>Registrar: 201 Created
                 end
             end
@@ -1060,6 +1068,7 @@ sequenceDiagram
 <ul>
   <li>Request/response DTO field lists and error envelope shape — tracked in the OpenAPI contract, per <code>02-component-diagram.md</code> §5.</li>
   <li>Database schema / column-level design — tracked separately.</li>
+  <li>Login, the must-change-password gate, and the Change/Forgot Password and View Initial Password flows (UC-21, UC-22, UC-23) — see <a href="./04-authentication-authorization.html">04-authentication-authorization.md</a>.</li>
   <li>Transaction isolation levels, retry policy, and timing/performance characteristics of the async event listeners in §6 — an implementation concern, not an architectural one at this level.</li>
 </ul>
 

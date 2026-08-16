@@ -28,7 +28,8 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 4. System validates that first name and last name are non-blank. *(Student.3)*
 5. System validates that date of birth is a real, valid date. *(Student.4)*
 6. System creates the student record.
-7. System confirms creation.
+6a. System automatically creates a user account for the student: username is set to the student's email; a random 8-character password is generated and set as the account's initial password; the account is marked as requiring a password change before further use. *(Identity.1–3)*
+7. System confirms creation, returning the student record along with the new account's username and initial password. This is the only step at which the initial password is generated; it remains retrievable afterward only through UC-23, and only until the student changes it.
 
 **Alternate / Exception Flows**
 - **3a.** Student code already exists → system rejects with a duplicate-code error; return to step 1.
@@ -36,7 +37,9 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 - **4a.** First or last name is blank → system rejects with a validation error; return to step 1.
 - **5a.** Date of birth is invalid → system rejects with a validation error; return to step 1.
 
-**Postconditions:** A new, uniquely identified student exists in the system.
+**Postconditions:** A new, uniquely identified student exists in the system, along with exactly one user account for that student, holding a system-issued initial password that must be changed before the account can be used normally.
+
+**Related Rules:** Identity.1–3.
 
 ---
 
@@ -430,11 +433,77 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 
 ---
 
+## UC-21: Login
+
+- **Actor:** Registrar, Librarian, Course Administrator, or Student
+- **Preconditions:** The actor holds an existing user account.
+- **Trigger:** Actor submits a username and password.
+
+**Main Flow**
+1. Actor enters username and password.
+2. System validates the username exists and the password matches the account's current password.
+3. System starts an authenticated session for the actor, carrying their role.
+4. System indicates to the actor whether their account requires a password change before further use. *(Identity.3)*
+
+**Alternate / Exception Flows**
+- **2a.** Username does not exist, or password does not match → system rejects with an authentication error; return to step 1.
+
+**Postconditions:** The actor has an authenticated session scoped to their role. If the account is still using its initial password, the only action available in that session is UC-22 (Change Password).
+
+**Related Rules:** Identity.2, Identity.3.
+
+---
+
+## UC-22: Change Password
+
+- **Actor:** Registrar, Librarian, Course Administrator, or Student
+- **Preconditions:** The actor has an authenticated session (UC-21). This includes an account still using its system-issued initial password — in fact, such an account cannot do anything else until it completes this use case.
+- **Trigger:** Actor submits their current password, a new password, and the new password retyped.
+
+**Main Flow**
+1. Actor enters current password, new password, and retyped new password.
+2. System validates the retyped new password matches the new password.
+3. System validates the current password matches the account's current password.
+4. System validates the new password meets the minimum password policy and differs from the current password.
+5. System replaces the account's password with the new one and clears the "must change password" state, if set. *(Identity.3–5)*
+6. System confirms the password has been changed.
+
+**Alternate / Exception Flows**
+- **2a.** Retyped new password does not match the new password → system rejects with a validation error; return to step 1.
+- **3a.** Current password does not match → system rejects with an authentication error; return to step 1.
+- **4a.** New password fails the minimum policy, or is identical to the current password → system rejects with a validation error; return to step 1.
+
+**Postconditions:** The account's password is changed; if it was previously recoverable by a Registrar as an initial password (UC-23), it is no longer recoverable by anyone. There is no recovery path in this design for an actor who cannot authenticate at all (i.e., has forgotten their current password with no active session) — that scenario is out of scope and must be handled operationally.
+
+**Related Rules:** Identity.3–5.
+
+---
+
+## UC-23: View Student's Initial Password
+
+- **Actor:** Registrar
+- **Preconditions:** The target student's user account exists.
+- **Trigger:** Registrar requests to view a student's initial (system-issued) password, e.g. from that student's detail view.
+
+**Main Flow**
+1. Registrar selects a student.
+2. System checks whether the student's account is still using its initial password. *(Identity.5)*
+3. System returns the initial password.
+
+**Alternate / Exception Flows**
+- **2a.** The student has already changed their password → system indicates the initial password is no longer available to anyone, including the Registrar; no password is returned. *(Identity.4, Identity.5)*
+
+**Postconditions:** No data is changed.
+
+**Related Rules:** Identity.4, Identity.5.
+
+---
+
 ## Use Case Summary Table
 
 | Use Case | Primary Actor | Business Rules |
 | -------- | -------------- | --------------- |
-| UC-1 Register Student | Registrar | Student.1–4 |
+| UC-1 Register Student | Registrar | Student.1–4; Identity.1–3 |
 | UC-2 Update Student Details | Registrar | Student.2–4 |
 | UC-3 Remove Student | Registrar | §5 student removal |
 | UC-4 Add Book | Librarian | Book.1, Book.3, Book.4 |
@@ -454,3 +523,6 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 | UC-18 View Book Detail | Librarian/Student | — (read-only) |
 | UC-19 View Course Detail | Course Administrator/Student | — (read-only) |
 | UC-20 View Enrollment Detail | Registrar/Course Administrator/Student | Enrollment.4 (read-only) |
+| UC-21 Login | Registrar/Librarian/Course Administrator/Student | Identity.2–3 |
+| UC-22 Change Password | Registrar/Librarian/Course Administrator/Student | Identity.3–5 |
+| UC-23 View Student's Initial Password | Registrar | Identity.4–5 |
