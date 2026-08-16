@@ -1,6 +1,6 @@
 # Database Schema
 
-Solution Architecture Document — Part 5 of 5 ([System Overview](./01-system-overview.md) → [Component Diagram](./02-component-diagram.md) → [Sequence Diagram](./03-sequence-diagrams.md) → [Authentication & Authorization](./04-authentication-authorization.md) → Database Schema).
+Solution Architecture Document — Part 5 of 6 ([System Overview](./01-system-overview.md) → [Component Diagram](./02-component-diagram.md) → [Sequence Diagram](./03-sequence-diagrams.md) → [Authentication & Authorization](./04-authentication-authorization.md) → Database Schema → [Low-Level Design](./06-low-level-design.md)).
 
 Derived from [req.md](../BA-docs/req.md) (business entities, invariants, and lifecycle rules) and [04-authentication-authorization.md](./04-authentication-authorization.md) §2.2 (the `users` table). Both of those documents deliberately left column-level design out of scope (`02-component-diagram.md` §5: "Database schema / column-level design — tracked separately, not duplicated here"; `04-authentication-authorization.md` §7: "Flyway migration DDL... future build-phase work"). This document is that separate design: a concrete MySQL 8 table-by-table schema, still **conceptual** — no Flyway migration file is written here, since no entity/repository code exists yet in `management/` to run against it (see §7).
 

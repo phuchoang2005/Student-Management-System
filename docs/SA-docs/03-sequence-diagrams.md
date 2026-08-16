@@ -1,6 +1,6 @@
 # Sequence Diagrams
 
-Solution Architecture Document — Part 3 of 5 ([System Overview](./01-system-overview.md) → [Component Diagram](./02-component-diagram.md) → Sequence Diagram → [Authentication & Authorization](./04-authentication-authorization.md) → [Database Schema](./05-database-schema.md)).
+Solution Architecture Document — Part 3 of 6 ([System Overview](./01-system-overview.md) → [Component Diagram](./02-component-diagram.md) → Sequence Diagram → [Authentication & Authorization](./04-authentication-authorization.md) → [Database Schema](./05-database-schema.md) → [Low-Level Design](./06-low-level-design.md)).
 
 This document shows, for every use case in [use-cases.md](../BA-docs/use-cases.md), the order of calls a request makes through the layers and modules described in the [Component Diagram](./02-component-diagram.md): Spring Security → Controller → Service → domain aggregate → repository → MySQL, plus the two synchronous cross-module lookups (`StudentLookup`, `CourseLookup`) and the two asynchronous cascade-delete events (`StudentDeleted`, `CourseDeleted`). Sections are grouped by owning module, matching the ownership table in `02-component-diagram.md` §2.4.
 

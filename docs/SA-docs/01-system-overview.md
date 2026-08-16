@@ -1,6 +1,6 @@
 # System Overview
 
-Solution Architecture Document — Part 1 of 5 (System Overview → [Component Diagram](./02-component-diagram.md) → [Sequence Diagram](./03-sequence-diagrams.md) → [Authentication & Authorization](./04-authentication-authorization.md) → [Database Schema](./05-database-schema.md)).
+Solution Architecture Document — Part 1 of 6 (System Overview → [Component Diagram](./02-component-diagram.md) → [Sequence Diagram](./03-sequence-diagrams.md) → [Authentication & Authorization](./04-authentication-authorization.md) → [Database Schema](./05-database-schema.md) → [Low-Level Design](./06-low-level-design.md)).
 
 Derived from [use-cases.md](../BA-docs/use-cases.md) and [req.md](../BA-docs/req.md). This document answers _what the system is, who talks to it, and what it depends on_ — not how a request is handled internally (Component Diagram) or in what order (Sequence Diagram).
 

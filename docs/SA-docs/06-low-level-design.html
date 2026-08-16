@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Low-Level Design — Student Management System SA Docs</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1c1e21;
+    --muted: #57606a;
+    --border: #d8dee4;
+    --code-bg: #f6f8fa;
+    --link: #0969da;
+    --table-stripe: #f6f8fa;
+    --header-bg: #f6f8fa;
+    --pill-bg: #eef2ff;
+    --pill-fg: #3730a3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --fg: #e6edf3;
+      --muted: #9198a1;
+      --border: #30363d;
+      --code-bg: #161b22;
+      --link: #4493f8;
+      --table-stripe: #161b22;
+      --header-bg: #161b22;
+      --pill-bg: #1c2333;
+      --pill-fg: #a5b4fc;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 5rem;
+  }
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.6rem;
+  }
+  h2 {
+    font-size: 1.4rem;
+    margin-top: 2.6rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.1rem;
+    margin-top: 1.8rem;
+    color: var(--fg);
+  }
+  p { color: var(--fg); }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin-top: 0;
+  }
+  .doc-nav {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0.6rem 0 1.6rem;
+  }
+  .doc-nav .pill {
+    background: var(--pill-bg);
+    color: var(--pill-fg);
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .doc-nav a { color: var(--link); text-decoration: none; }
+  .doc-nav a:hover { text-decoration: underline; }
+  a { color: var(--link); }
+  code {
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  pre.tree-block {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    margin: 1.2rem 0;
+  }
+  pre.tree-block code {
+    background: none;
+    padding: 0;
+    font-size: 0.85em;
+    line-height: 1.5;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.2rem 0;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.55rem 0.8rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--header-bg);
+    font-weight: 600;
+  }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .mermaid-wrap {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+    margin: 1.4rem 0 0.5rem;
+    overflow-x: auto;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .mermaid-wrap.zoomable { cursor: zoom-in; }
+  .mermaid-wrap.zoomable:hover {
+    border-color: var(--link);
+    box-shadow: 0 0 0 1px var(--link);
+  }
+  .mermaid { display: flex; justify-content: center; }
+  .fig-caption {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.82rem;
+    margin-top: 0;
+    margin-bottom: 1.4rem;
+  }
+  ul, ol { padding-left: 1.4rem; }
+  li { margin: 0.3rem 0; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  em { color: var(--muted); }
+
+  /* Diagram lightbox */
+  .lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.86);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .lightbox-overlay.open { display: flex; }
+  .lightbox-viewport {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+  }
+  .lightbox-viewport.grabbing { cursor: grabbing; }
+  .lightbox-stage {
+    transform-origin: center center;
+    will-change: transform;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 1.25rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+  .lightbox-stage svg.lightbox-svg {
+    display: block;
+  }
+  .lightbox-toolbar {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    display: flex;
+    gap: 0.5rem;
+    z-index: 1001;
+  }
+  .lightbox-toolbar button {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.05rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .lightbox-toolbar button:hover { background: rgba(255, 255, 255, 0.28); }
+  #lightbox-reset { width: auto; padding: 0 0.8rem; font-size: 0.85rem; }
+  .lightbox-hint {
+    position: absolute;
+    bottom: 1.1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<h1>Low-Level Design</h1>
+<p class="subtitle">Solution Architecture Document — Part 6 of 6</p>
+<nav class="doc-nav">
+  <a href="./01-system-overview.html">System Overview</a>
+  &nbsp;→&nbsp;
+  <a href="./02-component-diagram.html">Component Diagram</a>
+  &nbsp;→&nbsp;
+  <a href="./03-sequence-diagrams.html">Sequence Diagram</a>
+  &nbsp;→&nbsp;
+  <a href="./04-authentication-authorization.html">Authentication &amp; Authorization</a>
+  &nbsp;→&nbsp;
+  <a href="./05-database-schema.html">Database Schema</a>
+  &nbsp;→&nbsp;
+  <span class="pill">Part 6</span> Low-Level Design
+</nav>
+
+<p>This document extends <a href="./tactical-ddd-design.html">tactical-ddd-design.md</a>, which names the tactical DDD building blocks (Aggregates, Value Objects, Repositories, Application Services, Domain Events) and maps each to a class name already introduced in <a href="./02-component-diagram.html">02-component-diagram.md</a> §3, but explicitly stops there: its own §13 Out of Scope reads <em>"Class-level Java signatures, package layout beyond what 02-component-diagram.md §3 already shows, or unit-test design — this document names patterns and maps them to existing class names; it does not write the code."</em> This document is that next layer down: concrete package layout, class/interface definitions, and method signatures (parameters, return types, thrown exceptions) for all five bounded-context modules, precise enough to type directly into <code>management/src/main/java</code>.</p>
+
+<p>Nothing here is a new architectural or tactical decision — every class, method, and exception name is already implied by <code>02-component-diagram.md</code>, <code>03-sequence-diagrams.md</code>, <code>04-authentication-authorization.md</code>, <code>05-database-schema.md</code>, <code>tactical-ddd-design.md</code>, or <code>openapi/</code>. Where this document has to choose a concrete shape those documents leave implicit (e.g. an exception's exact superclass, a repository method not listed as "representative" in <code>tactical-ddd-design.md</code> §7), that choice is called out explicitly rather than presented as if it were already fixed.</p>
+
+<hr>
+
+<h2 id="purpose-scope">1. Purpose &amp; Scope</h2>
+<p><strong>In scope:</strong></p>
+<ul>
+  <li>Package layout per module, following the <code>web/ → application/ → domain/ → port/ → internal/</code> shape <code>02-component-diagram.md</code> §3 fixes for <code>student</code> and extends to all five modules.</li>
+  <li>Class and interface definitions: fields/attributes, constructors/factory methods, method signatures (parameter types, return types, checked/unchecked exceptions thrown).</li>
+  <li>The shared exception hierarchy implied by the exception names already used throughout <code>03-sequence-diagrams.md</code> and <code>04-authentication-authorization.md</code>.</li>
+  <li>Mermaid <code>classDiagram</code> views, one per module, showing how these classes connect.</li>
+  <li>Persistence annotations on every <code>*Row</code> record and the runnable Flyway migration DDL (§9).</li>
+  <li>Optimistic-locking strategy — which aggregates carry a <code>@Version</code>, and how a lost update surfaces as an HTTP response (§10).</li>
+  <li>Spring Security bean wiring and <code>SecurityFilterChain</code> configuration, including the JSON login filter and the <code>MustChangePasswordFilter</code> registration (§11).</li>
+  <li>MapStruct mapper method bodies for the domain-to-DTO conversions the annotation processor cannot infer on its own (§12).</li>
+</ul>
+<p><strong>Out of scope</strong> (see §15 for the full list): DTO field lists (owned by the OpenAPI contract) and unit-test design. Both are implementation-phase concerns that don't change the shape fixed here.</p>
+<h2 id="conventions">2. Conventions</h2>
+<h3>2.1 Package root and per-module layout</h3>
+<p>Root package (from <code>management/pom.xml</code>): <code>org.phuchoang.management</code>. Each of the five modules is a direct child package, matching Spring Modulith's default module-detection (one top-level package per module):</p>
+<pre class="tree-block"><code>org.phuchoang.management
+├── shared        (cross-cutting: exceptions, global handler, security config)
+├── student
+├── course
+├── book
+├── enrollment
+└── identity</code></pre>
+<p>Inside a module (<code>02-component-diagram.md</code> §3), the same five folders recur, plus a public API façade sitting beside <code>application/</code>:</p>
+<pre class="tree-block"><code>org.phuchoang.management.&lt;module&gt;
+├── web/            driving adapter — Controller, MapStruct Mapper, DTOs
+├── application/    use-case orchestration — the Application Service, Commands
+├── domain/         framework-free — Aggregate root, Value Objects
+├── port/           interfaces owned by domain/application — Repository, and (identity only) PasswordHasher/PasswordCipher
+├── &lt;PublicApi&gt;.java, &lt;events&gt;.java   published interfaces &amp; domain events — module root, NOT internal/
+└── internal/       driven adapter, invisible outside the module — Jdbc*Repository, *Row persistence records</code></pre>
+<p><code>ApplicationModules.verify()</code> (Spring Modulith, run as a test) enforces that nothing outside a module imports from that module's <code>internal/</code> package — this is the mechanical backstop for the "public API, not a port" rule <code>02-component-diagram.md</code> §2.5 already argues from first principles.</p>
+<h3>2.2 Class-shape conventions</h3>
+<table>
+  <thead><tr><th>Element</th><th>Java shape</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Value Object</td><td><code>record</code> (e.g. <code>record Email(String value)</code>), validating invariants in a compact constructor</td><td>Immutable, equality-by-value for free — exactly what §4 of <code>tactical-ddd-design.md</code> calls for</td></tr>
+    <tr><td>Aggregate root</td><td>Plain class, private mutable fields, package-visible/<code>@Getter</code> accessors, a static factory method, behavior methods that mutate <code>this</code></td><td>Spring Data JDBC aggregates are conventionally mutable POJOs; <code>Lombok</code> (already a <code>pom.xml</code> dependency) supplies <code>@Getter</code>/<code>@RequiredArgsConstructor</code> boilerplate without adding a runtime framework dependency to <code>domain/</code></td></tr>
+    <tr><td>Repository port</td><td>Interface in <code>port/</code>, only the methods the Application Service actually calls (never a bare <code>CrudRepository&lt;T, ID&gt;</code> leaked outward, per <code>02-component-diagram.md</code> §3)</td><td>Dependency-inversion boundary</td></tr>
+    <tr><td>Repository adapter</td><td>Class in <code>internal/</code>, implements the port, delegates to an injected Spring Data JDBC <code>CrudRepository</code> for CRUD and <code>@Query</code>/<code>JdbcAggregateOperations</code> for the rest</td><td>Keeps Spring Data JDBC entirely inside <code>internal/</code></td></tr>
+    <tr><td>Application Service</td><td>Concrete class (no <code>Impl</code> suffix, no interface) in <code>application/</code></td><td>Single implementation, thin orchestrator — an interface would add indirection with no second implementation to justify it</td></tr>
+    <tr><td>Command</td><td><code>record</code> in <code>application/</code>, one per write use case, primitive/<code>String</code>-typed fields (VO construction happens inside the service/aggregate, not the command)</td><td>Matches the <code>command</code> parameter already named generically in every <code>03-sequence-diagrams.md</code> diagram (<code>Svc-&gt;&gt;Svc: register(command)</code>)</td></tr>
+    <tr><td>Domain Event</td><td><code>record</code>, placed at the <em>publishing</em> module's root (not <code>internal/</code>) since consuming modules need the type on their classpath</td><td>Same published-language reasoning <code>tactical-ddd-design.md</code> §10 applies to <code>StudentLookup</code> et al.</td></tr>
+    <tr><td>Exception</td><td>Unchecked (<code>extends RuntimeException</code>), under <code>shared.exception</code></td><td>Spring's <code>@ControllerAdvice</code> idiom — see §3</td></tr>
+  </tbody>
+</table>
+<h3>2.3 Method-signature table format</h3>
+<p>Every method table below uses this column order: <strong>Method</strong>, <strong>Parameters</strong>, <strong>Returns</strong>, <strong>Throws</strong>. <code>Throws</code> lists only checked-equivalent <em>domain</em> exceptions callers must expect (unchecked, but load-bearing) — <code>RuntimeException</code>s a caller can't reasonably anticipate (e.g. a bug) are omitted.</p>
+<h2 id="shared-exceptions-kernel-types-shared">3. Shared Exceptions &amp; Kernel Types (<code>shared</code>)</h2>
+<p><code>shared</code> owns the mechanism (<code>SecurityFilterChain</code>, <code>PasswordEncoder</code> bean, global exception handler — <code>04-authentication-authorization.md</code> §2.1) but no domain vocabulary of its own (<code>tactical-ddd-design.md</code> §2). Its one piece of shared <em>type</em> vocabulary is the exception hierarchy every module's <code>application/</code> throws, consolidating every exception name already used across <code>03-sequence-diagrams.md</code> and <code>04-authentication-authorization.md</code>:</p>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+classDiagram
+    class ApiException {
+        &lt;&lt;abstract&gt;&gt;
+        #ApiException(String message)
+    }
+    class DomainValidationException
+    class NotFoundException
+    class ConflictException {
+        &lt;&lt;abstract&gt;&gt;
+    }
+    class DuplicateCodeException
+    class DuplicateIsbnException
+    class DuplicateEmailException
+    class DuplicateEnrollmentException
+    class StaleWriteException
+    class UnauthorizedException {
+        &lt;&lt;abstract&gt;&gt;
+    }
+    class InvalidCredentialsException
+    class InvalidEmailException
+    class UnknownReferenceException {
+        &lt;&lt;abstract&gt;&gt;
+    }
+    class UnknownStudentException
+    class UnknownCourseException
+    class PasswordNoLongerAvailableException
+
+    ApiException &lt;|-- DomainValidationException
+    ApiException &lt;|-- NotFoundException
+    ApiException &lt;|-- ConflictException
+    ApiException &lt;|-- UnauthorizedException
+    ConflictException &lt;|-- DuplicateCodeException
+    ConflictException &lt;|-- DuplicateIsbnException
+    ConflictException &lt;|-- DuplicateEmailException
+    ConflictException &lt;|-- DuplicateEnrollmentException
+    ConflictException &lt;|-- StaleWriteException
+    UnauthorizedException &lt;|-- InvalidCredentialsException
+    DomainValidationException &lt;|-- InvalidEmailException
+    DomainValidationException &lt;|-- UnknownReferenceException
+    UnknownReferenceException &lt;|-- UnknownStudentException
+    UnknownReferenceException &lt;|-- UnknownCourseException
+    NotFoundException &lt;|-- PasswordNoLongerAvailableException
+</pre>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<table>
+  <thead><tr><th>Exception</th><th>HTTP status</th><th>Raised where</th><th>Traces to</th></tr></thead>
+  <tbody>
+    <tr><td><code>DomainValidationException</code></td><td>400</td><td>VO constructors (<code>StudentCode</code>, <code>DateOfBirth</code>, <code>Credits</code>, …), aggregate factory methods</td><td>Student.3/4, Course.2/3</td></tr>
+    <tr><td><code>InvalidEmailException</code></td><td>400</td><td><code>Email</code> VO constructor — malformed format only (duplicate is <code>DuplicateEmailException</code>, per <code>api-specification.md</code> §5's malformed-vs-duplicate split)</td><td>Student.2</td></tr>
+    <tr><td><code>NotFoundException</code></td><td>404</td><td><code>*Service.getDetail(...)</code> when the requested aggregate no longer exists</td><td>UC-17/18/19/20 "no longer exists" branches</td></tr>
+    <tr><td><code>DuplicateCodeException</code></td><td>409</td><td><code>StudentService.register</code>, <code>CourseService.create</code></td><td>Student.1, Course.1</td></tr>
+    <tr><td><code>DuplicateIsbnException</code></td><td>409</td><td><code>BookService.addBook</code></td><td>Book.1</td></tr>
+    <tr><td><code>DuplicateEmailException</code></td><td>409</td><td><code>StudentService.register</code>/<code>update</code></td><td>Student.2</td></tr>
+    <tr><td><code>DuplicateEnrollmentException</code></td><td>409</td><td><code>EnrollmentService.enroll</code></td><td>Enrollment.1</td></tr>
+    <tr><td><code>StaleWriteException</code></td><td>409</td><td>Any <code>*Service</code> write method (<code>update</code>, <code>assign</code>/<code>unassign</code>, <code>changePassword</code>) that calls <code>repository.save(...)</code> on a <code>Student</code>/<code>Course</code>/<code>Book</code>/<code>User</code> loaded with a <code>version</code> that no longer matches the row — see §10</td><td>New in this document — closes the optimistic-locking gap <code>tactical-ddd-design.md</code> §13 left open</td></tr>
+    <tr><td><code>UnknownStudentException</code></td><td>400</td><td><code>BookService</code> (owner ref), <code>EnrollmentService</code> (student ref) via <code>StudentLookup.existsById</code></td><td>Book.4, Enrollment.3</td></tr>
+    <tr><td><code>UnknownCourseException</code></td><td>400</td><td><code>EnrollmentService</code> (course ref) via <code>CourseLookup.existsById</code></td><td>Enrollment.2</td></tr>
+    <tr><td><code>InvalidCredentialsException</code></td><td>401</td><td>Login (Spring Security <code>AuthenticationFailureHandler</code>), <code>IdentityService.changePassword</code> (current-password mismatch)</td><td>UC-21, UC-22</td></tr>
+    <tr><td><code>PasswordNoLongerAvailableException</code></td><td>404</td><td><code>IdentityService.viewInitialPassword</code> when <code>mustChangePassword = false</code></td><td>Identity.4/5, UC-23</td></tr>
+  </tbody>
+</table>
+<p><code>shared.web.GlobalExceptionHandler</code> (<code>@RestControllerAdvice</code>) maps each branch of this hierarchy to the <code>Error</code>/<code>ValidationError</code> envelope already fixed in <code>api-specification.md</code> §3 (<code>timestamp</code>, <code>status</code>, <code>error</code>, <code>message</code>, <code>path</code>) — one <code>@ExceptionHandler(ApiException.class)</code> reading <code>getStatus()</code> off the exception, no per-exception-type handler methods needed.</p>
+<h2 id="reference-module-student">4. Reference module: <code>student</code></h2>
+<p><code>student</code> is elaborated in full below; <code>course</code>, <code>book</code>, <code>enrollment</code>, and <code>identity</code> (§§5–8) reuse this exact shape and are described only where they differ, per <code>02-component-diagram.md</code> §3's own framing ("<code>course</code> is its twin; <code>book</code> and <code>enrollment</code> add one/two outbound API calls on top of the same shape").</p>
+<h3>4.1 Package layout</h3>
+<pre class="tree-block"><code>org.phuchoang.management.student
+├── web
+│   ├── StudentController.java
+│   ├── StudentMapper.java              (MapStruct: DTO ⇄ domain)
+│   └── dto/
+│       ├── RegisterStudentRequest.java, UpdateStudentRequest.java
+│       └── StudentResponse.java, StudentRegistrationResponse.java, StudentSummaryDto.java, StudentDetailDto.java
+├── application/
+│   ├── StudentService.java
+│   └── command/
+│       ├── RegisterStudentCommand.java
+│       └── UpdateStudentCommand.java
+├── domain/
+│   ├── Student.java
+│   ├── StudentId.java, StudentCode.java, Email.java, DateOfBirth.java
+├── port/
+│   └── StudentRepository.java
+├── StudentLookup.java                  (public API)
+├── StudentSummary.java                 (public API read model, also reused by web/ mapping)
+├── StudentDeleted.java                 (domain event)
+└── internal/
+    ├── JdbcStudentRepository.java
+    ├── SpringDataStudentRepository.java   (Spring Data JDBC CrudRepository&lt;StudentRow, Long&gt;)
+    └── StudentRow.java                    (@Table("students") persistence record)</code></pre>
+<p><code>StudentSummaryDto</code> (web) and <code>StudentSummary</code> (public API) hold the same fields by design — the web layer's <code>StudentMapper</code> maps the domain <code>Student</code> straight into both, and <code>book</code>/<code>enrollment</code> consume the public-API record directly. They stay two classes in two packages because <code>web/dto</code> is JSON/OpenAPI-contract-owned while the module root is Java-API-owned; a change to one must not force a change to the other's callers.</p>
+<h3>4.2 Class diagram</h3>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+classDiagram
+    class StudentController {
+        -StudentService studentService
+        -StudentMapper mapper
+        +searchStudents(String query) List~StudentSummaryDto~
+        +registerStudent(RegisterStudentRequest request) StudentRegistrationResponse
+        +getStudent(String code) StudentDetailDto
+        +updateStudent(String code, UpdateStudentRequest request) StudentResponse
+        +removeStudent(String code) void
+    }
+    class StudentService {
+        -StudentRepository repository
+        -AccountProvisioning accountProvisioning
+        -BookService bookService
+        -EnrollmentService enrollmentService
+        -ApplicationEventPublisher events
+        +register(RegisterStudentCommand command) ProvisionedStudent
+        +update(StudentCode code, UpdateStudentCommand command) Student
+        +remove(StudentCode code) void
+        +search(String query) List~Student~
+        +getDetail(StudentCode code) StudentDetailView
+    }
+    class Student {
+        -StudentId id
+        -StudentCode code
+        -String firstName
+        -String lastName
+        -Email email
+        -DateOfBirth dateOfBirth
+        -Instant createdAt
+        -Instant updatedAt
+        -long version
+        +register(StudentCode code, String firstName, String lastName, Email email, DateOfBirth dob)$ Student
+        +applyChanges(String firstName, String lastName, Email email, DateOfBirth dob) void
+    }
+    class StudentId
+    class StudentCode
+    class Email
+    class DateOfBirth
+    class StudentRepository {
+        &lt;&lt;interface&gt;&gt;
+        +findByCode(StudentCode code) Optional~Student~
+        +existsByCode(StudentCode code) boolean
+        +existsByEmail(Email email) boolean
+        +existsByEmailExcludingCode(Email email, StudentCode excluding) boolean
+        +search(String query) List~Student~
+        +save(Student student) Student
+        +deleteByCode(StudentCode code) void
+    }
+    class JdbcStudentRepository {
+        -SpringDataStudentRepository springRepo
+        -JdbcAggregateOperations jdbcOps
+    }
+    class StudentLookup {
+        &lt;&lt;interface&gt;&gt;
+        +existsById(StudentId id) boolean
+        +summaryOf(StudentId id) StudentSummary
+    }
+
+    StudentController --&gt; StudentService
+    StudentController --&gt; StudentMapper
+    StudentService --&gt; Student
+    StudentService --&gt; StudentRepository
+    StudentService ..&gt; StudentLookup : backs
+    JdbcStudentRepository ..|&gt; StudentRepository
+    Student *-- StudentId
+    Student *-- StudentCode
+    Student *-- Email
+    Student *-- DateOfBirth
+</pre>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<h3>4.3 Value Objects</h3>
+<table>
+  <thead><tr><th>VO</th><th>Field</th><th>Compact-constructor invariant</th><th>Throws</th><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td><code>StudentId(Long value)</code></td><td><code>value</code></td><td>none — <code>null</code> before first <code>save()</code> (Spring Data JDBC's new-vs-existing detection via <code>@Id</code>), assigned by the DB on insert</td><td>—</td><td>—</td></tr>
+    <tr><td><code>StudentCode(String value)</code></td><td><code>value</code></td><td>non-blank, matches the registrar-supplied code format</td><td><code>DomainValidationException</code></td><td>Student.1 (format; uniqueness is <code>StudentRepository.existsByCode</code>)</td></tr>
+    <tr><td><code>Email(String value)</code></td><td><code>value</code></td><td>non-blank, RFC-5322-shaped (Jakarta <code>@Email</code>-equivalent regex)</td><td><code>InvalidEmailException</code></td><td>Student.2 (format; uniqueness is <code>StudentRepository.existsByEmail</code>)</td></tr>
+    <tr><td><code>DateOfBirth(LocalDate value)</code></td><td><code>value</code></td><td>non-null, not in the future, within a plausible human age range</td><td><code>DomainValidationException</code></td><td>Student.4</td></tr>
+  </tbody>
+</table>
+<h3>4.4 <code>Student</code> aggregate</h3>
+<table>
+  <thead><tr><th>Method</th><th>Parameters</th><th>Returns</th><th>Throws</th></tr></thead>
+  <tbody>
+    <tr><td><code>register(...)</code> <em>(static factory)</em></td><td><code>StudentCode code, String firstName, String lastName, Email email, DateOfBirth dob</code></td><td><code>Student</code></td><td><code>DomainValidationException</code> (blank <code>firstName</code>/<code>lastName</code> — Student.3)</td></tr>
+    <tr><td><code>applyChanges(...)</code></td><td><code>String firstName, String lastName, Email email, DateOfBirth dob</code></td><td><code>void</code></td><td><code>DomainValidationException</code> (blank name)</td></tr>
+    <tr><td><code>id()</code>, <code>code()</code>, <code>firstName()</code>, <code>lastName()</code>, <code>email()</code>, <code>dateOfBirth()</code>, <code>createdAt()</code>, <code>updatedAt()</code>, <code>version()</code></td><td>—</td><td>respective field types</td><td>—</td></tr>
+  </tbody>
+</table>
+<p>Uniqueness (Student.1/2) is deliberately <strong>not</strong> checked here — <code>StudentService</code> checks it via <code>StudentRepository</code> before calling <code>register(...)</code>, since the aggregate must not depend on the repository (<code>tactical-ddd-design.md</code> §8).</p>
+<p><strong><code>createdAt</code>/<code>updatedAt</code>/<code>version</code> — an addition beyond <code>tactical-ddd-design.md</code>'s field list, needed to close a gap this document found:</strong> <code>StudentResponse</code> (<code>openapi/components/schemas/student.yaml</code>) requires <code>createdAt</code>/<code>updatedAt</code>, and <code>students.created_at</code>/<code>updated_at</code> exist in <code>05-database-schema.md</code> §3.1, but neither timestamp had a home on the aggregate for a mapper to read. <code>register(...)</code> sets both to <code>Instant.now()</code>; <code>applyChanges(...)</code> refreshes <code>updatedAt</code> only. These are set by the <strong>application</strong>, not read back from MySQL's <code>DEFAULT CURRENT_TIMESTAMP</code>/<code>ON UPDATE CURRENT_TIMESTAMP</code> — Spring Data JDBC doesn't re-fetch DB-computed column values after <code>save()</code> without an extra round-trip, so the DB-side defaults in §9's DDL are a safety net only, not the source of truth (the same "safety net, not replacement" framing <code>05-database-schema.md</code> §5 already uses for cascade deletes). <code>version</code> backs the optimistic-locking decision in §10; it starts at <code>0</code> in <code>register(...)</code> and is never touched directly by domain code — Spring Data JDBC increments it on every <code>save()</code>.</p>
+<h3>4.5 <code>StudentRepository</code> port / <code>JdbcStudentRepository</code> adapter</h3>
+<table>
+  <thead><tr><th>Method</th><th>Parameters</th><th>Returns</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>findByCode</code></td><td><code>StudentCode code</code></td><td><code>Optional&lt;Student&gt;</code></td><td>Backs UC-2, UC-17</td></tr>
+    <tr><td><code>existsByCode</code></td><td><code>StudentCode code</code></td><td><code>boolean</code></td><td>UC-1</td></tr>
+    <tr><td><code>existsByEmail</code></td><td><code>Email email</code></td><td><code>boolean</code></td><td>UC-1</td></tr>
+    <tr><td><code>existsByEmailExcludingCode</code></td><td><code>Email email, StudentCode excluding</code></td><td><code>boolean</code></td><td>UC-2 — "email changed" branch, <code>03-sequence-diagrams.md</code> §2.2</td></tr>
+    <tr><td><code>search</code></td><td><code>String query</code></td><td><code>List&lt;Student&gt;</code></td><td>UC-13 — matches code/name/email</td></tr>
+    <tr><td><code>save</code></td><td><code>Student student</code></td><td><code>Student</code></td><td>Insert or update, decided by <code>id() == null</code></td></tr>
+    <tr><td><code>deleteByCode</code></td><td><code>StudentCode code</code></td><td><code>void</code></td><td>UC-3</td></tr>
+  </tbody>
+</table>
+<p><code>JdbcStudentRepository</code> implements the port by delegating to an injected <code>SpringDataStudentRepository extends CrudRepository&lt;StudentRow, Long&gt;</code> (generated <code>findById</code>/<code>save</code>/<code>deleteById</code>) plus <code>@Query</code>-annotated finder methods for <code>existsByCode</code>/<code>existsByEmail...</code>/<code>search</code>, converting <code>StudentRow ⇄ Student</code> inline (a private mapping method, not MapStruct — <code>internal/</code> never imports <code>web/</code>).</p>
+<h3>4.6 <code>StudentService</code></h3>
+<table>
+  <thead><tr><th>Method</th><th>Parameters</th><th>Returns</th><th>Throws</th><th>Orchestration (<code>03-sequence-diagrams.md</code> ref)</th></tr></thead>
+  <tbody>
+    <tr><td><code>register</code></td><td><code>RegisterStudentCommand command</code></td><td><code>ProvisionedStudent</code> (<code>record ProvisionedStudent(Student student, String username, String initialPassword)</code>)</td><td><code>DuplicateCodeException</code>, <code>DuplicateEmailException</code>, <code>InvalidEmailException</code>, <code>DomainValidationException</code></td><td>§2.1: existsByCode → existsByEmail → <code>Student.register(...)</code> → save → <code>AccountProvisioning.provisionForStudent(...)</code> (same transaction)</td></tr>
+    <tr><td><code>update</code></td><td><code>StudentCode code, UpdateStudentCommand command</code></td><td><code>Student</code></td><td><code>DuplicateEmailException</code>, <code>InvalidEmailException</code>, <code>DomainValidationException</code></td><td>§2.2: findByCode → (if email changed) existsByEmailExcludingCode → <code>applyChanges(...)</code> → save</td></tr>
+    <tr><td><code>remove</code></td><td><code>StudentCode code</code></td><td><code>void</code></td><td>—</td><td>§2.3: deleteByCode → publish <code>StudentDeleted</code> (async, after commit)</td></tr>
+    <tr><td><code>search</code></td><td><code>String query</code></td><td><code>List&lt;Student&gt;</code></td><td>—</td><td>§2.4</td></tr>
+    <tr><td><code>getDetail</code></td><td><code>StudentCode code</code></td><td><code>StudentDetailView</code> (<code>record StudentDetailView(Student student, List&lt;BookSummary&gt; ownedBooks, List&lt;CourseSummary&gt; activeCourses)</code>)</td><td><code>NotFoundException</code></td><td>§2.5: findByCode, then <code>par</code> <code>BookService.findByOwner</code> / <code>EnrollmentService.findByStudent</code></td></tr>
+  </tbody>
+</table>
+<p><code>viewStudentInitialPassword</code> (<code>GET /api/v1/students/{code}/initial-password</code>, UC-23) is <strong>not</strong> a <code>StudentController</code>/<code>StudentService</code> method despite its URL path — <code>04-authentication-authorization.md</code> §5.3's sequence lifeline shows it handled by <code>AuthController</code> → <code>IdentityService.viewInitialPassword</code>. The path lives under <code>/students</code> for REST-resource readability, but the handling class belongs to <code>identity</code> (§8).</p>
+<h3>4.7 <code>StudentController</code></h3>
+<p>REST mapping <code>/api/v1/students</code>; method names match the OpenAPI <code>operationId</code>s in <code>openapi/paths/students.yaml</code> exactly, for direct traceability:</p>
+<table>
+  <thead><tr><th>Method</th><th>HTTP</th><th>Parameters</th><th>Returns</th></tr></thead>
+  <tbody>
+    <tr><td><code>searchStudents</code></td><td><code>GET /</code></td><td><code>String query</code> (optional)</td><td><code>List&lt;StudentSummaryDto&gt;</code> (200, <code>[]</code> if none)</td></tr>
+    <tr><td><code>registerStudent</code></td><td><code>POST /</code></td><td><code>RegisterStudentRequest request</code></td><td><code>StudentRegistrationResponse</code> (201)</td></tr>
+    <tr><td><code>getStudent</code></td><td><code>GET /{code}</code></td><td><code>String code</code></td><td><code>StudentDetailDto</code> (200)</td></tr>
+    <tr><td><code>updateStudent</code></td><td><code>PUT /{code}</code></td><td><code>String code, UpdateStudentRequest request</code></td><td><code>StudentResponse</code> (200)</td></tr>
+    <tr><td><code>removeStudent</code></td><td><code>DELETE /{code}</code></td><td><code>String code</code></td><td><code>void</code> (204)</td></tr>
+  </tbody>
+</table>
+<p>Each method: <code>StudentMapper</code> converts the incoming DTO to a <code>*Command</code>, calls <code>StudentService</code>, converts the result back to a response DTO. <code>GlobalExceptionHandler</code> (§3) turns thrown <code>ApiException</code>s into the 400/403/404/409 responses <code>books.yaml</code>/<code>students.yaml</code> document — no per-method <code>try/catch</code>.</p>
+<h3>4.8 <code>StudentLookup</code> (public API)</h3>
+<table>
+  <thead><tr><th>Method</th><th>Parameters</th><th>Returns</th><th>Consumed by</th></tr></thead>
+  <tbody>
+    <tr><td><code>existsById</code></td><td><code>StudentId id</code></td><td><code>boolean</code></td><td><code>BookService</code> (Book.4), <code>EnrollmentService</code> (Enrollment.3)</td></tr>
+    <tr><td><code>summaryOf</code></td><td><code>StudentId id</code></td><td><code>StudentSummary</code></td><td><code>BookService.getDetail</code>, <code>EnrollmentService.getDetail</code></td></tr>
+  </tbody>
+</table>
+<p><code>StudentService</code> implements <code>StudentLookup</code> directly (<code>02-component-diagram.md</code> §2.1: "exposes"); no separate façade class, since the read path needs no logic beyond delegating to <code>StudentRepository</code>.</p>
+<hr>
+<h2 id="course-module">5. <code>course</code> module</h2>
+<p>Identical shape to <code>student</code> — no outbound cross-module calls, <code>CourseService</code> implements <code>CourseLookup</code> the same way <code>StudentService</code> implements <code>StudentLookup</code>, <code>Course</code> has one behavior method beyond its factory (<code>applyChanges</code>).</p>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+classDiagram
+    class CourseController {
+        +searchCourses(String query) List~CourseSummaryDto~
+        +createCourse(CourseCreateRequest request) CourseResponse
+        +getCourse(String code) CourseDetailDto
+        +updateCourse(String code, CourseUpdateRequest request) CourseResponse
+        +removeCourse(String code) void
+    }
+    class CourseService {
+        -CourseRepository repository
+        -EnrollmentService enrollmentService
+        -ApplicationEventPublisher events
+        +create(CreateCourseCommand command) Course
+        +update(CourseCode code, UpdateCourseCommand command) Course
+        +remove(CourseCode code) void
+        +search(String query) List~Course~
+        +getDetail(CourseCode code) CourseDetailView
+    }
+    class Course {
+        -CourseId id
+        -CourseCode code
+        -String name
+        -String description
+        -Credits credits
+        -Instant createdAt
+        -Instant updatedAt
+        -long version
+        +create(CourseCode code, String name, String description, Credits credits)$ Course
+        +applyChanges(String name, String description, Credits credits) void
+    }
+    class CourseRepository {
+        &lt;&lt;interface&gt;&gt;
+        +findByCode(CourseCode code) Optional~Course~
+        +existsByCode(CourseCode code) boolean
+        +search(String query) List~Course~
+        +save(Course course) Course
+        +deleteByCode(CourseCode code) void
+    }
+    class CourseLookup {
+        &lt;&lt;interface&gt;&gt;
+        +existsById(CourseId id) boolean
+        +summaryOf(CourseId id) CourseSummary
+    }
+    CourseController --&gt; CourseService
+    CourseService --&gt; Course
+    CourseService --&gt; CourseRepository
+    CourseService ..&gt; CourseLookup : backs
+    Course *-- CourseId
+    Course *-- CourseCode
+    Course *-- Credits
+</pre>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<table>
+  <thead><tr><th>Difference from <code>student</code></th><th>Detail</th></tr></thead>
+  <tbody>
+    <tr><td>Value Objects</td><td><code>CourseId</code>, <code>CourseCode</code> (mirror <code>StudentId</code>/<code>StudentCode</code>); <code>Credits(int value)</code> — compact constructor throws <code>DomainValidationException</code> if <code>value &lt;= 0</code> (Course.3). <code>name</code>/<code>description</code> stay plain <code>String</code> fields — no VO, since neither has a format invariant beyond <code>name</code>'s non-blank check, which lives in <code>Course.create</code>/<code>applyChanges</code> directly</td></tr>
+    <tr><td><code>createdAt</code>/<code>updatedAt</code>/<code>version</code></td><td>Same addition and same reasoning as <code>Student</code> (§4.4) — <code>CourseResponse</code> requires the timestamps, <code>courses</code> carries <code>version</code> per §10</td></tr>
+    <tr><td>Read composition</td><td><code>CourseService.getDetail(CourseCode code)</code> calls <code>EnrollmentService.findRosterByCourse(CourseCode code): List&lt;Enrollment&gt;</code> (UC-19, <code>03-sequence-diagrams.md</code> §4.5), mapped to <code>List&lt;StudentSummary&gt;</code> via <code>StudentLookup</code> inside <code>EnrollmentService</code></td></tr>
+    <tr><td>No <code>initial-password</code>-style routing quirk</td><td><code>CourseController</code> owns all 5 of its endpoints directly, unlike <code>student</code>'s UC-23</td></tr>
+    <tr><td>Event published</td><td><code>CourseDeleted(CourseCode courseCode)</code>, published from <code>remove(...)</code> the same way <code>StudentDeleted</code> is</td></tr>
+  </tbody>
+</table>
+<hr>
+<h2 id="book-module">6. <code>book</code> module</h2>
+<p>No public API of its own (nothing depends on <code>book</code>); it is a <strong>consumer</strong> of <code>student.StudentLookup</code>.</p>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+classDiagram
+    class BookController {
+        +searchBooks(String query, Long ownerId) List~BookSummaryDto~
+        +addBook(BookCreateRequest request) BookResponse
+        +getBook(String isbn) BookDetailDto
+        +assignBookOwner(String isbn, BookOwnerRequest request) BookResponse
+        +clearBookOwner(String isbn) BookResponse
+        +removeBook(String isbn) void
+    }
+    class BookService {
+        -BookRepository repository
+        -StudentLookup studentLookup
+        +addBook(AddBookCommand command) Book
+        +assign(Isbn isbn, StudentId ownerId) Book
+        +unassign(Isbn isbn) Book
+        +remove(Isbn isbn) void
+        +search(String query, StudentId ownerFilter) List~Book~
+        +getDetail(Isbn isbn) BookDetailView
+        +findByOwner(StudentId ownerId) List~Book~
+    }
+    class Book {
+        -BookId id
+        -Isbn isbn
+        -String title
+        -String author
+        -LocalDate publishedDate
+        -StudentId ownerId
+        -Instant createdAt
+        -Instant updatedAt
+        -long version
+        +create(Isbn isbn, String title, String author, LocalDate publishedDate, StudentId ownerId)$ Book
+        +changeOwner(StudentId newOwnerId) void
+        +clearOwner() void
+    }
+    class BookRepository {
+        &lt;&lt;interface&gt;&gt;
+        +findByIsbn(Isbn isbn) Optional~Book~
+        +existsByIsbn(Isbn isbn) boolean
+        +findByOwnerId(StudentId ownerId) List~Book~
+        +clearOwnerByStudentId(StudentId studentId) void
+        +search(String query, StudentId ownerFilter) List~Book~
+        +save(Book book) Book
+        +deleteByIsbn(Isbn isbn) void
+    }
+    BookController --&gt; BookService
+    BookService --&gt; Book
+    BookService --&gt; BookRepository
+    BookService --&gt; StudentLookup : validates owner
+    Book *-- BookId
+    Book *-- Isbn
+    Book o-- StudentId : ownerId (nullable)
+</pre>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<table>
+  <thead><tr><th>Difference from <code>student</code></th><th>Detail</th></tr></thead>
+  <tbody>
+    <tr><td>Value Objects</td><td><code>BookId</code>, <code>Isbn(String value)</code> — compact constructor throws <code>DomainValidationException</code> on malformed ISBN-10/13 (Book.1 format; uniqueness is <code>existsByIsbn</code>). <code>ownerId</code> is typed <code>StudentId</code> — <code>book</code>'s domain layer imports <code>student.domain.StudentId</code>'s public counterpart <em>from the module root</em> (<code>student.StudentId</code> would need to be public API too — see note below)</td></tr>
+    <tr><td><code>createdAt</code>/<code>updatedAt</code>/<code>version</code></td><td>Same addition and same reasoning as <code>Student</code> (§4.4) — <code>BookResponse</code> requires the timestamps, <code>books</code> carries <code>version</code> per §10 (owner reassignment is exactly the kind of concurrent-write race optimistic locking guards against — two librarians assigning the same book to different students at once)</td></tr>
+    <tr><td>Cross-module dependency</td><td><code>BookService</code> constructor-injects <code>StudentLookup</code>; <code>addBook</code> and <code>assign</code> both call <code>existsById(ownerId)</code> before touching the aggregate (Book.4) — throws <code>UnknownStudentException</code></td></tr>
+    <tr><td>No update method</td><td>Book has no <code>update</code> use case — only <code>assign</code>/<code>unassign</code>/<code>remove</code>; <code>title</code>/<code>author</code>/<code>publishedDate</code> are set once at <code>create</code> and never changed by any UC</td></tr>
+    <tr><td>No <code>BookLookup</code> public API</td><td><code>book</code> is a pure consumer in this design — nothing currently needs to ask <code>book</code> a question the way <code>book</code> asks <code>student</code>/<code>course</code></td></tr>
+    <tr><td>No event published</td><td><code>remove(Isbn isbn)</code> does <strong>not</strong> publish an event — removing a book never cascades (<code>03-sequence-diagrams.md</code> §3.4)</td></tr>
+    <tr><td>Event listener</td><td><code>onStudentDeleted(StudentDeleted event)</code> → <code>repository.clearOwnerByStudentId(event.studentId())</code> — see §13</td></tr>
+  </tbody>
+</table>
+<p><strong>Note on <code>StudentId</code> reuse across modules:</strong> <code>tactical-ddd-design.md</code> §4 lists <code>StudentId</code> as used by <code>Book.ownerId</code>, <code>Enrollment.studentId</code>, and <code>User.studentId</code> — i.e. it is conceptually a <em>shared</em> value type, not <code>student</code>-internal. This document places the canonical <code>StudentId</code> definition at <code>student</code>'s module root (public, not <code>internal/</code>) precisely so <code>book</code>, <code>enrollment</code>, and <code>identity</code> can depend on the type itself while still only calling <code>student</code>'s behavior through <code>StudentLookup</code> — the type crossing the boundary is data, not logic, the same exemption domain events get in §2.2's table. The equivalent applies to <code>course.CourseCode</code> used by <code>Enrollment.courseCode</code>.</p>
+<hr>
+<h2 id="enrollment-module">7. <code>enrollment</code> module</h2>
+<p>Consumes <strong>both</strong> <code>StudentLookup</code> and <code>CourseLookup</code>; owns no update use case (only create/end).</p>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+classDiagram
+    class EnrollmentController {
+        +createEnrollment(EnrollmentCreateRequest request) EnrollmentResponse
+        +getEnrollment(Long studentId, String courseCode) EnrollmentDetailDto
+        +endEnrollment(Long studentId, String courseCode) void
+    }
+    class EnrollmentService {
+        -EnrollmentRepository repository
+        -StudentLookup studentLookup
+        -CourseLookup courseLookup
+        +enroll(EnrollStudentCommand command) Enrollment
+        +end(StudentId studentId, CourseCode courseCode) void
+        +getDetail(StudentId studentId, CourseCode courseCode) EnrollmentDetailView
+        +findByStudent(StudentId studentId) List~Enrollment~
+        +findRosterByCourse(CourseCode courseCode) List~Enrollment~
+    }
+    class Enrollment {
+        -EnrollmentId id
+        -StudentId studentId
+        -CourseCode courseCode
+        -Instant enrolledAt
+        +create(StudentId studentId, CourseCode courseCode)$ Enrollment
+    }
+    class EnrollmentRepository {
+        &lt;&lt;interface&gt;&gt;
+        +existsByStudentAndCourse(StudentId studentId, CourseCode courseCode) boolean
+        +findByStudentAndCourse(StudentId studentId, CourseCode courseCode) Optional~Enrollment~
+        +findByStudentId(StudentId studentId) List~Enrollment~
+        +findByCourseCode(CourseCode courseCode) List~Enrollment~
+        +save(Enrollment enrollment) Enrollment
+        +deleteByStudentAndCourse(StudentId studentId, CourseCode courseCode) void
+        +deleteByStudentId(StudentId studentId) void
+        +deleteByCourseCode(CourseCode courseCode) void
+    }
+    EnrollmentController --&gt; EnrollmentService
+    EnrollmentService --&gt; Enrollment
+    EnrollmentService --&gt; EnrollmentRepository
+    EnrollmentService --&gt; StudentLookup : validates student
+    EnrollmentService --&gt; CourseLookup : validates course
+    Enrollment *-- EnrollmentId
+    Enrollment o-- StudentId
+    Enrollment o-- CourseCode
+</pre>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<table>
+  <thead><tr><th>Difference from <code>student</code></th><th>Detail</th></tr></thead>
+  <tbody>
+    <tr><td>Value Objects</td><td><code>EnrollmentId</code> only — <code>studentId</code>/<code>courseCode</code> reuse <code>student.StudentId</code>/<code>course.CourseCode</code> directly (§6's reuse note); no <code>Enrollment</code>-owned VO wraps a format invariant of its own, since Enrollment.1–4 are all cross-aggregate existence/uniqueness rules, not format rules</td></tr>
+    <tr><td><code>enrolledAt</code></td><td>Same class of gap as <code>Student</code>/<code>Course</code>/<code>Book</code>'s <code>createdAt</code>/<code>updatedAt</code> (§4.4): <code>EnrollmentResponse</code>/<code>EnrollmentDetail</code> require it, <code>enrollments.enrolled_at</code> exists in <code>05-database-schema.md</code> §3.4, but the aggregate had no field for it. <code>create(...)</code> sets it once to <code>Instant.now()</code>; there is no <code>updatedAt</code> counterpart because, per the "no update" row below, nothing about an <code>Enrollment</code> ever changes after creation</td></tr>
+    <tr><td>Two published-interface dependencies</td><td><code>enroll(...)</code> calls <code>studentLookup.existsById</code> <strong>then</strong> <code>courseLookup.existsById</code> <strong>then</strong> <code>repository.existsByStudentAndCourse</code> — that exact order, per <code>03-sequence-diagrams.md</code> §5.1</td></tr>
+    <tr><td><code>findByStudent</code>/<code>findRosterByCourse</code></td><td>Read-side composition methods (§7 of <code>03-sequence-diagrams.md</code>) called by <code>StudentService.getDetail</code> (UC-17) and <code>CourseService.getDetail</code> (UC-19) respectively — each resolves the <em>other</em> side's summary via the relevant <code>Lookup</code> before returning</td></tr>
+    <tr><td>No <code>update</code></td><td>Enrollment.4 — "end removes only the link" — there is no field on <code>Enrollment</code> any UC ever changes after creation</td></tr>
+    <tr><td>Two event listeners</td><td><code>onStudentDeleted</code> → <code>deleteByStudentId</code>; <code>onCourseDeleted</code> → <code>deleteByCourseCode</code> — see §13</td></tr>
+  </tbody>
+</table>
+<hr>
+<h2 id="identity-module">8. <code>identity</code> module</h2>
+<p>The one module whose domain layer needs infrastructure collaborators (hashing, encryption, password generation) passed in rather than field-injected, to keep <code>domain/</code> framework-free per <code>02-component-diagram.md</code> §3.</p>
+<div class="mermaid-wrap">
+<pre class="mermaid">
+classDiagram
+    class AuthController {
+        +changePassword(ChangePasswordRequest request) void
+        +viewStudentInitialPassword(String studentCode) InitialPasswordResponse
+    }
+    class AppUserDetailsService {
+        &lt;&lt;Spring Security UserDetailsService&gt;&gt;
+        -UserRepository repository
+        +loadUserByUsername(String username) UserDetails
+    }
+    class MustChangePasswordFilter {
+        &lt;&lt;OncePerRequestFilter&gt;&gt;
+        +doFilterInternal(request, response, chain) void
+    }
+    class IdentityService {
+        -UserRepository repository
+        -PasswordHasher hasher
+        -PasswordCipher cipher
+        -InitialPasswordGenerator passwordGenerator
+        +provisionForStudent(StudentId studentId, Email email) ProvisionedAccount
+        +changePassword(ChangePasswordCommand command) void
+        +viewInitialPassword(StudentCode studentCode) InitialPasswordView
+        +studentIdOf(Authentication authentication) Optional~StudentId~
+    }
+    class User {
+        -UserId id
+        -Username username
+        -PasswordHash passwordHash
+        -EncryptedInitialPassword initialPasswordEncrypted
+        -Role role
+        -StudentId studentId
+        -boolean mustChangePassword
+        -long version
+        +provisionForStudent(Username username, StudentId studentId, String plaintextPassword, PasswordHasher hasher, PasswordCipher cipher)$ User
+        +changePassword(String newPlaintext, PasswordHasher hasher) void
+    }
+    class PasswordHasher {
+        &lt;&lt;interface&gt;&gt;
+        +hash(String plaintext) PasswordHash
+        +matches(String plaintext, PasswordHash hash) boolean
+    }
+    class PasswordCipher {
+        &lt;&lt;interface&gt;&gt;
+        +encrypt(String plaintext) EncryptedInitialPassword
+        +decrypt(EncryptedInitialPassword ciphertext) String
+    }
+    class InitialPasswordGenerator {
+        &lt;&lt;interface&gt;&gt;
+        +generate() String
+    }
+    class UserRepository {
+        &lt;&lt;interface&gt;&gt;
+        +findByUsername(Username username) Optional~User~
+        +findByStudentCode(StudentCode studentCode) Optional~User~
+        +existsByUsername(Username username) boolean
+        +save(User user) User
+        +deleteByStudentId(StudentId studentId) void
+    }
+    class AccountProvisioning {
+        &lt;&lt;interface&gt;&gt;
+        +provisionForStudent(StudentId studentId, Email email) ProvisionedAccount
+    }
+    class PrincipalStudentResolver {
+        &lt;&lt;interface&gt;&gt;
+        +studentIdOf(Authentication authentication) Optional~StudentId~
+    }
+
+    AuthController --&gt; IdentityService
+    AppUserDetailsService --&gt; UserRepository
+    IdentityService --&gt; User
+    IdentityService --&gt; UserRepository
+    IdentityService --&gt; PasswordHasher
+    IdentityService --&gt; PasswordCipher
+    IdentityService --&gt; InitialPasswordGenerator
+    IdentityService ..|&gt; AccountProvisioning
+    IdentityService ..|&gt; PrincipalStudentResolver
+    User *-- UserId
+    User *-- Username
+    User *-- PasswordHash
+    User *-- EncryptedInitialPassword
+    User o-- StudentId
+</pre>
+</div>
+<p class="fig-caption">Click diagram to zoom &amp; pan</p>
+<h3>8.1 Value Objects &amp; the password-handling ports</h3>
+<table>
+  <thead><tr><th>Type</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>UserId(Long value)</code>, <code>Username(String value)</code></td><td>Mirror <code>StudentId</code>/<code>StudentCode</code>'s nullable-before-save / non-blank pattern</td></tr>
+    <tr><td><code>PasswordHash(String value)</code></td><td>Wraps a 60-char BCrypt digest; no public constructor validation beyond non-blank — the <em>policy</em> (min length, etc.) is checked on the plaintext, before hashing, in <code>IdentityService.changePassword</code></td></tr>
+    <tr><td><code>EncryptedInitialPassword(String cipherText)</code> — nullable field on <code>User</code>, not a null-safe VO itself</td><td>Represents the AES ciphertext; <code>User</code> holds <code>EncryptedInitialPassword</code> or <code>null</code>, matching <code>initial_password_encrypted</code>'s nullable column (<code>05-database-schema.md</code> §3.5)</td></tr>
+    <tr><td><code>Role</code></td><td><code>enum { REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT }</code></td></tr>
+    <tr><td><code>PasswordHasher</code> (<code>port/</code>)</td><td>Domain-owned interface — <strong>not</strong> Spring Security's <code>PasswordEncoder</code> directly, so <code>domain/User</code> stays framework-free while still calling <code>hasher.hash(...)</code>/<code>hasher.matches(...)</code>. <code>internal/BCryptPasswordHasher</code> implements it, wrapping the <code>PasswordEncoder</code> bean <code>shared</code> configures</td></tr>
+    <tr><td><code>PasswordCipher</code> (<code>port/</code>)</td><td>Same reasoning for the reversible AES step. <code>internal/AesPasswordCipher</code> implements it</td></tr>
+    <tr><td><code>InitialPasswordGenerator</code> (<code>port/</code>, or <code>application/</code> — either is defensible since it has no infrastructure dependency beyond <code>SecureRandom</code>)</td><td>The one genuine Domain Service candidate identified in <code>tactical-ddd-design.md</code> §5; <code>internal/SecureRandomInitialPasswordGenerator implements InitialPasswordGenerator</code>, <code>generate(): String</code> returns an 8-char alphanumeric string</td></tr>
+  </tbody>
+</table>
+<h3>8.2 <code>User</code> aggregate</h3>
+<table>
+  <thead><tr><th>Method</th><th>Parameters</th><th>Returns</th><th>Throws</th><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td><code>provisionForStudent(...)</code> <em>(static factory)</em></td><td><code>Username username, StudentId studentId, String plaintextPassword, PasswordHasher hasher, PasswordCipher cipher</code></td><td><code>User</code></td><td>—</td><td>Sets <code>role = STUDENT</code>, <code>mustChangePassword = true</code> (Identity.3); <code>passwordHash = hasher.hash(plaintextPassword)</code>, <code>initialPasswordEncrypted = cipher.encrypt(plaintextPassword)</code></td></tr>
+    <tr><td><code>changePassword(...)</code></td><td><code>String newPlaintext, PasswordHasher hasher</code></td><td><code>void</code></td><td>—</td><td><code>passwordHash = hasher.hash(newPlaintext)</code>; <code>initialPasswordEncrypted = null</code>; <code>mustChangePassword = false</code> (Identity.4/5)</td></tr>
+    <tr><td><code>matchesCurrentPassword</code></td><td><code>String plaintext, PasswordHasher hasher</code></td><td><code>boolean</code></td><td>—</td><td>Thin delegate to <code>hasher.matches(plaintext, this.passwordHash)</code>, kept on the aggregate so <code>IdentityService</code> never reaches into <code>passwordHash</code> directly</td></tr>
+  </tbody>
+</table>
+<p>Collaborators (<code>PasswordHasher</code>, <code>PasswordCipher</code>) are passed as <strong>method parameters</strong>, not constructor-injected fields — the standard DDD answer for "an aggregate needs a stateless policy it must not own a live dependency on" (Evans' "Domain Service passed as a parameter"), which is what keeps <code>User</code> itself free of any Spring import.</p>
+<p><code>User</code> carries <code>version</code> (no <code>createdAt</code>/<code>updatedAt</code> — no DTO in <code>openapi/components/schemas/</code> exposes a <code>User</code>/<code>account</code> response, so there's no gap to close the way there was for <code>Student</code>/<code>Course</code>/<code>Book</code>) per the optimistic-locking decision in §10: <code>provisionForStudent(...)</code> starts it at <code>0</code>; <code>changePassword(...)</code> doesn't touch it directly, Spring Data JDBC increments it on <code>save()</code>. It guards the one genuine concurrent-write race in this module — a <code>changePassword</code> racing a <code>provisionForStudent</code>-triggered re-save is not possible (provisioning only happens once, at registration), but <code>changePassword</code> racing a second, stale <code>changePassword</code> request from a replayed/duplicate client submission is exactly what it catches.</p>
+<h3>8.3 <code>UserRepository</code> port</h3>
+<table>
+  <thead><tr><th>Method</th><th>Parameters</th><th>Returns</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>findByUsername</code></td><td><code>Username username</code></td><td><code>Optional&lt;User&gt;</code></td><td><code>AppUserDetailsService.loadUserByUsername</code>, <code>IdentityService.changePassword</code></td></tr>
+    <tr><td><code>findByStudentCode</code></td><td><code>StudentCode studentCode</code></td><td><code>Optional&lt;User&gt;</code></td><td><code>IdentityService.viewInitialPassword</code> (UC-23)</td></tr>
+    <tr><td><code>existsByUsername</code></td><td><code>Username username</code></td><td><code>boolean</code></td><td>Available for a future staff-provisioning flow (§7 of <code>04-authentication-authorization.md</code> notes none exists yet — never actually called for Student accounts, since <code>Email</code> is already Student.2-unique)</td></tr>
+    <tr><td><code>save</code></td><td><code>User user</code></td><td><code>User</code></td><td>Provisioning, change-password</td></tr>
+    <tr><td><code>deleteByStudentId</code></td><td><code>StudentId studentId</code></td><td><code>void</code></td><td><strong>Addition beyond <code>tactical-ddd-design.md</code> §7's "representative methods" list</strong> — needed by the <code>StudentDeleted</code> listener (§13) so account removal goes through the application layer rather than relying solely on <code>users.student_id ON DELETE CASCADE</code> as the <em>only</em> mechanism, consistent with <code>05-database-schema.md</code> §5's "DB-level is a safety net, not a replacement"</td></tr>
+  </tbody>
+</table>
+<h3>8.4 <code>IdentityService</code></h3>
+<table>
+  <thead><tr><th>Method</th><th>Parameters</th><th>Returns</th><th>Throws</th><th>Orchestration</th></tr></thead>
+  <tbody>
+    <tr><td><code>provisionForStudent</code></td><td><code>StudentId studentId, Email email</code></td><td><code>ProvisionedAccount</code> (<code>record ProvisionedAccount(String username, String plaintextPassword)</code>)</td><td>—</td><td><code>04-auth.md</code> §3: generate plaintext via <code>InitialPasswordGenerator</code> → <code>User.provisionForStudent(...)</code> → <code>repository.save(user)</code>. This is <code>AccountProvisioning.provisionForStudent</code>; called synchronously by <code>StudentService.register</code>, same transaction</td></tr>
+    <tr><td><code>changePassword</code></td><td><code>ChangePasswordCommand command</code> (<code>record ChangePasswordCommand(String currentPassword, String newPassword, String retypeNewPassword)</code>, principal resolved from <code>SecurityContext</code>)</td><td><code>void</code></td><td><code>DomainValidationException</code> (retype mismatch or policy failure — §5.2 of <code>04-auth.md</code>: min 8 / max 72 chars, must differ from current), <code>InvalidCredentialsException</code> (current-password mismatch)</td><td>§5.1: retype check → <code>findByUsername</code> → <code>matchesCurrentPassword</code> → policy check → <code>agg.changePassword(...)</code> → save</td></tr>
+    <tr><td><code>viewInitialPassword</code></td><td><code>StudentCode studentCode</code></td><td><code>InitialPasswordView</code> (<code>record InitialPasswordView(String username, String initialPassword)</code>)</td><td><code>PasswordNoLongerAvailableException</code></td><td>§5.3: <code>findByStudentCode</code> → if <code>!mustChangePassword</code> throw, else <code>cipher.decrypt(initialPasswordEncrypted)</code></td></tr>
+    <tr><td><code>studentIdOf</code> (<code>PrincipalStudentResolver</code>)</td><td><code>Authentication authentication</code></td><td><code>Optional&lt;StudentId&gt;</code></td><td>—</td><td>Used by <code>student</code>/<code>book</code>/<code>enrollment</code> controllers or services to scope a <code>STUDENT</code>-role caller to <code>principal.studentId</code> (<code>02-component-diagram.md</code> §4's "own records only" row)</td></tr>
+  </tbody>
+</table>
+<p><code>IdentityService</code> implements both <code>AccountProvisioning</code> and <code>PrincipalStudentResolver</code> — no separate façade class, mirroring <code>StudentService</code>/<code>StudentLookup</code> in §4.8.</p>
+<h3>8.5 Web-layer / security-adapter classes</h3>
+<p>Three classes sit in <code>identity/web/</code> alongside <code>AuthController</code>, none of them owning business rules — they exist because Spring Security's contracts (<code>UserDetailsService</code>, <code>OncePerRequestFilter</code>) have to be implemented <em>somewhere</em>, and <code>identity</code> is the module that owns <code>User</code>:</p>
+<table>
+  <thead><tr><th>Class</th><th>Role</th></tr></thead>
+  <tbody>
+    <tr><td><code>AppUserDetailsService implements UserDetailsService</code></td><td><code>loadUserByUsername(String username): UserDetails</code> — delegates to <code>UserRepository.findByUsername</code>, throws Spring Security's own <code>UsernameNotFoundException</code> if absent (§4.1 of <code>04-auth.md</code>); wraps the found <code>User</code> in a small <code>AuthenticatedPrincipal</code> (custom <code>UserDetails</code> implementation carrying <code>role</code>, <code>studentId</code>, <code>mustChangePassword</code>)</td></tr>
+    <tr><td><code>MustChangePasswordFilter extends OncePerRequestFilter</code></td><td><code>doFilterInternal(HttpServletRequest, HttpServletResponse, FilterChain): void</code> — the gate in <code>04-auth.md</code> §4.2: 403 if <code>principal.mustChangePassword &amp;&amp; path != "/api/v1/auth/password"</code></td></tr>
+    <tr><td><code>AuthController</code></td><td>Hosts only <code>changePassword</code> and <code>viewStudentInitialPassword</code> (<code>operationId</code>s <code>changePassword</code>, <code>viewStudentInitialPassword</code>) — <strong>not</strong> <code>login</code>. <code>POST /api/v1/auth/login</code> is handled entirely inside Spring Security's authentication filter chain (a <code>UsernamePasswordAuthenticationFilter</code>-family filter configured with a JSON <code>AuthenticationSuccessHandler</code>/<code>AuthenticationFailureHandler</code>), per <code>04-auth.md</code> §4.1's sequence lifeline (<code>User-&gt;&gt;Sec</code>, never reaching a <code>@Controller</code>). This filter and its handlers are <code>shared</code>/<code>identity</code> Spring-config, designed in full in §11</td></tr>
+  </tbody>
+</table>
+<h3>8.6 <code>AuthController</code></h3>
+<table>
+  <thead><tr><th>Method</th><th>HTTP</th><th>Parameters</th><th>Returns</th></tr></thead>
+  <tbody>
+    <tr><td><code>changePassword</code></td><td><code>POST /api/v1/auth/password</code></td><td><code>ChangePasswordRequest request</code></td><td><code>void</code> (200)</td></tr>
+    <tr><td><code>viewStudentInitialPassword</code></td><td><code>GET /api/v1/students/{code}/initial-password</code></td><td><code>String code</code></td><td><code>InitialPasswordResponse</code> (200)</td></tr>
+  </tbody>
+</table>
+<hr>
+<h2 id="persistence-mapping-flyway-migration">9. Persistence Mapping &amp; Flyway Migration</h2>
+<h3>9.1 Annotation conventions</h3>
+<p>Spring Data JDBC's default <code>NamingStrategy</code> converts a camelCase property to snake_case automatically (<code>studentCode</code> → <code>student_code</code>, <code>dateOfBirth</code> → <code>date_of_birth</code>, <code>ownerId</code> → <code>owner_id</code>), which is exactly <code>05-database-schema.md</code> §6's naming rule — every <code>*Row</code> field below already lands on the right column with <strong>zero</strong> explicit <code>@Column</code> annotations; adding them anyway would be redundant, not defensive, so this document doesn't. Each <code>*Row</code> is a <code>record</code>: Spring Data JDBC creates it via its canonical (all-args) constructor on read, and — since records have no setters — assigns a DB-generated <code>id</code> and an incremented <code>@Version</code> back by building a <em>new</em> record instance through that same constructor after <code>save()</code> (its documented immutable-entity path), not by mutating the original.</p>
+<table>
+  <thead><tr><th>Module</th><th>Row class</th><th><code>@Table</code></th><th><code>@Id</code></th><th><code>@Version</code></th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>student</code></td><td><code>StudentRow</code></td><td><code>"students"</code></td><td><code>id</code></td><td><code>version</code></td><td>—</td></tr>
+    <tr><td><code>course</code></td><td><code>CourseRow</code></td><td><code>"courses"</code></td><td><code>id</code></td><td><code>version</code></td><td><code>description</code> maps <code>NULL</code> ⇄ <code>null</code> directly, no wrapper type needed</td></tr>
+    <tr><td><code>book</code></td><td><code>BookRow</code></td><td><code>"books"</code></td><td><code>id</code></td><td><code>version</code></td><td><code>ownerId</code> is a nullable <code>Long</code> — Spring Data JDBC maps SQL <code>NULL</code> to Java <code>null</code> for a boxed type with no extra annotation</td></tr>
+    <tr><td><code>enrollment</code></td><td><code>EnrollmentRow</code></td><td><code>"enrollments"</code></td><td><code>id</code></td><td><em>(none — §10)</em></td><td>Stores <code>courseId</code> (<code>Long</code>), <strong>not</strong> <code>courseCode</code> — see translation note below</td></tr>
+    <tr><td><code>identity</code></td><td><code>UserRow</code></td><td><code>"users"</code></td><td><code>id</code></td><td><code>version</code></td><td><code>role</code> maps to the MySQL <code>ENUM(...)</code> via Spring Data JDBC's default <code>Enum.name()</code> conversion, whose values already match <code>Role</code>'s constants exactly</td></tr>
+  </tbody>
+</table>
+<p>Two representative <code>*Row</code> records:</p>
+<pre class="tree-block"><code>package org.phuchoang.management.student.internal;
+
+@Table("students")
+public record StudentRow(
+    @Id Long id,
+    String studentCode,
+    String firstName,
+    String lastName,
+    String email,
+    LocalDate dateOfBirth,
+    Instant createdAt,
+    Instant updatedAt,
+    @Version long version
+) {}</code></pre>
+<pre class="tree-block"><code>package org.phuchoang.management.enrollment.internal;
+
+@Table("enrollments")
+public record EnrollmentRow(
+    @Id Long id,
+    Long studentId,
+    Long courseId,
+    Instant enrolledAt
+) {}</code></pre>
+<p><strong><code>EnrollmentRow.courseId</code> vs. <code>Enrollment.courseCode</code> — a translation the repository port already implied but never spelled out:</strong> <code>enrollments.course_id</code> is the DB's surrogate FK (<code>05-database-schema.md</code> §3.4), but <code>EnrollmentRepository</code>'s port methods (§7) are typed in <code>CourseCode</code>, matching the aggregate. <code>JdbcEnrollmentRepository</code> (<code>internal/</code>) resolves the difference with a SQL join against <code>courses</code> in its <code>@Query</code> methods — e.g. <code>findByCourseCode</code> becomes <code>SELECT e.* FROM enrollments e JOIN courses c ON c.id = e.course_id WHERE c.course_code = :courseCode</code>, and <code>save</code> first resolves <code>courseCode</code> to <code>courseId</code> (a one-row <code>SELECT id FROM courses WHERE course_code = :courseCode</code>, already guaranteed to exist because <code>EnrollmentService.enroll</code> validated it via <code>CourseLookup.existsById</code> beforehand) before writing the <code>EnrollmentRow</code>. This is a plain SQL join, not a Java import across the module boundary — <code>ApplicationModules.verify()</code> (§2.1) only forbids the latter — so it doesn't violate the module boundary it looks like it might cross.</p>
+<h3>9.2 Flyway migration DDL</h3>
+<p><code>management/src/main/resources/db/migration/V1__init_schema.sql</code> (the location <code>application.properties</code>'s <code>spring.flyway.locations=classpath:db/migration</code> already points at). Transcribed table-by-table from <code>05-database-schema.md</code> §3, in FK dependency order (<code>students</code>, <code>courses</code> before <code>books</code>, <code>enrollments</code>, <code>users</code>), <strong>with one addition beyond that document's column list</strong>: a <code>version BIGINT NOT NULL DEFAULT 0</code> column on <code>students</code>, <code>courses</code>, <code>books</code>, and <code>users</code> — not <code>enrollments</code> — backing the optimistic-locking decision in §10; <code>05-database-schema.md</code> doesn't mention it because that document explicitly left versioning undecided (<code>tactical-ddd-design.md</code> §13), and this is where it gets decided.</p>
+<pre class="tree-block"><code>-- V1__init_schema.sql
+-- Charset utf8mb4, engine InnoDB throughout (05-database-schema.md §6).
+
+CREATE TABLE students (
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    student_code   VARCHAR(20)  NOT NULL,
+    first_name     VARCHAR(100) NOT NULL,
+    last_name      VARCHAR(100) NOT NULL,
+    email          VARCHAR(255) NOT NULL,
+    date_of_birth  DATE         NOT NULL,
+    version        BIGINT       NOT NULL DEFAULT 0,
+    created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_students_student_code UNIQUE (student_code),
+    CONSTRAINT uq_students_email UNIQUE (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE courses (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    course_code   VARCHAR(20)  NOT NULL,
+    name          VARCHAR(150) NOT NULL,
+    description   TEXT         NULL,
+    credits       SMALLINT     NOT NULL,
+    version       BIGINT       NOT NULL DEFAULT 0,
+    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_courses_course_code UNIQUE (course_code),
+    CONSTRAINT chk_courses_credits CHECK (credits &gt; 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE books (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    isbn            VARCHAR(20)  NOT NULL,
+    title           VARCHAR(255) NOT NULL,
+    author          VARCHAR(255) NOT NULL,
+    published_date  DATE         NULL,
+    owner_id        BIGINT       NULL,
+    version         BIGINT       NOT NULL DEFAULT 0,
+    created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_books_isbn UNIQUE (isbn),
+    CONSTRAINT fk_books_owner FOREIGN KEY (owner_id) REFERENCES students (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE enrollments (
+    id           BIGINT   AUTO_INCREMENT PRIMARY KEY,
+    student_id   BIGINT   NOT NULL,
+    course_id    BIGINT   NOT NULL,
+    enrolled_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_enrollments_student_course UNIQUE (student_id, course_id),
+    CONSTRAINT fk_enrollments_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE,
+    CONSTRAINT fk_enrollments_course FOREIGN KEY (course_id) REFERENCES courses (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE users (
+    id                          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username                    VARCHAR(255) NOT NULL,
+    password_hash               CHAR(60)     NOT NULL,
+    initial_password_encrypted  VARCHAR(255) NULL,
+    role                        ENUM('REGISTRAR','LIBRARIAN','COURSE_ADMINISTRATOR','STUDENT') NOT NULL,
+    student_id                  BIGINT       NULL,
+    must_change_password        BOOLEAN      NOT NULL DEFAULT FALSE,
+    version                     BIGINT       NOT NULL DEFAULT 0,
+    created_at                  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uq_users_username UNIQUE (username),
+    CONSTRAINT uq_users_student_id UNIQUE (student_id),
+    CONSTRAINT fk_users_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE,
+    CONSTRAINT chk_users_student_role CHECK (
+        (role = 'STUDENT' AND student_id IS NOT NULL) OR (role &lt;&gt; 'STUDENT' AND student_id IS NULL)
+    )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;</code></pre>
+<p>The <code>ON DELETE</code> clauses above are the same DB-level safety net <code>05-database-schema.md</code> §5 already documents (real deletes route through the Spring Modulith event listeners in §13) — nothing about that decision changes here; this is the first time it's written as runnable SQL.</p>
+<h2 id="optimistic-locking">10. Optimistic Locking</h2>
+<p><code>tactical-ddd-design.md</code> §13 left this "an implementation concern, not fixed at this level" — deferred, not forbidden — so this document decides it: <strong><code>Student</code>, <code>Course</code>, <code>Book</code>, and <code>User</code> each carry <code>@Version long version</code>; <code>Enrollment</code> does not.</strong></p>
+<p>The line is drawn at "has an update-after-create lifecycle": <code>Student.applyChanges</code>, <code>Course.applyChanges</code>, <code>Book.changeOwner</code>/<code>clearOwner</code>, and <code>User.changePassword</code> all mutate an aggregate that was loaded earlier in the same request — exactly the window in which a second, concurrent write can silently overwrite the first (e.g. a Librarian assigning a book to one student while a second request reassigns it to another, both reading the same pre-assignment row). <code>Enrollment</code> has no such window: §7 already establishes "no update... there is no field on <code>Enrollment</code> any UC ever changes after creation," so there's no lost update for a <code>version</code> column to prevent — adding one would be a field with no reader.</p>
+<p><strong>Failure path:</strong> <code>Jdbc*Repository.save(...)</code> calls the injected <code>CrudRepository.save(row)</code>; when the <code>version</code> it's writing no longer matches the row in the database, Spring Data JDBC throws <code>org.springframework.dao.OptimisticLockingFailureException</code>. Each adapter catches this at the port boundary and rethrows the module's own <code>StaleWriteException</code> (§3, <code>ConflictException</code> subtype, 409):</p>
+<pre class="tree-block"><code>@Override
+public Student save(Student student) {
+    StudentRow row = toRow(student);
+    try {
+        return toDomain(springRepo.save(row));
+    } catch (OptimisticLockingFailureException e) {
+        throw new StaleWriteException("Student " + student.code().value() + " was modified concurrently");
+    }
+}</code></pre>
+<p>This keeps the translation at the <code>internal/</code> boundary rather than in <code>GlobalExceptionHandler</code> — <code>OptimisticLockingFailureException</code> is a Spring Data infrastructure type, and letting it escape <code>internal/</code> unwrapped would be the same layering violation <code>port/</code> interfaces exist to prevent (§2.2). <code>GlobalExceptionHandler</code> needs no new <code>@ExceptionHandler</code> method: <code>StaleWriteException</code> already flows through the single <code>ApiException</code>-typed handler §3 describes.</p>
+<h2 id="spring-security-configuration">11. Spring Security Configuration</h2>
+<p><code>shared.security.SecurityConfig</code> (<code>@Configuration</code> + <code>@EnableWebSecurity</code>) is the one class implementing what <code>02-component-diagram.md</code> §4 and <code>04-authentication-authorization.md</code> §1/§6 already fixed as decisions — the RBAC matrix, session-based auth, and the login/change-password/view-initial-password endpoint rules — as an actual <code>SecurityFilterChain</code>.</p>
+<h3>11.1 RBAC → <code>authorizeHttpRequests</code></h3>
+<p>Directly off <code>02-component-diagram.md</code> §4's table (Registrar writes <code>student</code>+<code>enrollment</code>; Librarian writes <code>book</code>; Course Administrator writes <code>course</code>; Student writes nothing; every role reads everything, with the <code>STUDENT</code>-role "own records only" narrowing done inside each Application Service, per that section's own note — not expressible as a filter-chain rule):</p>
+<pre class="tree-block"><code>@Bean
+public SecurityFilterChain filterChain(HttpSecurity http, AuthenticationManager authenticationManager,
+                                        MustChangePasswordFilter mustChangePasswordFilter) throws Exception {
+    JsonUsernamePasswordAuthenticationFilter loginFilter =
+        new JsonUsernamePasswordAuthenticationFilter(authenticationManager);
+    loginFilter.setFilterProcessesUrl("/api/v1/auth/login");
+    loginFilter.setAuthenticationSuccessHandler(this::onLoginSuccess);
+    loginFilter.setAuthenticationFailureHandler(this::onLoginFailure);
+
+    http
+        .csrf(AbstractHttpConfigurer::disable)
+        .sessionManagement(session -&gt; session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+        .authorizeHttpRequests(auth -&gt; auth
+            .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+            .requestMatchers(HttpMethod.POST, "/api/v1/auth/password").authenticated()
+            .requestMatchers(HttpMethod.GET, "/api/v1/students/*/initial-password").hasRole("REGISTRAR")
+            .requestMatchers(HttpMethod.POST, "/api/v1/students/**").hasRole("REGISTRAR")
+            .requestMatchers(HttpMethod.PUT, "/api/v1/students/**").hasRole("REGISTRAR")
+            .requestMatchers(HttpMethod.DELETE, "/api/v1/students/**").hasRole("REGISTRAR")
+            .requestMatchers(HttpMethod.POST, "/api/v1/enrollments/**").hasRole("REGISTRAR")
+            .requestMatchers(HttpMethod.DELETE, "/api/v1/enrollments/**").hasRole("REGISTRAR")
+            .requestMatchers(HttpMethod.POST, "/api/v1/courses/**").hasRole("COURSE_ADMINISTRATOR")
+            .requestMatchers(HttpMethod.PUT, "/api/v1/courses/**").hasRole("COURSE_ADMINISTRATOR")
+            .requestMatchers(HttpMethod.DELETE, "/api/v1/courses/**").hasRole("COURSE_ADMINISTRATOR")
+            .requestMatchers(HttpMethod.POST, "/api/v1/books/**").hasRole("LIBRARIAN")
+            .requestMatchers(HttpMethod.PUT, "/api/v1/books/**").hasRole("LIBRARIAN")
+            .requestMatchers(HttpMethod.DELETE, "/api/v1/books/**").hasRole("LIBRARIAN")
+            .anyRequest().authenticated())
+        .addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class)
+        .addFilterAfter(mustChangePasswordFilter, AuthorizationFilter.class);
+
+    return http.build();
+}
+
+@Bean
+public PasswordEncoder passwordEncoder() {
+    return new BCryptPasswordEncoder();
+}</code></pre>
+<p>Summarized, the same rules read as:</p>
+<table>
+  <thead><tr><th>Verb + path</th><th>Role required</th></tr></thead>
+  <tbody>
+    <tr><td><code>POST/PUT/DELETE /api/v1/students/**</code></td><td><code>REGISTRAR</code></td></tr>
+    <tr><td><code>POST/DELETE /api/v1/enrollments/**</code></td><td><code>REGISTRAR</code> (no <code>PUT</code> — Enrollment has no update, §7)</td></tr>
+    <tr><td><code>POST/PUT/DELETE /api/v1/courses/**</code></td><td><code>COURSE_ADMINISTRATOR</code></td></tr>
+    <tr><td><code>POST/PUT/DELETE /api/v1/books/**</code></td><td><code>LIBRARIAN</code></td></tr>
+    <tr><td>every <code>GET /api/v1/**</code> (except the initial-password route above)</td><td>any authenticated role — scoping for <code>STUDENT</code> happens in the Application Service</td></tr>
+  </tbody>
+</table>
+<p><strong>CSRF — a decision <code>04-authentication-authorization.md</code> doesn't make, called out explicitly:</strong> disabled. Auth here is session-based, which is normally exactly the case CSRF protection exists for, but this API has no HTML form surface — every write is a JSON body from a programmatic client, not a browser <code>&lt;form&gt;</code> submission a forged cross-site request could imitate — so the standard justification for enabling it doesn't apply. If a browser SPA client is added later that also carries other same-site cookies, this is the decision to revisit.</p>
+<h3>11.2 JSON login filter</h3>
+<p><code>POST /api/v1/auth/login</code> takes a JSON body (<code>{username, password}</code>, UC-21), but Spring Security's default <code>UsernamePasswordAuthenticationFilter</code> reads form-urlencoded parameters — so <code>shared.security</code> adds a small subclass that parses the body itself and otherwise behaves identically:</p>
+<pre class="tree-block"><code>public class JsonUsernamePasswordAuthenticationFilter extends UsernamePasswordAuthenticationFilter {
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public JsonUsernamePasswordAuthenticationFilter(AuthenticationManager authenticationManager) {
+        super(authenticationManager);
+    }
+
+    @Override
+    public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) {
+        try {
+            LoginRequest body = objectMapper.readValue(request.getInputStream(), LoginRequest.class);
+            var authRequest = UsernamePasswordAuthenticationToken.unauthenticated(body.username(), body.password());
+            setDetails(request, authRequest);
+            return getAuthenticationManager().authenticate(authRequest);
+        } catch (IOException e) {
+            throw new AuthenticationServiceException("Malformed login request body", e);
+        }
+    }
+
+    private record LoginRequest(String username, String password) {}
+}</code></pre>
+<p>Success/failure handlers write exactly the bodies <code>04-authentication-authorization.md</code> §4.1 specifies:</p>
+<pre class="tree-block"><code>private void onLoginSuccess(HttpServletRequest req, HttpServletResponse res, Authentication auth) throws IOException {
+    AuthenticatedPrincipal principal = (AuthenticatedPrincipal) auth.getPrincipal();
+    res.setStatus(HttpServletResponse.SC_OK);
+    res.setContentType("application/json");
+    objectMapper.writeValue(res.getWriter(),
+        Map.of("role", principal.role(), "mustChangePassword", principal.mustChangePassword()));
+}
+
+private void onLoginFailure(HttpServletRequest req, HttpServletResponse res, AuthenticationException ex) throws IOException {
+    res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+    res.setContentType("application/json");
+    objectMapper.writeValue(res.getWriter(), Map.of(
+        "timestamp", Instant.now().toString(), "status", 401,
+        "error", "Unauthorized", "message", "Invalid username or password", "path", req.getRequestURI()));
+}</code></pre>
+<p>The 401 body deliberately reuses the same <code>{timestamp, status, error, message, path}</code> envelope <code>GlobalExceptionHandler</code> (§3) produces for every other error — login failure never reaches <code>GlobalExceptionHandler</code> (it's rejected inside the filter chain, before any <code>@Controller</code>), so the shape has to be duplicated here rather than delegated, but it stays visually consistent for API consumers.</p>
+<h3>11.3 <code>AppUserDetailsService</code> and <code>MustChangePasswordFilter</code> bodies</h3>
+<pre class="tree-block"><code>@Component
+public class AppUserDetailsService implements UserDetailsService {
+
+    private final UserRepository repository;
+
+    @Override
+    public UserDetails loadUserByUsername(String username) {
+        User user = repository.findByUsername(new Username(username))
+            .orElseThrow(() -&gt; new UsernameNotFoundException(username));
+        return new AuthenticatedPrincipal(user);
+    }
+}
+
+public record AuthenticatedPrincipal(User user) implements UserDetails {
+    @Override public Collection&lt;? extends GrantedAuthority&gt; getAuthorities() {
+        return List.of(new SimpleGrantedAuthority("ROLE_" + user.role().name()));
+    }
+    @Override public String getPassword() { return user.passwordHash().value(); }
+    @Override public String getUsername() { return user.username().value(); }
+    public boolean mustChangePassword() { return user.mustChangePassword(); }
+    public String role() { return user.role().name(); }
+    public Optional&lt;StudentId&gt; studentId() { return Optional.ofNullable(user.studentId()); }
+}</code></pre>
+<pre class="tree-block"><code>@Component
+public class MustChangePasswordFilter extends OncePerRequestFilter {
+
+    private static final String CHANGE_PASSWORD_PATH = "/api/v1/auth/password";
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null &amp;&amp; auth.getPrincipal() instanceof AuthenticatedPrincipal principal
+                &amp;&amp; principal.mustChangePassword()
+                &amp;&amp; !CHANGE_PASSWORD_PATH.equals(request.getRequestURI())) {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            return;
+        }
+        chain.doFilter(request, response);
+    }
+}</code></pre>
+<p>This is the exact <code>alt</code> gate <code>04-authentication-authorization.md</code> §4.2 already specifies (<code>principal.mustChangePassword &amp;&amp; path != "/api/v1/auth/password" → 403</code>) — the filter adds no new rule, only the Java for the one already fixed.</p>
+<h2 id="mapstruct-mapper-method-bodies">12. MapStruct Mapper Method Bodies</h2>
+<p>Every <code>*Mapper</code> interface (<code>@Mapper(componentModel = "spring")</code>) mixes two kinds of method, per §2.2's Command/DTO conventions:</p>
+<ul>
+  <li><strong>DTO → Command</strong>: flat <code>String</code>-to-<code>String</code> copies (a <code>Command</code> is "primitive/<code>String</code>-typed fields," §2.2) — MapStruct generates these from the bare abstract method signature; no body to write.</li>
+  <li><strong>Domain → DTO</strong>: needs VO <code>.value()</code> unwrapping and, for the <code>*DetailDto</code> methods, assembling nested collections — MapStruct can't infer either, so these are hand-written <code>default</code> methods.</li>
+</ul>
+<p><code>StudentMapper</code>, in full (reference module):</p>
+<pre class="tree-block"><code>@Mapper(componentModel = "spring")
+public interface StudentMapper {
+
+    // Generated — flat field copy, no body needed.
+    RegisterStudentCommand toCommand(RegisterStudentRequest request);
+    UpdateStudentCommand toCommand(UpdateStudentRequest request);
+    BookSummaryDto toDto(BookSummary book);
+    CourseSummaryDto toDto(CourseSummary course);
+
+    // Hand-written — VO unwrapping MapStruct cannot infer.
+    default StudentSummaryDto toSummaryDto(Student student) {
+        return new StudentSummaryDto(
+            student.id().value(), student.code().value(),
+            student.firstName(), student.lastName(), student.email().value());
+    }
+
+    default StudentResponse toResponse(Student student) {
+        return new StudentResponse(
+            student.id().value(), student.code().value(),
+            student.firstName(), student.lastName(), student.email().value(),
+            student.dateOfBirth().value(), student.createdAt(), student.updatedAt());
+    }
+
+    default StudentRegistrationResponse toRegistrationResponse(ProvisionedStudent provisioned) {
+        return new StudentRegistrationResponse(
+            toResponse(provisioned.student()), provisioned.username(), provisioned.initialPassword());
+    }
+
+    default StudentDetailDto toDetailDto(StudentDetailView view) {
+        return new StudentDetailDto(
+            toResponse(view.student()),
+            view.ownedBooks().stream().map(this::toDto).toList(),
+            view.activeCourses().stream().map(this::toDto).toList());
+    }
+}</code></pre>
+<p>What differs per sibling module — each still follows the same generated/hand-written split above, so only the bodies that actually differ are shown:</p>
+<table>
+  <thead><tr><th>Module</th><th>Hand-written method</th><th>Body detail</th></tr></thead>
+  <tbody>
+    <tr><td><code>course</code></td><td><code>toResponse(Course course)</code></td><td><code>course.credits().value()</code> unwraps <code>Credits</code>; <code>description</code> copies straight through (plain <code>String</code>, nullable)</td></tr>
+    <tr><td><code>book</code></td><td><code>toResponse(Book book)</code></td><td><code>ownerId</code> is nullable at the domain level too: <code>book.ownerId() == null ? null : book.ownerId().value()</code></td></tr>
+    <tr><td><code>enrollment</code></td><td><code>toResponse(Enrollment enrollment)</code></td><td>Two VO unwraps from two different modules on one line: <code>enrollment.studentId().value()</code>, <code>enrollment.courseCode().value()</code>, plus <code>enrollment.enrolledAt()</code> (§7's new field)</td></tr>
+    <tr><td><code>identity</code></td><td><em>(none)</em></td><td><code>identity</code>'s only DTOs (<code>ChangePasswordRequest</code>, <code>InitialPasswordResponse</code>) map through <code>IdentityService</code>'s own records (<code>ChangePasswordCommand</code>, <code>InitialPasswordView</code>) directly — no <code>Mapper</code> class was ever named for <code>identity</code> in §8.1's package layout, and this document introduces none</td></tr>
+  </tbody>
+</table>
+<hr>
+<h2 id="cross-module-event-listeners">13. Cross-module event listeners</h2>
+<p>Both events are <code>record</code>s at the publishing module's root (§2.2): <code>student.StudentDeleted(StudentId studentId)</code>, <code>course.CourseDeleted(CourseCode courseCode)</code>. Each listener is a <code>@ApplicationModuleListener</code> method on the consuming module's own Application Service — Spring Modulith's Event Publication Registry guarantees at-least-once delivery after the publisher's transaction commits (<code>tactical-ddd-design.md</code> §9).</p>
+<table>
+  <thead><tr><th>Publisher</th><th>Event</th><th>Listener method</th><th>Consuming action</th></tr></thead>
+  <tbody>
+    <tr><td><code>StudentService.remove</code></td><td><code>StudentDeleted</code></td><td><code>BookService.onStudentDeleted(StudentDeleted event)</code></td><td><code>bookRepository.clearOwnerByStudentId(event.studentId())</code></td></tr>
+    <tr><td><code>StudentService.remove</code></td><td><code>StudentDeleted</code></td><td><code>EnrollmentService.onStudentDeleted(StudentDeleted event)</code></td><td><code>enrollmentRepository.deleteByStudentId(event.studentId())</code></td></tr>
+    <tr><td><code>StudentService.remove</code></td><td><code>StudentDeleted</code></td><td><code>IdentityService.onStudentDeleted(StudentDeleted event)</code></td><td><code>userRepository.deleteByStudentId(event.studentId())</code></td></tr>
+    <tr><td><code>CourseService.remove</code></td><td><code>CourseDeleted</code></td><td><code>EnrollmentService.onCourseDeleted(CourseDeleted event)</code></td><td><code>enrollmentRepository.deleteByCourseCode(event.courseCode())</code></td></tr>
+  </tbody>
+</table>
+<h2 id="traceability">14. Traceability</h2>
+<p><code>tactical-ddd-design.md</code> §12 already maps every <code>req.md</code> rule to a tactical construct and an existing (module-level) class/method name; every entry in that table resolves, unchanged, to a concrete method in §§4–8 and §13 above — this document adds no new mapping, only the parameter/return types and the exception types each method throws. The deltas this document introduces <em>beyond</em> what <code>tactical-ddd-design.md</code> names are called out individually rather than in a separate table: <code>UserRepository.deleteByStudentId</code> (§8.3), the <code>PasswordHasher</code>/<code>PasswordCipher</code>/<code>InitialPasswordGenerator</code> ports (§8.1), the full <code>shared</code> exception hierarchy including <code>StaleWriteException</code> (§3), the <code>AuthController</code>-not-<code>StudentController</code> routing note for UC-23 (§4.6), the <code>createdAt</code>/<code>updatedAt</code>/<code>enrolledAt</code> fields closing the aggregate↔DTO gap found while writing this revision (§4.4, §7), the <code>version</code>-column optimistic-locking decision (§10), and the <code>EnrollmentRow.courseId ⇄ Enrollment.courseCode</code> translation the repository adapter performs (§9.1).</p>
+<h2 id="out-of-scope">15. Out of Scope</h2>
+<ul>
+  <li><strong>DTO field lists</strong> — every <code>web/dto</code> class named above is fully specified already in <code>openapi/components/schemas/*.yaml</code>; this document does not repeat those field lists (<code>02-component-diagram.md</code> §5's existing rule, extended to this document).</li>
+  <li><strong>Unit-test design</strong> — test doubles for <code>port/</code> interfaces, <code>@ApplicationModuleTest</code> setup, and <code>ApplicationModules.verify()</code> wiring are build-phase work.</li>
+  <li><strong>AES key management/rotation, session-store horizontal scaling (Spring Session JDBC/Redis), MFA, password expiry/rotation/history</strong> — all already ruled out of scope by <code>04-authentication-authorization.md</code> §7; this document's §11 implements what that document decided, not what it deferred.</li>
+  <li><strong>Composite/covering indexes beyond what §9.2's <code>UNIQUE</code>/FK constraints already create</strong> — <code>05-database-schema.md</code> §7 defers this without a known query pattern to design against; nothing in this revision changes that.</li>
+</ul>
+
+
+<div id="diagram-lightbox" class="lightbox-overlay">
+  <div class="lightbox-toolbar">
+    <button id="lightbox-zoom-out" title="Zoom out">−</button>
+    <button id="lightbox-reset" title="Reset zoom">100%</button>
+    <button id="lightbox-zoom-in" title="Zoom in">+</button>
+    <button id="lightbox-close" title="Close (Esc)">✕</button>
+  </div>
+  <div id="lightbox-viewport" class="lightbox-viewport">
+    <div id="lightbox-stage" class="lightbox-stage"></div>
+  </div>
+  <p class="lightbox-hint">Scroll to zoom · Drag to pan · Double-click to reset · Esc to close</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+  (async function () {
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: prefersDark ? "dark" : "default",
+      securityLevel: "strict",
+      flowchart: { useMaxWidth: true }
+    });
+    await mermaid.run();
+    initDiagramLightbox();
+  })();
+
+  function initDiagramLightbox() {
+    const overlay = document.getElementById("diagram-lightbox");
+    const viewport = document.getElementById("lightbox-viewport");
+    const stage = document.getElementById("lightbox-stage");
+    const zoomInBtn = document.getElementById("lightbox-zoom-in");
+    const zoomOutBtn = document.getElementById("lightbox-zoom-out");
+    const resetBtn = document.getElementById("lightbox-reset");
+    const closeBtn = document.getElementById("lightbox-close");
+
+    const MIN_SCALE = 0.15;
+    const MAX_SCALE = 10;
+    let scale = 1, panX = 0, panY = 0;
+    let baseWidth = 800, baseHeight = 600;
+    let currentSvg = null;
+    let dragging = false, moved = false, startX = 0, startY = 0, startPanX = 0, startPanY = 0;
+    let applyQueued = false;
+
+    function apply() {
+      if (applyQueued) return;
+      applyQueued = true;
+      requestAnimationFrame(() => {
+        applyQueued = false;
+        if (currentSvg) {
+          currentSvg.style.width = Math.round(baseWidth * scale) + "px";
+          currentSvg.style.height = Math.round(baseHeight * scale) + "px";
+        }
+        stage.style.transform = `translate(${panX}px, ${panY}px)`;
+        resetBtn.textContent = Math.round(scale * 100) + "%";
+      });
+    }
+    function resetView() {
+      scale = 1; panX = 0; panY = 0;
+      apply();
+    }
+    function zoomBy(factor) {
+      scale = Math.min(Math.max(scale * factor, MIN_SCALE), MAX_SCALE);
+      apply();
+    }
+    function openLightbox(svg) {
+      stage.innerHTML = "";
+      const clone = svg.cloneNode(true);
+      clone.classList.add("lightbox-svg");
+      clone.removeAttribute("style");
+      clone.removeAttribute("width");
+      clone.removeAttribute("height");
+
+      let vbWidth = 800, vbHeight = 600;
+      const vb = clone.getAttribute("viewBox");
+      if (vb) {
+        const parts = vb.trim().split(/\s+/).map(Number);
+        if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+          vbWidth = parts[2];
+          vbHeight = parts[3];
+        }
+      }
+      const stagePadding = 40;
+      const maxW = window.innerWidth * 0.9 - stagePadding;
+      const maxH = window.innerHeight * 0.78 - stagePadding;
+      const fitScale = Math.min(maxW / vbWidth, maxH / vbHeight, 1);
+      baseWidth = Math.round(vbWidth * fitScale);
+      baseHeight = Math.round(vbHeight * fitScale);
+      clone.style.width = baseWidth + "px";
+      clone.style.height = baseHeight + "px";
+
+      stage.appendChild(clone);
+      currentSvg = clone;
+      resetView();
+      overlay.classList.add("open");
+      document.body.style.overflow = "hidden";
+    }
+    function closeLightbox() {
+      overlay.classList.remove("open");
+      document.body.style.overflow = "";
+    }
+
+    document.querySelectorAll(".mermaid-wrap").forEach((wrap) => {
+      wrap.classList.add("zoomable");
+      wrap.addEventListener("click", () => {
+        const svg = wrap.querySelector("svg");
+        if (svg) openLightbox(svg);
+      });
+    });
+
+    closeBtn.addEventListener("click", closeLightbox);
+    resetBtn.addEventListener("click", resetView);
+    zoomInBtn.addEventListener("click", () => zoomBy(1.3));
+    zoomOutBtn.addEventListener("click", () => zoomBy(1 / 1.3));
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && overlay.classList.contains("open")) closeLightbox();
+    });
+
+    viewport.addEventListener("click", (e) => {
+      if (!moved && e.target === viewport) closeLightbox();
+    });
+
+    viewport.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12);
+    }, { passive: false });
+
+    viewport.addEventListener("dblclick", resetView);
+
+    viewport.addEventListener("pointerdown", (e) => {
+      dragging = true; moved = false;
+      startX = e.clientX; startY = e.clientY;
+      startPanX = panX; startPanY = panY;
+      viewport.classList.add("grabbing");
+      viewport.setPointerCapture(e.pointerId);
+    });
+    viewport.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+      panX = startPanX + dx;
+      panY = startPanY + dy;
+      apply();
+    });
+    viewport.addEventListener("pointerup", () => {
+      dragging = false;
+      viewport.classList.remove("grabbing");
+    });
+  }
+</script>
+
+</body>
+</html>
