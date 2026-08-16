@@ -1,6 +1,6 @@
 # Component Diagram
 
-Solution Architecture Document — Part 2 of 4 ([System Overview](./01-system-overview.md) → Component Diagram → [Sequence Diagram](./03-sequence-diagrams.md) → [Authentication & Authorization](./04-authentication-authorization.md)).
+Solution Architecture Document — Part 2 of 5 ([System Overview](./01-system-overview.md) → Component Diagram → [Sequence Diagram](./03-sequence-diagrams.md) → [Authentication & Authorization](./04-authentication-authorization.md) → [Database Schema](./05-database-schema.md)).
 
 This document zooms into the single process shown in the System Overview and answers two questions the Context diagram deliberately left out: **how do the five Spring Modulith modules depend on each other**, and **what does the inside of one module look like** (the Clean/Hexagonal layering referenced in the README). Traceability back to [use-cases.md](../BA-docs/use-cases.md) is kept explicit throughout, since every component here exists to serve a specific UC.
 

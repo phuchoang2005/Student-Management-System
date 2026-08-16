@@ -202,7 +202,7 @@
 <body>
 
 <h1>Sequence Diagrams</h1>
-<p class="subtitle">Solution Architecture Document — Part 3 of 4</p>
+<p class="subtitle">Solution Architecture Document — Part 3 of 5</p>
 <nav class="doc-nav">
   <a href="./01-system-overview.html">System Overview</a>
   &nbsp;→&nbsp;
@@ -211,6 +211,8 @@
   <span class="pill">Part 3</span> Sequence Diagrams
   &nbsp;→&nbsp;
   <a href="./04-authentication-authorization.html">Authentication &amp; Authorization</a>
+  &nbsp;→&nbsp;
+  <a href="./05-database-schema.html">Database Schema</a>
 </nav>
 
 <p>This document shows, for every use case in <a href="../BA-docs/use-cases.md">use-cases.md</a>, the order of calls a request makes through the layers and modules described in the <a href="./02-component-diagram.html">Component Diagram</a>: Spring Security → Controller → Service → domain aggregate → repository → MySQL, plus the two synchronous cross-module lookups (<code>StudentLookup</code>, <code>CourseLookup</code>) and the two asynchronous cascade-delete events (<code>StudentDeleted</code>, <code>CourseDeleted</code>). Sections are grouped by owning module, matching the ownership table in <code>02-component-diagram.md</code> §2.4.</p>
