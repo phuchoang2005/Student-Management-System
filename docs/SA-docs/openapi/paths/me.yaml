@@ -1,0 +1,21 @@
+booksAndCourses:
+  get:
+    operationId: getMyBooksAndCourses
+    tags: [Self-Service]
+    summary: View my own books and courses
+    description: |
+      **Roles:** Student only. Composes the caller's owned books and active course
+      enrollments in one call, scoped to `principal.studentId`. A non-Student caller
+      receives 403.
+    x-roles: [STUDENT]
+    responses:
+      '200':
+        description: The caller's own books and courses.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/MeBooksAndCoursesResponse'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'

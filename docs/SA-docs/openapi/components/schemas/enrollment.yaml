@@ -1,0 +1,40 @@
+EnrollmentCreateRequest:
+  type: object
+  required: [studentId, courseCode]
+  properties:
+    studentId:
+      type: integer
+      format: int64
+      description: Must reference an existing student, or the request is rejected with 400.
+    courseCode:
+      type: string
+      maxLength: 20
+      description: Must reference an existing course, or the request is rejected with 400.
+
+EnrollmentResponse:
+  type: object
+  required: [id, studentId, courseCode, enrolledAt]
+  properties:
+    id:
+      type: integer
+      format: int64
+    studentId:
+      type: integer
+      format: int64
+    courseCode:
+      type: string
+    enrolledAt:
+      type: string
+      format: date-time
+
+EnrollmentDetail:
+  type: object
+  required: [student, course, enrolledAt]
+  properties:
+    student:
+      $ref: './student.yaml#/StudentSummary'
+    course:
+      $ref: './course.yaml#/CourseSummary'
+    enrolledAt:
+      type: string
+      format: date-time

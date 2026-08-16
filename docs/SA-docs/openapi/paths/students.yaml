@@ -1,0 +1,197 @@
+collection:
+  get:
+    operationId: searchStudents
+    tags: [Students]
+    summary: Search / list students
+    description: |
+      **Roles:** All authenticated roles. Student results are transparently scoped to the
+      caller's own record (0 or 1 result), consistent with every other search endpoint's
+      "no match → 200 `[]`" shape — no 403 is raised here.
+    x-roles: [REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/SearchQueryParam'
+    responses:
+      '200':
+        description: Zero or more matching students.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '../components/schemas/student.yaml#/StudentSummary'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+
+  post:
+    operationId: registerStudent
+    tags: [Students]
+    summary: Register a new student
+    description: |
+      **Roles:** Registrar only.
+
+      In the same transaction as the insert, a Student login account is auto-provisioned
+      (`AccountProvisioning.provisionForStudent`) with `mustChangePassword = true`. The
+      plaintext initial password is returned exactly once, in this response.
+    x-roles: [REGISTRAR]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/student.yaml#/StudentCreateRequest'
+    responses:
+      '201':
+        description: Student registered and login account provisioned.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/student.yaml#/StudentRegistrationResponse'
+      '400':
+        $ref: '../components/responses/errors.yaml#/BadRequest'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '409':
+        description: studentCode or email already in use.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/Error'
+            example:
+              timestamp: '2026-01-15T09:24:00Z'
+              status: 409
+              error: Conflict
+              message: Student code 'S00123' is already in use.
+              path: /api/v1/students
+
+item:
+  get:
+    operationId: getStudent
+    tags: [Students]
+    summary: Get student detail
+    description: |
+      **Roles:** All authenticated roles. A Student caller requesting a code that is not
+      their own receives 403.
+    x-roles: [REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/StudentCodePathParam'
+    responses:
+      '200':
+        description: Student detail, including owned books and active course enrollments.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/student.yaml#/StudentDetail'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../components/responses/errors.yaml#/NotFound'
+
+  put:
+    operationId: updateStudent
+    tags: [Students]
+    summary: Update student details
+    description: |
+      **Roles:** Registrar only. studentCode itself is immutable — it identifies the
+      resource in the path and cannot be changed via this operation.
+    x-roles: [REGISTRAR]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/StudentCodePathParam'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/student.yaml#/StudentUpdateRequest'
+    responses:
+      '200':
+        description: Updated student.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/student.yaml#/StudentResponse'
+      '400':
+        $ref: '../components/responses/errors.yaml#/BadRequest'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../components/responses/errors.yaml#/NotFound'
+      '409':
+        description: The new email is already used by another student.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/Error'
+            example:
+              timestamp: '2026-01-15T09:24:00Z'
+              status: 409
+              error: Conflict
+              message: Email 'jane.doe@example.edu' is already used by another student.
+              path: /api/v1/students/S00123
+
+  delete:
+    operationId: removeStudent
+    tags: [Students]
+    summary: Remove a student
+    description: |
+      **Roles:** Registrar only.
+
+      Deletes the student row, then asynchronously publishes `StudentDeleted`, which clears
+      ownership on any books the student held, deletes their enrollments, and deletes their
+      login account. The response does not wait for the cascade to complete.
+    x-roles: [REGISTRAR]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/StudentCodePathParam'
+    responses:
+      '204':
+        description: Student removed.
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../components/responses/errors.yaml#/NotFound'
+
+initialPassword:
+  get:
+    operationId: viewStudentInitialPassword
+    tags: [Students]
+    summary: View a student's initial password
+    description: |
+      **Roles:** Registrar only.
+
+      Returns the decrypted initial password only while it is still unchanged
+      (`mustChangePassword = true`). Once the Student has changed their password, this
+      endpoint returns 404 — the same status used when the student does not exist at all,
+      an intentional choice that avoids revealing which case applies.
+    x-roles: [REGISTRAR]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/StudentCodePathParam'
+    responses:
+      '200':
+        description: The student's still-unchanged initial credentials.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/student.yaml#/InitialPasswordResponse'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '404':
+        description: No such student, or the password has already been changed.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/Error'
+            example:
+              timestamp: '2026-01-15T09:24:00Z'
+              status: 404
+              error: Not Found
+              message: No unchanged initial password found for student 'S00123'.
+              path: /api/v1/students/S00123/initial-password

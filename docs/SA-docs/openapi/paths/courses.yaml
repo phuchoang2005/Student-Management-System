@@ -1,0 +1,136 @@
+collection:
+  get:
+    operationId: searchCourses
+    tags: [Courses]
+    summary: Search / list courses
+    description: |
+      **Roles:** All authenticated roles.
+    x-roles: [REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/SearchQueryParam'
+    responses:
+      '200':
+        description: Zero or more matching courses.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '../components/schemas/course.yaml#/CourseSummary'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+
+  post:
+    operationId: createCourse
+    tags: [Courses]
+    summary: Create a course
+    description: |
+      **Roles:** Course Administrator only.
+    x-roles: [COURSE_ADMINISTRATOR]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/course.yaml#/CourseCreateRequest'
+    responses:
+      '201':
+        description: Course created.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/course.yaml#/CourseResponse'
+      '400':
+        $ref: '../components/responses/errors.yaml#/BadRequest'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '409':
+        description: courseCode already in use.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/Error'
+            example:
+              timestamp: '2026-01-15T09:24:00Z'
+              status: 409
+              error: Conflict
+              message: Course code 'CS101' is already in use.
+              path: /api/v1/courses
+
+item:
+  get:
+    operationId: getCourse
+    tags: [Courses]
+    summary: Get course detail
+    description: |
+      **Roles:** All authenticated roles.
+    x-roles: [REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/CourseCodePathParam'
+    responses:
+      '200':
+        description: Course detail, including its current enrolled-student roster.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/course.yaml#/CourseDetail'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '404':
+        $ref: '../components/responses/errors.yaml#/NotFound'
+
+  put:
+    operationId: updateCourse
+    tags: [Courses]
+    summary: Update a course
+    description: |
+      **Roles:** Course Administrator only. courseCode itself is immutable.
+    x-roles: [COURSE_ADMINISTRATOR]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/CourseCodePathParam'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/course.yaml#/CourseUpdateRequest'
+    responses:
+      '200':
+        description: Updated course.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/course.yaml#/CourseResponse'
+      '400':
+        $ref: '../components/responses/errors.yaml#/BadRequest'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../components/responses/errors.yaml#/NotFound'
+
+  delete:
+    operationId: removeCourse
+    tags: [Courses]
+    summary: Remove a course
+    description: |
+      **Roles:** Course Administrator only.
+
+      Deletes the course row, then asynchronously publishes `CourseDeleted`, which deletes
+      every enrollment referencing this course. The response does not wait for the cascade
+      to complete.
+    x-roles: [COURSE_ADMINISTRATOR]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/CourseCodePathParam'
+    responses:
+      '204':
+        description: Course removed.
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../components/responses/errors.yaml#/NotFound'

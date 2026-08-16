@@ -1,0 +1,66 @@
+Role:
+  type: string
+  description: The four fixed roles in the system. Staff roles (Registrar, Librarian, Course Administrator) are pre-seeded out-of-band; Student accounts are auto-provisioned on student registration.
+  enum:
+    - REGISTRAR
+    - LIBRARIAN
+    - COURSE_ADMINISTRATOR
+    - STUDENT
+
+Error:
+  type: object
+  description: Spring Boot's default error body shape. No custom error envelope is defined elsewhere in the design docs, so this idiomatic default is used for every non-2xx response.
+  required: [timestamp, status, error, message, path]
+  properties:
+    timestamp:
+      type: string
+      format: date-time
+    status:
+      type: integer
+      example: 404
+    error:
+      type: string
+      example: Not Found
+    message:
+      type: string
+      example: Student with code 'S12345' was not found.
+    path:
+      type: string
+      example: /api/v1/students/S12345
+
+FieldError:
+  type: object
+  required: [field, message]
+  properties:
+    field:
+      type: string
+      example: email
+    message:
+      type: string
+      example: must be a well-formed email address
+
+ValidationError:
+  description: An Error whose 400 response also lists which field(s) failed validation.
+  allOf:
+    - $ref: '#/Error'
+    - type: object
+      required: [errors]
+      properties:
+        errors:
+          type: array
+          items:
+            $ref: '#/FieldError'
+
+MeBooksAndCoursesResponse:
+  type: object
+  description: The calling Student's own owned books and active course enrollments, composed in one call.
+  required: [books, courses]
+  properties:
+    books:
+      type: array
+      items:
+        $ref: './book.yaml#/BookSummary'
+    courses:
+      type: array
+      items:
+        $ref: './course.yaml#/CourseSummary'

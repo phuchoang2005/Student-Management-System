@@ -1,0 +1,161 @@
+collection:
+  get:
+    operationId: searchBooks
+    tags: [Books]
+    summary: Search / list books
+    description: |
+      **Roles:** All authenticated roles.
+    x-roles: [REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/SearchQueryParam'
+      - $ref: '../components/parameters/common.yaml#/OwnerFilterParam'
+    responses:
+      '200':
+        description: Zero or more matching books.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '../components/schemas/book.yaml#/BookSummary'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+
+  post:
+    operationId: addBook
+    tags: [Books]
+    summary: Add a book to the catalog
+    description: |
+      **Roles:** Librarian only. An optional `ownerId` assigns the book to a student at
+      creation time; it must reference an existing student.
+    x-roles: [LIBRARIAN]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/book.yaml#/BookCreateRequest'
+    responses:
+      '201':
+        description: Book added.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/book.yaml#/BookResponse'
+      '400':
+        $ref: '../components/responses/errors.yaml#/BadRequest'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '409':
+        description: isbn already in use.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/Error'
+            example:
+              timestamp: '2026-01-15T09:24:00Z'
+              status: 409
+              error: Conflict
+              message: ISBN '9780134685991' is already in use.
+              path: /api/v1/books
+
+item:
+  get:
+    operationId: getBook
+    tags: [Books]
+    summary: Get book detail
+    description: |
+      **Roles:** All authenticated roles.
+    x-roles: [REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/IsbnPathParam'
+    responses:
+      '200':
+        description: Book detail, including the current owner's summary if any.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/book.yaml#/BookDetail'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '404':
+        $ref: '../components/responses/errors.yaml#/NotFound'
+
+  delete:
+    operationId: removeBook
+    tags: [Books]
+    summary: Remove a book
+    description: |
+      **Roles:** Librarian only. No cascade — removing a book never affects other resources.
+    x-roles: [LIBRARIAN]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/IsbnPathParam'
+    responses:
+      '204':
+        description: Book removed.
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../components/responses/errors.yaml#/NotFound'
+
+owner:
+  patch:
+    operationId: assignBookOwner
+    tags: [Books]
+    summary: Assign / reassign a book's owner
+    description: |
+      **Roles:** Librarian only. A book has at most one owner; assigning a new owner
+      replaces any prior one.
+    x-roles: [LIBRARIAN]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/IsbnPathParam'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/book.yaml#/BookOwnerRequest'
+    responses:
+      '200':
+        description: Book with its new owner.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/book.yaml#/BookResponse'
+      '400':
+        $ref: '../components/responses/errors.yaml#/BadRequest'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../components/responses/errors.yaml#/NotFound'
+
+  delete:
+    operationId: clearBookOwner
+    tags: [Books]
+    summary: End a book's ownership
+    description: |
+      **Roles:** Librarian only. Clears `ownerId`; the book stays in the catalog. Idempotent —
+      calling this on an already-unowned book still returns 200 with `ownerId: null`, since no
+      other endpoint in this API models an "already in that state" 409.
+    x-roles: [LIBRARIAN]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/IsbnPathParam'
+    responses:
+      '200':
+        description: Book with ownership cleared.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/book.yaml#/BookResponse'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../components/responses/errors.yaml#/NotFound'

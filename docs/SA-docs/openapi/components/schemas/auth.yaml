@@ -1,0 +1,41 @@
+LoginRequest:
+  type: object
+  required: [username, password]
+  properties:
+    username:
+      type: string
+      example: jane.doe@example.edu
+    password:
+      type: string
+      format: password
+
+LoginResponse:
+  type: object
+  description: Returned on successful login. The session itself is established via the `JSESSIONID` cookie (see the `cookieAuth` security scheme), not a token in this body.
+  required: [role, mustChangePassword]
+  properties:
+    role:
+      $ref: './common.yaml#/Role'
+    mustChangePassword:
+      type: boolean
+      description: When true, every endpoint except `POST /auth/password` responds 403 until the password is changed.
+
+ChangePasswordRequest:
+  type: object
+  required: [currentPassword, newPassword, retypeNewPassword]
+  properties:
+    currentPassword:
+      type: string
+      format: password
+    newPassword:
+      type: string
+      format: password
+      minLength: 8
+      maxLength: 72
+      description: Must differ from the current password. No mandatory composition rules (NIST 800-63B style). Max length reflects BCrypt's 72-byte input limit.
+    retypeNewPassword:
+      type: string
+      format: password
+      minLength: 8
+      maxLength: 72
+      description: Must exactly match `newPassword`.

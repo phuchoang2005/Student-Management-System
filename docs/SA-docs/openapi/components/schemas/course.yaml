@@ -1,0 +1,84 @@
+CourseCreateRequest:
+  type: object
+  required: [courseCode, name, credits]
+  properties:
+    courseCode:
+      type: string
+      maxLength: 20
+    name:
+      type: string
+      maxLength: 150
+    description:
+      type: string
+      nullable: true
+    credits:
+      type: integer
+      format: int32
+      minimum: 1
+
+CourseUpdateRequest:
+  type: object
+  description: Same as CourseCreateRequest minus courseCode, which is immutable and supplied via the path instead.
+  required: [name, credits]
+  properties:
+    name:
+      type: string
+      maxLength: 150
+    description:
+      type: string
+      nullable: true
+    credits:
+      type: integer
+      format: int32
+      minimum: 1
+
+CourseResponse:
+  type: object
+  required: [id, courseCode, name, description, credits, createdAt, updatedAt]
+  properties:
+    id:
+      type: integer
+      format: int64
+    courseCode:
+      type: string
+    name:
+      type: string
+    description:
+      type: string
+      nullable: true
+    credits:
+      type: integer
+      format: int32
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+
+CourseSummary:
+  type: object
+  required: [id, courseCode, name, credits]
+  properties:
+    id:
+      type: integer
+      format: int64
+    courseCode:
+      type: string
+    name:
+      type: string
+    credits:
+      type: integer
+      format: int32
+
+CourseDetail:
+  description: A course's full record plus its current roster of enrolled students.
+  allOf:
+    - $ref: '#/CourseResponse'
+    - type: object
+      required: [roster]
+      properties:
+        roster:
+          type: array
+          items:
+            $ref: './student.yaml#/StudentSummary'

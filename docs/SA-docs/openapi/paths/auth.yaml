@@ -1,0 +1,74 @@
+login:
+  post:
+    operationId: login
+    tags: [Auth]
+    summary: Log in
+    description: |
+      **Roles:** No authentication required.
+
+      Validates credentials against the `users` table and, on success, opens a server-side
+      HTTP session (`JSESSIONID` cookie) — this is session-based auth, not a bearer token.
+    x-roles: []
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/auth.yaml#/LoginRequest'
+    responses:
+      '200':
+        description: Authenticated. The `JSESSIONID` cookie is set on the response.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/auth.yaml#/LoginResponse'
+      '401':
+        description: Unknown username or password mismatch.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/Error'
+            example:
+              timestamp: '2026-01-15T09:24:00Z'
+              status: 401
+              error: Unauthorized
+              message: Username or password is incorrect.
+              path: /api/v1/auth/login
+
+password:
+  post:
+    operationId: changePassword
+    tags: [Auth]
+    summary: Change own password
+    description: |
+      **Roles:** All authenticated roles — every principal may change only their own password.
+      This is the one endpoint still reachable when `mustChangePassword = true`.
+
+      Validation order: retype must match newPassword (400) → currentPassword must match (401)
+      → newPassword must differ from currentPassword (400). On success, `initialPasswordEncrypted`
+      is cleared and `mustChangePassword` is set to false.
+    x-roles: [REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/auth.yaml#/ChangePasswordRequest'
+    responses:
+      '200':
+        description: Password changed. The current session remains valid; no re-login is required.
+      '400':
+        $ref: '../components/responses/errors.yaml#/BadRequest'
+      '401':
+        description: Not authenticated, or currentPassword did not match.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/Error'
+            example:
+              timestamp: '2026-01-15T09:24:00Z'
+              status: 401
+              error: Unauthorized
+              message: currentPassword did not match.
+              path: /api/v1/auth/password

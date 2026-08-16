@@ -1,0 +1,126 @@
+StudentCreateRequest:
+  type: object
+  required: [studentCode, firstName, lastName, email, dateOfBirth]
+  properties:
+    studentCode:
+      type: string
+      maxLength: 20
+      example: S00123
+    firstName:
+      type: string
+      maxLength: 100
+    lastName:
+      type: string
+      maxLength: 100
+    email:
+      type: string
+      format: email
+      maxLength: 255
+    dateOfBirth:
+      type: string
+      format: date
+
+StudentUpdateRequest:
+  type: object
+  description: Same as StudentCreateRequest minus studentCode, which is immutable once assigned and is supplied via the path instead.
+  required: [firstName, lastName, email, dateOfBirth]
+  properties:
+    firstName:
+      type: string
+      maxLength: 100
+    lastName:
+      type: string
+      maxLength: 100
+    email:
+      type: string
+      format: email
+      maxLength: 255
+    dateOfBirth:
+      type: string
+      format: date
+
+StudentResponse:
+  type: object
+  required: [id, studentCode, firstName, lastName, email, dateOfBirth, createdAt, updatedAt]
+  properties:
+    id:
+      type: integer
+      format: int64
+    studentCode:
+      type: string
+    firstName:
+      type: string
+    lastName:
+      type: string
+    email:
+      type: string
+      format: email
+    dateOfBirth:
+      type: string
+      format: date
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+
+StudentRegistrationResponse:
+  description: |
+    Returned only from `POST /students`. Includes the auto-provisioned login account's
+    username and one-time plaintext initial password — this is the only response in the
+    entire API where the plaintext password is ever shown; afterward it is retrievable
+    only via `GET /students/{code}/initial-password`, and only until it is changed.
+  allOf:
+    - $ref: '#/StudentResponse'
+    - type: object
+      required: [username, initialPassword]
+      properties:
+        username:
+          type: string
+          description: Equal to email at provisioning time.
+        initialPassword:
+          type: string
+          description: System-generated 8-character alphanumeric password, shown once.
+
+StudentSummary:
+  type: object
+  required: [id, studentCode, firstName, lastName, email]
+  properties:
+    id:
+      type: integer
+      format: int64
+    studentCode:
+      type: string
+    firstName:
+      type: string
+    lastName:
+      type: string
+    email:
+      type: string
+      format: email
+
+StudentDetail:
+  description: A student's full record plus the books they currently own and the courses they are actively enrolled in.
+  allOf:
+    - $ref: '#/StudentResponse'
+    - type: object
+      required: [books, courses]
+      properties:
+        books:
+          type: array
+          items:
+            $ref: './book.yaml#/BookSummary'
+        courses:
+          type: array
+          items:
+            $ref: './course.yaml#/CourseSummary'
+
+InitialPasswordResponse:
+  type: object
+  required: [username, initialPassword]
+  properties:
+    username:
+      type: string
+    initialPassword:
+      type: string

@@ -1,0 +1,89 @@
+BookCreateRequest:
+  type: object
+  required: [isbn, title, author]
+  properties:
+    isbn:
+      type: string
+      maxLength: 20
+    title:
+      type: string
+      maxLength: 255
+    author:
+      type: string
+      maxLength: 255
+    publishedDate:
+      type: string
+      format: date
+      nullable: true
+    ownerId:
+      type: integer
+      format: int64
+      nullable: true
+      description: Optional initial owner. Must reference an existing student, or the request is rejected with 400.
+
+BookOwnerRequest:
+  type: object
+  required: [studentId]
+  properties:
+    studentId:
+      type: integer
+      format: int64
+      description: Must reference an existing student, or the request is rejected with 400.
+
+BookResponse:
+  type: object
+  required: [id, isbn, title, author, publishedDate, ownerId, createdAt, updatedAt]
+  properties:
+    id:
+      type: integer
+      format: int64
+    isbn:
+      type: string
+    title:
+      type: string
+    author:
+      type: string
+    publishedDate:
+      type: string
+      format: date
+      nullable: true
+    ownerId:
+      type: integer
+      format: int64
+      nullable: true
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+
+BookSummary:
+  type: object
+  required: [id, isbn, title, author, ownerId]
+  properties:
+    id:
+      type: integer
+      format: int64
+    isbn:
+      type: string
+    title:
+      type: string
+    author:
+      type: string
+    ownerId:
+      type: integer
+      format: int64
+      nullable: true
+
+BookDetail:
+  description: A book's full record plus the current owner's summary, if any.
+  allOf:
+    - $ref: '#/BookResponse'
+    - type: object
+      properties:
+        owner:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: './student.yaml#/StudentSummary'

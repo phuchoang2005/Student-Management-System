@@ -1,0 +1,88 @@
+collection:
+  post:
+    operationId: createEnrollment
+    tags: [Enrollments]
+    summary: Enroll a student in a course
+    description: |
+      **Roles:** Registrar, or the Student being enrolled (self-service, if enabled).
+
+      Both `studentId` and `courseCode` are validated to exist before the duplicate-enrollment
+      check runs.
+    x-roles: [REGISTRAR, STUDENT]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/enrollment.yaml#/EnrollmentCreateRequest'
+    responses:
+      '201':
+        description: Enrollment created.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/enrollment.yaml#/EnrollmentResponse'
+      '400':
+        $ref: '../components/responses/errors.yaml#/BadRequest'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '409':
+        description: This student is already enrolled in this course.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/Error'
+            example:
+              timestamp: '2026-01-15T09:24:00Z'
+              status: 409
+              error: Conflict
+              message: Student 42 is already enrolled in course 'CS101'.
+              path: /api/v1/enrollments
+
+item:
+  get:
+    operationId: getEnrollment
+    tags: [Enrollments]
+    summary: Get enrollment detail
+    description: |
+      **Roles:** Registrar, Course Administrator, or the enrolled Student themself.
+    x-roles: [REGISTRAR, COURSE_ADMINISTRATOR, STUDENT]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/EnrollmentStudentIdPathParam'
+      - $ref: '../components/parameters/common.yaml#/EnrollmentCourseCodePathParam'
+    responses:
+      '200':
+        description: Enrollment detail, with the student's and course's summaries.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/enrollment.yaml#/EnrollmentDetail'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../components/responses/errors.yaml#/NotFound'
+
+  delete:
+    operationId: endEnrollment
+    tags: [Enrollments]
+    summary: End an enrollment
+    description: |
+      **Roles:** Registrar, or the enrolled Student themself. Removes only the
+      student–course link; neither the student nor the course record is affected.
+    x-roles: [REGISTRAR, STUDENT]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/EnrollmentStudentIdPathParam'
+      - $ref: '../components/parameters/common.yaml#/EnrollmentCourseCodePathParam'
+    responses:
+      '204':
+        description: Enrollment ended.
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../components/responses/errors.yaml#/NotFound'

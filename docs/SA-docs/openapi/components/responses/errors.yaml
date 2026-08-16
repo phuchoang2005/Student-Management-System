@@ -1,0 +1,62 @@
+BadRequest:
+  description: |
+    The request is malformed or fails a validation rule (blank required field, invalid date,
+    non-positive credits, or a reference to a student/course/book that does not exist).
+    Distinct from **409 Conflict**, which is reserved for uniqueness violations on an
+    otherwise well-formed request.
+  content:
+    application/json:
+      schema:
+        $ref: '../schemas/common.yaml#/ValidationError'
+      example:
+        timestamp: '2026-01-15T09:24:00Z'
+        status: 400
+        error: Bad Request
+        message: "Validation failed for object='studentCreateRequest'. Error count: 1"
+        path: /api/v1/students
+        errors:
+          - field: email
+            message: must be a well-formed email address
+
+Unauthorized:
+  description: No valid session is present (missing/expired `JSESSIONID`), or the credentials supplied to `POST /auth/login` did not match.
+  content:
+    application/json:
+      schema:
+        $ref: '../schemas/common.yaml#/Error'
+      example:
+        timestamp: '2026-01-15T09:24:00Z'
+        status: 401
+        error: Unauthorized
+        message: Full authentication is required to access this resource.
+        path: /api/v1/students
+
+Forbidden:
+  description: |
+    The caller is authenticated but not authorized: either their role may not perform this
+    operation, or (for Student principals) the request targets a record that is not their own.
+    Also returned for every endpoint except `POST /auth/password` when the caller's account has
+    `mustChangePassword = true`.
+  content:
+    application/json:
+      schema:
+        $ref: '../schemas/common.yaml#/Error'
+      example:
+        timestamp: '2026-01-15T09:24:00Z'
+        status: 403
+        error: Forbidden
+        message: The current principal does not have the required role for this operation.
+        path: /api/v1/students
+
+NotFound:
+  description: No resource matches the given identifier.
+  content:
+    application/json:
+      schema:
+        $ref: '../schemas/common.yaml#/Error'
+      example:
+        timestamp: '2026-01-15T09:24:00Z'
+        status: 404
+        error: Not Found
+        message: Student with code 'S12345' was not found.
+        path: /api/v1/students/S12345

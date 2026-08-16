@@ -1,0 +1,61 @@
+SearchQueryParam:
+  name: query
+  in: query
+  required: false
+  description: Free-text search term matched against the resource's business-key and name-like fields. Omit to return all results.
+  schema:
+    type: string
+
+OwnerFilterParam:
+  name: owner
+  in: query
+  required: false
+  description: Restrict results to books currently owned by this student id.
+  schema:
+    type: integer
+    format: int64
+
+StudentCodePathParam:
+  name: code
+  in: path
+  required: true
+  description: The student's business-key code (`students.student_code`).
+  schema:
+    type: string
+    maxLength: 20
+
+CourseCodePathParam:
+  name: code
+  in: path
+  required: true
+  description: The course's business-key code (`courses.course_code`).
+  schema:
+    type: string
+    maxLength: 20
+
+IsbnPathParam:
+  name: isbn
+  in: path
+  required: true
+  description: The book's ISBN (`books.isbn`).
+  schema:
+    type: string
+    maxLength: 20
+
+EnrollmentStudentIdPathParam:
+  name: studentId
+  in: path
+  required: true
+  description: Surrogate id of the enrolled student (`students.id`).
+  schema:
+    type: integer
+    format: int64
+
+EnrollmentCourseCodePathParam:
+  name: courseCode
+  in: path
+  required: true
+  description: Business-key code of the course (`courses.course_code`).
+  schema:
+    type: string
+    maxLength: 20

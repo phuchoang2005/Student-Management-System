@@ -1,0 +1,164 @@
+openapi: 3.0.3
+info:
+  title: Student Management System API
+  version: "1.0.0"
+  description: |
+    REST contract for the Student Management System — a single-deployable, backend-only
+    Spring Boot / Spring Modulith application with one MySQL 8 schema
+    (see `../01-system-overview.md`). This spec is hand-authored from the Solution
+    Architecture documents (`../02-component-diagram.md` through `../05-database-schema.md`);
+    no backend implementation exists yet to generate it from — see
+    `../api-specification.md` for full conventions and the design decisions made while
+    filling gaps the source docs left open.
+
+    **Base path:** every operation below is relative to `/api/v1`.
+
+    **Auth:** session-based, not token-based. `POST /auth/login` opens a server-side HTTP
+    session and sets the `JSESSIONID` cookie (see the `cookieAuth` security scheme below);
+    there is no bearer/JWT token anywhere in this API.
+
+    **Roles:** REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT. Every operation states
+    its allowed roles in its description and in the machine-readable `x-roles` extension.
+    Student principals are further scoped to their own records where noted.
+
+    **must-change-password gate:** while `principal.mustChangePassword = true`, every
+    endpoint except `POST /auth/password` responds 403 Forbidden.
+
+    **Error shape:** every non-2xx response uses `Error` (or `ValidationError` for 400s,
+    which adds a per-field `errors` list) — Spring Boot's default error body shape.
+  license:
+    name: Proprietary — internal use only
+    url: https://internal.example/license
+servers:
+  - url: https://api.studentmanagement.internal/api/v1
+    description: Placeholder — no backend is deployed yet; update once a real environment exists.
+security:
+  - cookieAuth: []
+tags:
+  - name: Auth
+    description: Login, password management, and session lifecycle.
+  - name: Students
+    description: Student records — owned by the Registrar role.
+  - name: Books
+    description: Book catalog and ownership — owned by the Librarian role.
+  - name: Courses
+    description: Course offerings — owned by the Course Administrator role.
+  - name: Enrollments
+    description: Student-course enrollment links.
+  - name: Self-Service
+    description: Composite read endpoints scoped to the calling Student principal.
+paths:
+  /auth/login:
+    $ref: './paths/auth.yaml#/login'
+  /auth/password:
+    $ref: './paths/auth.yaml#/password'
+  /students:
+    $ref: './paths/students.yaml#/collection'
+  '/students/{code}':
+    $ref: './paths/students.yaml#/item'
+  '/students/{code}/initial-password':
+    $ref: './paths/students.yaml#/initialPassword'
+  /books:
+    $ref: './paths/books.yaml#/collection'
+  '/books/{isbn}':
+    $ref: './paths/books.yaml#/item'
+  '/books/{isbn}/owner':
+    $ref: './paths/books.yaml#/owner'
+  /courses:
+    $ref: './paths/courses.yaml#/collection'
+  '/courses/{code}':
+    $ref: './paths/courses.yaml#/item'
+  /enrollments:
+    $ref: './paths/enrollments.yaml#/collection'
+  '/enrollments/{studentId}/{courseCode}':
+    $ref: './paths/enrollments.yaml#/item'
+  /me/books-and-courses:
+    $ref: './paths/me.yaml#/booksAndCourses'
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+      description: Server-side session cookie issued by `POST /auth/login` (Spring Security default, session-based — not JWT/bearer).
+  schemas:
+    Role:
+      $ref: './components/schemas/common.yaml#/Role'
+    Error:
+      $ref: './components/schemas/common.yaml#/Error'
+    FieldError:
+      $ref: './components/schemas/common.yaml#/FieldError'
+    ValidationError:
+      $ref: './components/schemas/common.yaml#/ValidationError'
+    MeBooksAndCoursesResponse:
+      $ref: './components/schemas/common.yaml#/MeBooksAndCoursesResponse'
+    LoginRequest:
+      $ref: './components/schemas/auth.yaml#/LoginRequest'
+    LoginResponse:
+      $ref: './components/schemas/auth.yaml#/LoginResponse'
+    ChangePasswordRequest:
+      $ref: './components/schemas/auth.yaml#/ChangePasswordRequest'
+    StudentCreateRequest:
+      $ref: './components/schemas/student.yaml#/StudentCreateRequest'
+    StudentUpdateRequest:
+      $ref: './components/schemas/student.yaml#/StudentUpdateRequest'
+    StudentResponse:
+      $ref: './components/schemas/student.yaml#/StudentResponse'
+    StudentRegistrationResponse:
+      $ref: './components/schemas/student.yaml#/StudentRegistrationResponse'
+    StudentSummary:
+      $ref: './components/schemas/student.yaml#/StudentSummary'
+    StudentDetail:
+      $ref: './components/schemas/student.yaml#/StudentDetail'
+    InitialPasswordResponse:
+      $ref: './components/schemas/student.yaml#/InitialPasswordResponse'
+    BookCreateRequest:
+      $ref: './components/schemas/book.yaml#/BookCreateRequest'
+    BookOwnerRequest:
+      $ref: './components/schemas/book.yaml#/BookOwnerRequest'
+    BookResponse:
+      $ref: './components/schemas/book.yaml#/BookResponse'
+    BookSummary:
+      $ref: './components/schemas/book.yaml#/BookSummary'
+    BookDetail:
+      $ref: './components/schemas/book.yaml#/BookDetail'
+    CourseCreateRequest:
+      $ref: './components/schemas/course.yaml#/CourseCreateRequest'
+    CourseUpdateRequest:
+      $ref: './components/schemas/course.yaml#/CourseUpdateRequest'
+    CourseResponse:
+      $ref: './components/schemas/course.yaml#/CourseResponse'
+    CourseSummary:
+      $ref: './components/schemas/course.yaml#/CourseSummary'
+    CourseDetail:
+      $ref: './components/schemas/course.yaml#/CourseDetail'
+    EnrollmentCreateRequest:
+      $ref: './components/schemas/enrollment.yaml#/EnrollmentCreateRequest'
+    EnrollmentResponse:
+      $ref: './components/schemas/enrollment.yaml#/EnrollmentResponse'
+    EnrollmentDetail:
+      $ref: './components/schemas/enrollment.yaml#/EnrollmentDetail'
+  responses:
+    BadRequest:
+      $ref: './components/responses/errors.yaml#/BadRequest'
+    Unauthorized:
+      $ref: './components/responses/errors.yaml#/Unauthorized'
+    Forbidden:
+      $ref: './components/responses/errors.yaml#/Forbidden'
+    NotFound:
+      $ref: './components/responses/errors.yaml#/NotFound'
+  parameters:
+    SearchQueryParam:
+      $ref: './components/parameters/common.yaml#/SearchQueryParam'
+    OwnerFilterParam:
+      $ref: './components/parameters/common.yaml#/OwnerFilterParam'
+    StudentCodePathParam:
+      $ref: './components/parameters/common.yaml#/StudentCodePathParam'
+    CourseCodePathParam:
+      $ref: './components/parameters/common.yaml#/CourseCodePathParam'
+    IsbnPathParam:
+      $ref: './components/parameters/common.yaml#/IsbnPathParam'
+    EnrollmentStudentIdPathParam:
+      $ref: './components/parameters/common.yaml#/EnrollmentStudentIdPathParam'
+    EnrollmentCourseCodePathParam:
+      $ref: './components/parameters/common.yaml#/EnrollmentCourseCodePathParam'
