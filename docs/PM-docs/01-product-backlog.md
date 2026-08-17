@@ -1,0 +1,161 @@
+# Product Backlog
+
+Project Management Documentation — Part 1 of 4 (Product Backlog → [Sprint Plan](./02-sprint-plan.md) → [Scrum Artifacts](./03-scrum-artifacts.md) → [Sprint Backlog](./04-sprint-backlog.md)).
+
+Turns the completed specification ([BA-docs](../BA-docs/), [SA-docs](../SA-docs/), [Testing](../Testing/)) into a ranked, estimated backlog. No new business rules, roles, or endpoints are introduced here — every functional item reuses the existing `US-x.x` / `UC-x` IDs verbatim from [user-stories.md](../BA-docs/user-stories.md) and [use-cases.md](../BA-docs/use-cases.md). Items with no user story (build/tooling prerequisites) are numbered `PM-0xx` and sourced from the gaps already flagged in [Testing/02-test-plan.md](../Testing/02-test-plan.md) §5 and §8.
+
+---
+
+## 1. How to read this backlog
+
+- **Epic** — one of the 5 Spring Modulith modules (`student`, `course`, `book`, `enrollment`, `identity`) plus `shared`/platform and a final cross-cutting/hardening epic, matching the module boundaries fixed in [SA-docs/02-component-diagram.md](../SA-docs/02-component-diagram.md).
+- **Item** — either a user story ID (`US-x.x`, acceptance criteria live in `user-stories.md` and are not restated here) or a platform item (`PM-0xx`).
+- **Priority** — MoSCoW. Nearly everything is *Must* because [Testing/README.md](../Testing/README.md) already commits to covering all 23 UCs with at least one test case each; items marked *Should* are explicitly flagged as recommended-not-required in `Testing/02-test-plan.md` §8.
+- **Estimate** — ideal developer-hours, not story points. The confirmed delivery model is a solo developer, so a shared team velocity in points has no meaning here; hours are a sizing input for [02-sprint-plan.md](./02-sprint-plan.md), not a commitment.
+- **Sprint** — which sprint the item is pulled into, per the sequence fixed by `Testing/02-test-plan.md` §2 (dependency order: `shared` → `student`+`identity` provisioning → `course` → `book` → `enrollment` → `identity` auth → cross-cutting).
+
+---
+
+## 2. Epic A — Platform / `shared` foundation
+
+No user-facing UC; unblocks every other epic.
+
+| ID | Item | Priority | Estimate | Source |
+| --- | --- | --- | --- | --- |
+| PM-000 | Write the Flyway baseline migration (`V1__*.sql`) transcribed from the DDL already designed in `06-low-level-design.md` §9 | Must | 6h | `Testing/02-test-plan.md` §5 — "does not exist yet... hard prerequisite" |
+| PM-001 | Fix the `Makefile` vs `docker-compose.yml` inconsistency (Makefile targets a Postgres container; compose/`application.properties` are MySQL) | Must | 2h | `Testing/02-test-plan.md` §5, §8 risk 1 |
+| PM-002 | Remove the hardcoded `spring.security.user.name`/`password` placeholder in `application.properties` | Must | 1h | `Testing/02-test-plan.md` §5 "known pre-existing scaffolding item" |
+| PM-003 | Stand up CI (GitHub Actions running `mvn verify` on every PR against `main`) | Must | 4h | `Testing/02-test-plan.md` §5, §8 risk 3 |
+| PM-004 | Add ArchUnit + Testcontainers dependencies; create the `architecture/` test package skeleton (`LayeringRulesTest`, `DomainPurityTest`, `NamingConventionsTest`) and `shared/ModuleBoundaryTest` | Should | 6h | `Testing/02-test-plan.md` §4, §8 risks 5–6 (recommended, not required) |
+| PM-005 | `shared` module: exception hierarchy + global exception handler + error envelope | Must | 6h | `06-low-level-design.md` §3 |
+| PM-006 | Spring Security filter chain skeleton — session-based auth, role-based authorization gate in front of all five modules | Must | 8h | `06-low-level-design.md` §11; `SA-docs/04-authentication-authorization.md` |
+
+**Epic A subtotal: 33h**
+
+---
+
+## 3. Epic B — `student` module + `identity` provisioning
+
+| ID | Item | Priority | Estimate | Linked UC |
+| --- | --- | --- | --- | --- |
+| US-1.1 | Register a student (includes automatic `identity` account provisioning — username = email, random 8-char initial password, must-change-password flag) | Must | 8h | UC-1 |
+| US-1.2 | Update a student's details | Must | 4h | UC-2 |
+| US-1.3 | Remove a student (cascade: unassign owned books, remove enrollments, remove account) | Must | 5h | UC-3 |
+| US-5.1 | Registrar looks up a student (search + full detail: fields, owned books, enrollments) | Must | 5h | UC-13, UC-17 |
+
+**Epic B subtotal: 22h**
+
+---
+
+## 4. Epic C — `course` module
+
+| ID | Item | Priority | Estimate | Linked UC |
+| --- | --- | --- | --- | --- |
+| US-3.1 | Create a course | Must | 4h | UC-8 |
+| US-3.2 | Update a course | Must | 3h | UC-9 |
+| US-3.3 | Remove a course (cascade: remove tied enrollments) | Must | 4h | UC-10 |
+| US-5.3 | Course Administrator looks up courses + enrolled-student roster | Must | 5h | UC-15, UC-19 |
+
+**Epic C subtotal: 16h** — has no dependency on `student` or `book`; can be pulled ahead of `book` within its sprint if slack allows (`Testing/02-test-plan.md` §2 note).
+
+---
+
+## 5. Epic D — `book` module
+
+| ID | Item | Priority | Estimate | Linked UC |
+| --- | --- | --- | --- | --- |
+| US-2.1 | Add a book to the catalog | Must | 4h | UC-4 |
+| US-2.2 | Assign a book to a student | Must | 4h | UC-5 |
+| US-2.3 | Unassign a book (end ownership) | Must | 2h | UC-6 |
+| US-2.4 | Remove a book | Must | 3h | UC-7 |
+| US-5.2 | Librarian looks up books + current ownership | Must | 5h | UC-14, UC-18 |
+
+**Epic D subtotal: 18h** — depends on `student` existing (optional ownership lookup via `StudentLookup`).
+
+---
+
+## 6. Epic E — `enrollment` module
+
+| ID | Item | Priority | Estimate | Linked UC |
+| --- | --- | --- | --- | --- |
+| US-4.1 | Enroll a student in a course | Must | 5h | UC-11 |
+| US-4.2 | End an enrollment | Must | 3h | UC-12 |
+| US-5.5 | View enrollment detail (from a student's list or a course's roster) | Must | 3h | UC-20 |
+
+**Epic E subtotal: 11h** — depends on both `student` and `course` existing.
+
+---
+
+## 7. Epic F — `identity` auth + self-service
+
+Account provisioning itself ships with Epic B (US-1.1); these items are the rest of the `identity` module.
+
+| ID | Item | Priority | Estimate | Linked UC |
+| --- | --- | --- | --- | --- |
+| US-6.1 | Log in | Must | 5h | UC-21 |
+| US-6.2 | Change my password | Must | 4h | UC-22 |
+| US-6.3 | View a student's initial password (Registrar-only, only until changed) | Must | 3h | UC-23 |
+| US-5.4 | Student views their own owned books and enrolled courses | Must | 4h | UC-16 |
+
+**Epic F subtotal: 16h**
+
+---
+
+## 8. Epic G — Cross-cutting / hardening
+
+No new UC; makes the whole system's non-functional guarantees testable and closes the release.
+
+| ID | Item | Priority | Estimate | Source |
+| --- | --- | --- | --- | --- |
+| PM-010 | RBAC matrix integration tests (role × endpoint) | Must | 8h | `Testing/03-test-cases/cross-cutting.md` |
+| PM-011 | Must-change-password gate enforced across all endpoints | Must | 4h | Identity.3; `use-cases.md` UC-21/UC-22 postconditions |
+| PM-012 | Optimistic locking implementation + tests | Must | 5h | `06-low-level-design.md` §10 |
+| PM-013 | Cross-module cascade/lifecycle integration tests (student/book/course/enrollment removal chains) | Must | 6h | `req.md` §5; `Testing/03-test-cases/cross-cutting.md` |
+| PM-014 | Implement and test the 7 explicit ambiguity resolutions | Must | 5h | `api-specification.md` §5 |
+| PM-015 | JaCoCo coverage report + finalize living traceability matrix | Should | 3h | `Testing/02-test-plan.md` §6 |
+
+**Epic G subtotal: 31h**
+
+---
+
+## 9. Ranked backlog (delivery order)
+
+Matches the sprint sequence in [02-sprint-plan.md](./02-sprint-plan.md); this is the order items are pulled off the backlog, not a strict one-at-a-time queue within a sprint.
+
+| Rank | ID | Item | Sprint |
+| --- | --- | --- | --- |
+| 1 | PM-000 | Flyway baseline migration | Sprint 0 |
+| 2 | PM-001 | Makefile/docker-compose fix | Sprint 0 |
+| 3 | PM-002 | Remove hardcoded security placeholder | Sprint 0 |
+| 4 | PM-003 | CI pipeline | Sprint 0 |
+| 5 | PM-004 | ArchUnit/Testcontainers skeleton | Sprint 0 |
+| 6 | PM-005 | `shared` exception hierarchy + error envelope | Sprint 1 |
+| 7 | PM-006 | Security filter chain skeleton | Sprint 1 |
+| 8 | US-1.1 | Register a student (+ provisioning) | Sprint 1 |
+| 9 | US-1.2 | Update a student | Sprint 1 |
+| 10 | US-1.3 | Remove a student | Sprint 1 |
+| 11 | US-5.1 | Registrar looks up a student | Sprint 1 |
+| 12 | US-3.1 | Create a course | Sprint 2 |
+| 13 | US-3.2 | Update a course | Sprint 2 |
+| 14 | US-3.3 | Remove a course | Sprint 2 |
+| 15 | US-5.3 | Course Administrator looks up courses | Sprint 2 |
+| 16 | US-2.1 | Add a book | Sprint 2 |
+| 17 | US-2.2 | Assign a book | Sprint 2 |
+| 18 | US-2.3 | Unassign a book | Sprint 2 |
+| 19 | US-2.4 | Remove a book | Sprint 2 |
+| 20 | US-5.2 | Librarian looks up books | Sprint 2 |
+| 21 | US-4.1 | Enroll a student in a course | Sprint 3 |
+| 22 | US-4.2 | End an enrollment | Sprint 3 |
+| 23 | US-5.5 | View enrollment detail | Sprint 3 |
+| 24 | US-6.1 | Log in | Sprint 3 |
+| 25 | US-6.2 | Change my password | Sprint 3 |
+| 26 | US-6.3 | View a student's initial password | Sprint 3 |
+| 27 | US-5.4 | Student views own books/courses | Sprint 3 |
+| 28 | PM-010 | RBAC matrix tests | Sprint 4 |
+| 29 | PM-011 | Must-change-password gate | Sprint 4 |
+| 30 | PM-012 | Optimistic locking | Sprint 4 |
+| 31 | PM-013 | Cascade/lifecycle integration tests | Sprint 4 |
+| 32 | PM-014 | 7 ambiguity resolutions | Sprint 4 |
+| 33 | PM-015 | Coverage report + traceability matrix | Sprint 4 |
+
+**Total: 147 ideal-hours across 33 backlog items**, covering all 23 UCs / 18 user stories plus the 6 platform prerequisites and 6 hardening items identified in the Testing documentation.

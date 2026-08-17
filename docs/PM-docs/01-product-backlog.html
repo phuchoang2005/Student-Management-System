@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Product Backlog — Student Management System PM Docs</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1c1e21;
+    --muted: #57606a;
+    --border: #d8dee4;
+    --code-bg: #f6f8fa;
+    --link: #0969da;
+    --table-stripe: #f6f8fa;
+    --header-bg: #f6f8fa;
+    --pill-bg: #eef2ff;
+    --pill-fg: #3730a3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --fg: #e6edf3;
+      --muted: #9198a1;
+      --border: #30363d;
+      --code-bg: #161b22;
+      --link: #4493f8;
+      --table-stripe: #161b22;
+      --header-bg: #161b22;
+      --pill-bg: #1c2333;
+      --pill-fg: #a5b4fc;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 5rem;
+  }
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.6rem;
+  }
+  h2 {
+    font-size: 1.4rem;
+    margin-top: 2.6rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.1rem;
+    margin-top: 1.8rem;
+    color: var(--fg);
+  }
+  p { color: var(--fg); }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin-top: 0;
+  }
+  .doc-nav {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0.6rem 0 1.6rem;
+  }
+  .doc-nav .pill {
+    background: var(--pill-bg);
+    color: var(--pill-fg);
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .doc-nav a { color: var(--link); text-decoration: none; }
+  .doc-nav a:hover { text-decoration: underline; }
+  a { color: var(--link); }
+  code {
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.2rem 0;
+    font-size: 0.92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.55rem 0.8rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--header-bg);
+    font-weight: 600;
+  }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  ul, ol { padding-left: 1.4rem; }
+  li { margin: 0.3rem 0; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  em { color: var(--muted); }
+  strong.subtotal { color: var(--fg); }
+</style>
+</head>
+<body>
+
+<h1>Product Backlog</h1>
+<p class="subtitle">Project Management Documentation — Part 1 of 4</p>
+<nav class="doc-nav">
+  <span class="pill">Part 1</span> Product Backlog
+  &nbsp;→&nbsp;
+  <a href="./02-sprint-plan.html">Sprint Plan</a>
+  &nbsp;→&nbsp;
+  <a href="./03-scrum-artifacts.html">Scrum Artifacts</a>
+  &nbsp;→&nbsp;
+  <a href="./04-sprint-backlog.html">Sprint Backlog</a>
+</nav>
+
+<p>Turns the completed specification (<a href="../BA-docs/use-cases.md">BA-docs</a>, <a href="../SA-docs/01-system-overview.html">SA-docs</a>, <a href="../Testing/README.md">Testing</a>) into a ranked, estimated backlog. No new business rules, roles, or endpoints are introduced here — every functional item reuses the existing <code>US-x.x</code> / <code>UC-x</code> IDs verbatim from <a href="../BA-docs/user-stories.md">user-stories.md</a> and <a href="../BA-docs/use-cases.md">use-cases.md</a>. Items with no user story (build/tooling prerequisites) are numbered <code>PM-0xx</code> and sourced from the gaps already flagged in <a href="../Testing/02-test-plan.md">Testing/02-test-plan.md</a> §5 and §8.</p>
+
+<hr>
+
+<h2 id="how-to-read">1. How to read this backlog</h2>
+<ul>
+  <li><strong>Epic</strong> — one of the 5 Spring Modulith modules (<code>student</code>, <code>course</code>, <code>book</code>, <code>enrollment</code>, <code>identity</code>) plus <code>shared</code>/platform and a final cross-cutting/hardening epic, matching the module boundaries fixed in <a href="../SA-docs/02-component-diagram.html">SA-docs/02-component-diagram.md</a>.</li>
+  <li><strong>Item</strong> — either a user story ID (<code>US-x.x</code>, acceptance criteria live in <code>user-stories.md</code> and are not restated here) or a platform item (<code>PM-0xx</code>).</li>
+  <li><strong>Priority</strong> — MoSCoW. Nearly everything is <em>Must</em> because <a href="../Testing/README.md">Testing/README.md</a> already commits to covering all 23 UCs with at least one test case each; items marked <em>Should</em> are explicitly flagged as recommended-not-required in <code>Testing/02-test-plan.md</code> §8.</li>
+  <li><strong>Estimate</strong> — ideal developer-hours, not story points. The confirmed delivery model is a solo developer, so a shared team velocity in points has no meaning here; hours are a sizing input for <a href="./02-sprint-plan.html">02-sprint-plan.md</a>, not a commitment.</li>
+  <li><strong>Sprint</strong> — which sprint the item is pulled into, per the sequence fixed by <code>Testing/02-test-plan.md</code> §2 (dependency order: <code>shared</code> → <code>student</code>+<code>identity</code> provisioning → <code>course</code> → <code>book</code> → <code>enrollment</code> → <code>identity</code> auth → cross-cutting).</li>
+</ul>
+
+<hr>
+
+<h2 id="epic-a">2. Epic A — Platform / <code>shared</code> foundation</h2>
+<p>No user-facing UC; unblocks every other epic.</p>
+<table>
+  <thead><tr><th>ID</th><th>Item</th><th>Priority</th><th>Estimate</th><th>Source</th></tr></thead>
+  <tbody>
+    <tr><td>PM-000</td><td>Write the Flyway baseline migration (<code>V1__*.sql</code>) transcribed from the DDL already designed in <code>06-low-level-design.md</code> §9</td><td>Must</td><td>6h</td><td><code>Testing/02-test-plan.md</code> §5 — "does not exist yet... hard prerequisite"</td></tr>
+    <tr><td>PM-001</td><td>Fix the <code>Makefile</code> vs <code>docker-compose.yml</code> inconsistency (Makefile targets a Postgres container; compose/<code>application.properties</code> are MySQL)</td><td>Must</td><td>2h</td><td><code>Testing/02-test-plan.md</code> §5, §8 risk 1</td></tr>
+    <tr><td>PM-002</td><td>Remove the hardcoded <code>spring.security.user.name</code>/<code>password</code> placeholder in <code>application.properties</code></td><td>Must</td><td>1h</td><td><code>Testing/02-test-plan.md</code> §5 "known pre-existing scaffolding item"</td></tr>
+    <tr><td>PM-003</td><td>Stand up CI (GitHub Actions running <code>mvn verify</code> on every PR against <code>main</code>)</td><td>Must</td><td>4h</td><td><code>Testing/02-test-plan.md</code> §5, §8 risk 3</td></tr>
+    <tr><td>PM-004</td><td>Add ArchUnit + Testcontainers dependencies; create the <code>architecture/</code> test package skeleton (<code>LayeringRulesTest</code>, <code>DomainPurityTest</code>, <code>NamingConventionsTest</code>) and <code>shared/ModuleBoundaryTest</code></td><td>Should</td><td>6h</td><td><code>Testing/02-test-plan.md</code> §4, §8 risks 5–6 (recommended, not required)</td></tr>
+    <tr><td>PM-005</td><td><code>shared</code> module: exception hierarchy + global exception handler + error envelope</td><td>Must</td><td>6h</td><td><code>06-low-level-design.md</code> §3</td></tr>
+    <tr><td>PM-006</td><td>Spring Security filter chain skeleton — session-based auth, role-based authorization gate in front of all five modules</td><td>Must</td><td>8h</td><td><code>06-low-level-design.md</code> §11; <code>SA-docs/04-authentication-authorization.md</code></td></tr>
+  </tbody>
+</table>
+<p><strong class="subtotal">Epic A subtotal: 33h</strong></p>
+
+<hr>
+
+<h2 id="epic-b">3. Epic B — <code>student</code> module + <code>identity</code> provisioning</h2>
+<table>
+  <thead><tr><th>ID</th><th>Item</th><th>Priority</th><th>Estimate</th><th>Linked UC</th></tr></thead>
+  <tbody>
+    <tr><td>US-1.1</td><td>Register a student (includes automatic <code>identity</code> account provisioning — username = email, random 8-char initial password, must-change-password flag)</td><td>Must</td><td>8h</td><td>UC-1</td></tr>
+    <tr><td>US-1.2</td><td>Update a student's details</td><td>Must</td><td>4h</td><td>UC-2</td></tr>
+    <tr><td>US-1.3</td><td>Remove a student (cascade: unassign owned books, remove enrollments, remove account)</td><td>Must</td><td>5h</td><td>UC-3</td></tr>
+    <tr><td>US-5.1</td><td>Registrar looks up a student (search + full detail: fields, owned books, enrollments)</td><td>Must</td><td>5h</td><td>UC-13, UC-17</td></tr>
+  </tbody>
+</table>
+<p><strong class="subtotal">Epic B subtotal: 22h</strong></p>
+
+<hr>
+
+<h2 id="epic-c">4. Epic C — <code>course</code> module</h2>
+<table>
+  <thead><tr><th>ID</th><th>Item</th><th>Priority</th><th>Estimate</th><th>Linked UC</th></tr></thead>
+  <tbody>
+    <tr><td>US-3.1</td><td>Create a course</td><td>Must</td><td>4h</td><td>UC-8</td></tr>
+    <tr><td>US-3.2</td><td>Update a course</td><td>Must</td><td>3h</td><td>UC-9</td></tr>
+    <tr><td>US-3.3</td><td>Remove a course (cascade: remove tied enrollments)</td><td>Must</td><td>4h</td><td>UC-10</td></tr>
+    <tr><td>US-5.3</td><td>Course Administrator looks up courses + enrolled-student roster</td><td>Must</td><td>5h</td><td>UC-15, UC-19</td></tr>
+  </tbody>
+</table>
+<p><strong class="subtotal">Epic C subtotal: 16h</strong> — has no dependency on <code>student</code> or <code>book</code>; can be pulled ahead of <code>book</code> within its sprint if slack allows (<code>Testing/02-test-plan.md</code> §2 note).</p>
+
+<hr>
+
+<h2 id="epic-d">5. Epic D — <code>book</code> module</h2>
+<table>
+  <thead><tr><th>ID</th><th>Item</th><th>Priority</th><th>Estimate</th><th>Linked UC</th></tr></thead>
+  <tbody>
+    <tr><td>US-2.1</td><td>Add a book to the catalog</td><td>Must</td><td>4h</td><td>UC-4</td></tr>
+    <tr><td>US-2.2</td><td>Assign a book to a student</td><td>Must</td><td>4h</td><td>UC-5</td></tr>
+    <tr><td>US-2.3</td><td>Unassign a book (end ownership)</td><td>Must</td><td>2h</td><td>UC-6</td></tr>
+    <tr><td>US-2.4</td><td>Remove a book</td><td>Must</td><td>3h</td><td>UC-7</td></tr>
+    <tr><td>US-5.2</td><td>Librarian looks up books + current ownership</td><td>Must</td><td>5h</td><td>UC-14, UC-18</td></tr>
+  </tbody>
+</table>
+<p><strong class="subtotal">Epic D subtotal: 18h</strong> — depends on <code>student</code> existing (optional ownership lookup via <code>StudentLookup</code>).</p>
+
+<hr>
+
+<h2 id="epic-e">6. Epic E — <code>enrollment</code> module</h2>
+<table>
+  <thead><tr><th>ID</th><th>Item</th><th>Priority</th><th>Estimate</th><th>Linked UC</th></tr></thead>
+  <tbody>
+    <tr><td>US-4.1</td><td>Enroll a student in a course</td><td>Must</td><td>5h</td><td>UC-11</td></tr>
+    <tr><td>US-4.2</td><td>End an enrollment</td><td>Must</td><td>3h</td><td>UC-12</td></tr>
+    <tr><td>US-5.5</td><td>View enrollment detail (from a student's list or a course's roster)</td><td>Must</td><td>3h</td><td>UC-20</td></tr>
+  </tbody>
+</table>
+<p><strong class="subtotal">Epic E subtotal: 11h</strong> — depends on both <code>student</code> and <code>course</code> existing.</p>
+
+<hr>
+
+<h2 id="epic-f">7. Epic F — <code>identity</code> auth + self-service</h2>
+<p>Account provisioning itself ships with Epic B (US-1.1); these items are the rest of the <code>identity</code> module.</p>
+<table>
+  <thead><tr><th>ID</th><th>Item</th><th>Priority</th><th>Estimate</th><th>Linked UC</th></tr></thead>
+  <tbody>
+    <tr><td>US-6.1</td><td>Log in</td><td>Must</td><td>5h</td><td>UC-21</td></tr>
+    <tr><td>US-6.2</td><td>Change my password</td><td>Must</td><td>4h</td><td>UC-22</td></tr>
+    <tr><td>US-6.3</td><td>View a student's initial password (Registrar-only, only until changed)</td><td>Must</td><td>3h</td><td>UC-23</td></tr>
+    <tr><td>US-5.4</td><td>Student views their own owned books and enrolled courses</td><td>Must</td><td>4h</td><td>UC-16</td></tr>
+  </tbody>
+</table>
+<p><strong class="subtotal">Epic F subtotal: 16h</strong></p>
+
+<hr>
+
+<h2 id="epic-g">8. Epic G — Cross-cutting / hardening</h2>
+<p>No new UC; makes the whole system's non-functional guarantees testable and closes the release.</p>
+<table>
+  <thead><tr><th>ID</th><th>Item</th><th>Priority</th><th>Estimate</th><th>Source</th></tr></thead>
+  <tbody>
+    <tr><td>PM-010</td><td>RBAC matrix integration tests (role × endpoint)</td><td>Must</td><td>8h</td><td><code>Testing/03-test-cases/cross-cutting.md</code></td></tr>
+    <tr><td>PM-011</td><td>Must-change-password gate enforced across all endpoints</td><td>Must</td><td>4h</td><td>Identity.3; <code>use-cases.md</code> UC-21/UC-22 postconditions</td></tr>
+    <tr><td>PM-012</td><td>Optimistic locking implementation + tests</td><td>Must</td><td>5h</td><td><code>06-low-level-design.md</code> §10</td></tr>
+    <tr><td>PM-013</td><td>Cross-module cascade/lifecycle integration tests (student/book/course/enrollment removal chains)</td><td>Must</td><td>6h</td><td><code>req.md</code> §5; <code>Testing/03-test-cases/cross-cutting.md</code></td></tr>
+    <tr><td>PM-014</td><td>Implement and test the 7 explicit ambiguity resolutions</td><td>Must</td><td>5h</td><td><code>api-specification.md</code> §5</td></tr>
+    <tr><td>PM-015</td><td>JaCoCo coverage report + finalize living traceability matrix</td><td>Should</td><td>3h</td><td><code>Testing/02-test-plan.md</code> §6</td></tr>
+  </tbody>
+</table>
+<p><strong class="subtotal">Epic G subtotal: 31h</strong></p>
+
+<hr>
+
+<h2 id="ranked-backlog">9. Ranked backlog (delivery order)</h2>
+<p>Matches the sprint sequence in <a href="./02-sprint-plan.html">02-sprint-plan.md</a>; this is the order items are pulled off the backlog, not a strict one-at-a-time queue within a sprint.</p>
+<table>
+  <thead><tr><th>Rank</th><th>ID</th><th>Item</th><th>Sprint</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>PM-000</td><td>Flyway baseline migration</td><td>Sprint 0</td></tr>
+    <tr><td>2</td><td>PM-001</td><td>Makefile/docker-compose fix</td><td>Sprint 0</td></tr>
+    <tr><td>3</td><td>PM-002</td><td>Remove hardcoded security placeholder</td><td>Sprint 0</td></tr>
+    <tr><td>4</td><td>PM-003</td><td>CI pipeline</td><td>Sprint 0</td></tr>
+    <tr><td>5</td><td>PM-004</td><td>ArchUnit/Testcontainers skeleton</td><td>Sprint 0</td></tr>
+    <tr><td>6</td><td>PM-005</td><td><code>shared</code> exception hierarchy + error envelope</td><td>Sprint 1</td></tr>
+    <tr><td>7</td><td>PM-006</td><td>Security filter chain skeleton</td><td>Sprint 1</td></tr>
+    <tr><td>8</td><td>US-1.1</td><td>Register a student (+ provisioning)</td><td>Sprint 1</td></tr>
+    <tr><td>9</td><td>US-1.2</td><td>Update a student</td><td>Sprint 1</td></tr>
+    <tr><td>10</td><td>US-1.3</td><td>Remove a student</td><td>Sprint 1</td></tr>
+    <tr><td>11</td><td>US-5.1</td><td>Registrar looks up a student</td><td>Sprint 1</td></tr>
+    <tr><td>12</td><td>US-3.1</td><td>Create a course</td><td>Sprint 2</td></tr>
+    <tr><td>13</td><td>US-3.2</td><td>Update a course</td><td>Sprint 2</td></tr>
+    <tr><td>14</td><td>US-3.3</td><td>Remove a course</td><td>Sprint 2</td></tr>
+    <tr><td>15</td><td>US-5.3</td><td>Course Administrator looks up courses</td><td>Sprint 2</td></tr>
+    <tr><td>16</td><td>US-2.1</td><td>Add a book</td><td>Sprint 2</td></tr>
+    <tr><td>17</td><td>US-2.2</td><td>Assign a book</td><td>Sprint 2</td></tr>
+    <tr><td>18</td><td>US-2.3</td><td>Unassign a book</td><td>Sprint 2</td></tr>
+    <tr><td>19</td><td>US-2.4</td><td>Remove a book</td><td>Sprint 2</td></tr>
+    <tr><td>20</td><td>US-5.2</td><td>Librarian looks up books</td><td>Sprint 2</td></tr>
+    <tr><td>21</td><td>US-4.1</td><td>Enroll a student in a course</td><td>Sprint 3</td></tr>
+    <tr><td>22</td><td>US-4.2</td><td>End an enrollment</td><td>Sprint 3</td></tr>
+    <tr><td>23</td><td>US-5.5</td><td>View enrollment detail</td><td>Sprint 3</td></tr>
+    <tr><td>24</td><td>US-6.1</td><td>Log in</td><td>Sprint 3</td></tr>
+    <tr><td>25</td><td>US-6.2</td><td>Change my password</td><td>Sprint 3</td></tr>
+    <tr><td>26</td><td>US-6.3</td><td>View a student's initial password</td><td>Sprint 3</td></tr>
+    <tr><td>27</td><td>US-5.4</td><td>Student views own books/courses</td><td>Sprint 3</td></tr>
+    <tr><td>28</td><td>PM-010</td><td>RBAC matrix tests</td><td>Sprint 4</td></tr>
+    <tr><td>29</td><td>PM-011</td><td>Must-change-password gate</td><td>Sprint 4</td></tr>
+    <tr><td>30</td><td>PM-012</td><td>Optimistic locking</td><td>Sprint 4</td></tr>
+    <tr><td>31</td><td>PM-013</td><td>Cascade/lifecycle integration tests</td><td>Sprint 4</td></tr>
+    <tr><td>32</td><td>PM-014</td><td>7 ambiguity resolutions</td><td>Sprint 4</td></tr>
+    <tr><td>33</td><td>PM-015</td><td>Coverage report + traceability matrix</td><td>Sprint 4</td></tr>
+  </tbody>
+</table>
+<p><strong>Total: 147 ideal-hours across 33 backlog items</strong>, covering all 23 UCs / 18 user stories plus the 6 platform prerequisites and 6 hardening items identified in the Testing documentation.</p>
+
+</body>
+</html>
