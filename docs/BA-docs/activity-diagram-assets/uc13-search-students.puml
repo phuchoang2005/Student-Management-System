@@ -1,0 +1,33 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Registrar|
+start
+:Enter student code, or name/email search term;
+
+|System|
+:Look up matching student record(s);
+if (Any match found?) then (no)
+  :Return empty result;
+else (yes)
+  :Return matching student summaries\n(code, name, email);
+endif
+
+|Registrar|
+:View results;
+if (Select one result?) then (yes)
+  :Continue at UC-17\n(View Student Detail);
+else (no)
+endif
+stop
+@enduml

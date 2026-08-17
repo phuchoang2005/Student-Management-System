@@ -1,0 +1,26 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Librarian|
+start
+:Select an owned book;
+
+|System|
+:Clear the ownership link;
+:Book remains in catalog as unassigned;
+:Confirm the change;
+
+|Librarian|
+:Receive confirmation;
+stop
+@enduml

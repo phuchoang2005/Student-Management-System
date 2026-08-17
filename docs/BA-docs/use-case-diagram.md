@@ -1,6 +1,6 @@
 # Student Management System — Use Case Diagrams
 
-Derived from [use-cases.md](./use-cases.md), which remains the authoritative source (actors, flows, business-rule traceability). This document is the visual companion: a system-wide **Overview** diagram followed by one **detail diagram per functional area**, so that no single diagram has to carry all 23 use cases at once. See also [req.md](./req.md) and [user-stories.md](./user-stories.md).
+Derived from [use-cases.md](./use-cases.md), which remains the authoritative source (actors, flows, business-rule traceability). This document is the visual companion: a system-wide **Overview** diagram followed by one **detail diagram per functional area**, so that no single diagram has to carry all 23 use cases at once. See also [req.md](./req.md) and [user-stories.md](./user-stories.md), and the [Activity Diagrams](./activity-diagram.md) for how each use case's request flow — validations, decisions, branches — actually plays out.
 
 Diagrams are drawn in standard UML use-case notation (stick-figure actors, oval use cases, a system-boundary rectangle) using [PlantUML](https://plantuml.com/use-case-diagram). Each `.svg` below is generated from the matching `.puml` source in [use-case-diagram-assets/](./use-case-diagram-assets/) — edit the `.puml` file and re-render with `plantuml -tsvg *.puml` to update a diagram. The [HTML version](./use-case-diagram.html) of this document embeds the same SVGs with click-to-zoom and drag-to-pan.
 

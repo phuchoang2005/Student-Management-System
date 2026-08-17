@@ -1,0 +1,32 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Registrar / Course Admin / Student|
+start
+:Select one enrollment entry from a student's\nenrollment list (UC-17) or a course's roster (UC-19);
+
+|System|
+if (Selected enrollment still exists?) then (no)
+  :Return not-found result;
+  |Registrar / Course Admin / Student|
+  :Return to the list;
+  stop
+endif
+:Retrieve enrollment for the (student, course) pair;
+:Retrieve linked student summary\nand linked course summary;
+:Display full enrollment detail;
+
+|Registrar / Course Admin / Student|
+:View enrollment detail;
+stop
+@enduml

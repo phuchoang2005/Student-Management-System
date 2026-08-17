@@ -1,0 +1,30 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Librarian|
+start
+:Select a book and a target student;
+
+|System|
+if (Target student exists?) then (no)
+  :Reject — student does not exist;
+  |Librarian|
+  stop
+endif
+:Set book's owner to target student,\nreplacing any prior owner;
+:Confirm assignment;
+
+|Librarian|
+:Receive confirmation;
+stop
+@enduml

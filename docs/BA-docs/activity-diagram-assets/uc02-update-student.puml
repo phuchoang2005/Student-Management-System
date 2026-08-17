@@ -1,0 +1,40 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Registrar|
+start
+:Select student and submit updated fields;
+
+|System|
+if (Updated email unique across other students\nand well-formed (if changed)?) then (no)
+  :Reject — invalid/duplicate email;
+  |Registrar|
+  stop
+endif
+if (First/last name non-blank (if changed)?) then (no)
+  :Reject — blank name;
+  |Registrar|
+  stop
+endif
+if (Date of birth valid (if changed)?) then (no)
+  :Reject — invalid date of birth;
+  |Registrar|
+  stop
+endif
+:Save updated student record\n(student code unchanged);
+:Confirm update;
+
+|Registrar|
+:Receive confirmation;
+stop
+@enduml

@@ -1,0 +1,35 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Course Administrator|
+start
+:Select course and submit updated fields;
+
+|System|
+if (Name non-blank (if changed)?) then (no)
+  :Reject — blank name;
+  |Course Administrator|
+  stop
+endif
+if (Credits positive (if changed)?) then (no)
+  :Reject — non-positive credits;
+  |Course Administrator|
+  stop
+endif
+:Save updated course record\n(course code unchanged);
+:Confirm update;
+
+|Course Administrator|
+:Receive confirmation;
+stop
+@enduml

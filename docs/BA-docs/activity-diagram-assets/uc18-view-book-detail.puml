@@ -1,0 +1,31 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Librarian / Student|
+start
+:Select one book from results\n(search UC-14, or "my books" UC-16);
+
+|System|
+if (Selected book still exists?) then (no)
+  :Return not-found result;
+  |Librarian / Student|
+  :Return to results list;
+  stop
+endif
+:Retrieve full book record\nand current owner summary, if owned;
+:Display full book detail;
+
+|Librarian / Student|
+:View book detail;
+stop
+@enduml

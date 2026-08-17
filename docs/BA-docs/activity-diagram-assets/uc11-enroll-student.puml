@@ -1,0 +1,40 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Registrar|
+start
+:Select a student and a course;
+
+|System|
+if (Student exists?) then (no)
+  :Reject — student does not exist;
+  |Registrar|
+  stop
+endif
+if (Course exists?) then (no)
+  :Reject — course does not exist;
+  |Registrar|
+  stop
+endif
+if (Existing enrollment for this pair?) then (yes)
+  :Reject — duplicate enrollment;
+  |Registrar|
+  stop
+endif
+:Create the enrollment;
+:Confirm enrollment;
+
+|Registrar|
+:Receive confirmation;
+stop
+@enduml

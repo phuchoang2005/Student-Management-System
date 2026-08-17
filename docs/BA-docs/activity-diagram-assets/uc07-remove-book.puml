@@ -1,0 +1,26 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Librarian|
+start
+:Select a book to remove;
+
+|System|
+:Remove ownership link, if any;
+:Delete the book record;
+:Confirm removal;
+
+|Librarian|
+:Receive confirmation\n(previous owner, if any, is unaffected);
+stop
+@enduml

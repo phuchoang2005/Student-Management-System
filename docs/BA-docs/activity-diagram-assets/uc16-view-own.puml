@@ -1,0 +1,46 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Student|
+start
+:Select "my books" and/or "my courses";
+
+|System|
+if (Books requested?) then (yes)
+  :Look up books owned by the student;
+  if (Owns any books?) then (no)
+    :Return empty book list;
+  else (yes)
+    :Return book summaries;
+  endif
+endif
+if (Courses requested?) then (yes)
+  :Look up active enrollments for the student;
+  if (Has any active enrollments?) then (no)
+    :Return empty course list;
+  else (yes)
+    :Return course summaries;
+  endif
+endif
+:Return requested information;
+
+|Student|
+:View own books/courses;
+if (Select a book?) then (yes)
+  :Continue at UC-18\n(View Book Detail);
+elseif (Select a course?) then (yes)
+  :Continue at UC-19\n(View Course Detail);
+else (no)
+endif
+stop
+@enduml

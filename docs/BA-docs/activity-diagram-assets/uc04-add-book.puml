@@ -1,0 +1,37 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Librarian|
+start
+:Enter ISBN, title, author, published date,\noptionally an owner;
+
+|System|
+if (ISBN unique?) then (no)
+  :Reject — duplicate ISBN;
+  |Librarian|
+  stop
+endif
+if (Owner specified?) then (yes)
+  if (Owning student exists?) then (no)
+    :Reject — owner does not exist;
+    |Librarian|
+    stop
+  endif
+endif
+:Create book record (owned or unowned);
+:Confirm creation;
+
+|Librarian|
+:Receive confirmation;
+stop
+@enduml

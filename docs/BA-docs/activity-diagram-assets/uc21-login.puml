@@ -1,0 +1,38 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Actor (any role)|
+start
+:Enter username and password;
+
+|System|
+if (Username exists and password matches?) then (no)
+  :Reject — authentication error;
+  |Actor (any role)|
+  stop
+endif
+:Start authenticated session\nscoped to actor's role;
+if (Account requires password change?) then (yes)
+  :Indicate password change required;
+else (no)
+  :Indicate normal access;
+endif
+
+|Actor (any role)|
+if (Password change required?) then (yes)
+  :Continue at UC-22 (Change Password) —\nno other action available until changed;
+else (no)
+  :Proceed with role-scoped session;
+endif
+stop
+@enduml

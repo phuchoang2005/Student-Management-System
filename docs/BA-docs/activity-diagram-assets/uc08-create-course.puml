@@ -1,0 +1,40 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Course Administrator|
+start
+:Enter course code, name, description, credits;
+
+|System|
+if (Course code unique?) then (no)
+  :Reject — duplicate course code;
+  |Course Administrator|
+  stop
+endif
+if (Name non-blank?) then (no)
+  :Reject — blank name;
+  |Course Administrator|
+  stop
+endif
+if (Credits positive?) then (no)
+  :Reject — non-positive credits;
+  |Course Administrator|
+  stop
+endif
+:Create course record;
+:Confirm creation;
+
+|Course Administrator|
+:Receive confirmation;
+stop
+@enduml

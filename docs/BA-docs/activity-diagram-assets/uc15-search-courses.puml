@@ -1,0 +1,33 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Course Administrator|
+start
+:Enter course code, or name search term;
+
+|System|
+:Look up matching course record(s);
+if (Any match found?) then (no)
+  :Return empty result;
+else (yes)
+  :Return matching course summaries\n(code, name, credits);
+endif
+
+|Course Administrator|
+:View results;
+if (Select one result?) then (yes)
+  :Continue at UC-19\n(View Course Detail);
+else (no)
+endif
+stop
+@enduml

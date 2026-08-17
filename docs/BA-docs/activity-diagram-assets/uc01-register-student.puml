@@ -1,0 +1,46 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Registrar|
+start
+:Enter student code, first name, last name,\nemail, and date of birth;
+
+|System|
+if (Student code unique?) then (no)
+  :Reject — duplicate student code;
+  |Registrar|
+  stop
+endif
+if (Email unique and well-formed?) then (no)
+  :Reject — invalid/duplicate email;
+  |Registrar|
+  stop
+endif
+if (First and last name non-blank?) then (no)
+  :Reject — blank name;
+  |Registrar|
+  stop
+endif
+if (Date of birth valid?) then (no)
+  :Reject — invalid date of birth;
+  |Registrar|
+  stop
+endif
+:Create student record;
+:Create user account\n(username = email, random 8-char password,\nmust-change-password = true);
+:Return student record + username + initial password;
+
+|Registrar|
+:Receive confirmation with username\nand initial password;
+stop
+@enduml
