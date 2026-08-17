@@ -289,6 +289,30 @@ Source of truth: `06-low-level-design.md` §2.1–2.2 (package layout, class-sha
 
 ---
 
+## 8. Pagination Conventions
+
+Source of truth: `api-specification.md` §3 (scheme) and §5 item 8 (defaults/cap and invalid-input handling). These cases check the envelope/param contract once at the cross-cutting level rather than duplicating it identically across every module — per-module cases (default/custom page, out-of-range page) live in [student.md](./student.md), [book.md](./book.md), [course.md](./course.md), and [identity-auth.md](./identity-auth.md) instead.
+
+### TC-XC-036 — Every list/roster endpoint's response uses the `{content, page, size, totalElements, totalPages}` envelope
+- **Related UC / Rule:** `api-specification.md` §3 Pagination
+- **Priority:** P1 · **Type:** Functional (contract)
+- **Steps:** Call `GET /students`, `GET /books`, `GET /courses`, `GET /courses/{code}` (inspect `roster`), and `GET /me/books-and-courses` (inspect `books` and `courses`).
+- **Expected Result:** Every one of these fields has exactly the `PageMeta` + `content` shape — no bare arrays remain on any list/roster field.
+
+### TC-XC-037 — `size` outside 1-100 is rejected with `400`, not clamped
+- **Related UC / Rule:** `api-specification.md` §5 item 8
+- **Priority:** P2 · **Type:** Negative
+- **Steps:** `GET /api/v1/students?size=0`, then `GET /api/v1/students?size=101`.
+- **Expected Result:** `400 Bad Request` (`ValidationError`) for both — the caller is told its request was invalid rather than silently served a different page size than it asked for.
+
+### TC-XC-038 — A negative `page` is rejected with `400`
+- **Related UC / Rule:** `api-specification.md` §5 item 8
+- **Priority:** P2 · **Type:** Negative
+- **Steps:** `GET /api/v1/students?page=-1`.
+- **Expected Result:** `400 Bad Request` (`ValidationError`).
+
+---
+
 ## Traceability Summary
 
 | Concern | Test Case IDs |
@@ -302,3 +326,4 @@ Source of truth: `06-low-level-design.md` §2.1–2.2 (package layout, class-sha
 | Error envelope | TC-XC-025–027 |
 | §5 ambiguity resolutions | Table in §6 (cross-references) |
 | Architecture conformance (ArchUnit) | TC-XC-028–035 |
+| Pagination conventions | TC-XC-036–038 |

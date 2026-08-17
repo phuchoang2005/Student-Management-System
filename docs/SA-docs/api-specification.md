@@ -23,6 +23,7 @@ It is hand-authored: no backend implementation exists yet in `management/` to ge
 - **Roles:** `REGISTRAR`, `LIBRARIAN`, `COURSE_ADMINISTRATOR`, `STUDENT`. Every operation states its allowed roles in its `description` (a leading `**Roles:** ...` line) and in the machine-readable `x-roles` extension, since OpenAPI has no native per-role authorization construct.
 - **must-change-password gate:** while `principal.mustChangePassword = true`, every endpoint except `POST /auth/password` responds `403 Forbidden`.
 - **Error shape:** every non-2xx response body is `Error` (`{timestamp, status, error, message, path}` — Spring Boot's default shape) or, for `400` responses, `ValidationError` (`Error` plus a per-field `errors` array). No custom envelope is defined elsewhere in the design docs, so this idiomatic default was adopted deliberately.
+- **Pagination:** every list/roster endpoint — `GET /students`, `GET /books`, `GET /courses`, the `roster` field of `GET /courses/{code}`, and the `books`/`courses` fields of `GET /me/books-and-courses` — returns a page, not a bare array: `{content: [...], page, size, totalElements, totalPages}` (`PageMeta`), mirroring Spring Data's `Page<T>` JSON shape. Paged via `page` (0-based, default 0) and `size` (default 20, max 100) query params; `GET /me/books-and-courses` uses `books`-/`courses`-prefixed variants (`booksPage`, `coursesPage`, ...) since it composes two independently-paged collections in one response. An out-of-range `page` returns `200` with empty `content`, matching every search use case's existing "no match → `200 []`" pattern; an invalid `page`/`size` (negative, or `size` outside 1-100) is malformed input, so it's `400`.
 
 ## 4. Regenerating the HTML
 
@@ -58,7 +59,8 @@ Where the sequence-diagram/auth docs left a status code ambiguous or unspecified
 5. **`GET /students/{code}/initial-password`** already collapses "password already changed" and "student not found" into one `404` in the source doc. Kept as-is and called out explicitly as intentional information-hiding, not an oversight.
 6. **`GET /me/books-and-courses` called by a non-Student role** is undocumented upstream. Resolved: `403 Forbidden`, for consistency with #3.
 7. **`DELETE /books/{isbn}/owner` when the book is already unowned** is undocumented upstream. Resolved: idempotent `200` (returns the book with `ownerId: null`) — no other endpoint in this API models an "already in that state" `409`.
+8. **Pagination defaults/cap and invalid-input handling** are not specified by any use case, so they're fixed here: default page size `20`, capped at `100`; default `page` `0`. A negative `page` or an out-of-1-100-range `size` is treated the same as any other malformed input (decision #2 above) — `400`, not silently clamped — so a caller never gets a different page than the one it asked for without knowing it.
 
 ## 6. Out of scope
 
-Mirrors `04-authentication-authorization.md` §7: no SSO/OAuth/OIDC, no true forgot-password flow, no MFA, no rate limiting, no API versioning strategy beyond the `/api/v1` prefix, no pagination on list/search endpoints (not specified by any use case — all "View/Search" flows return a flat list). These may warrant their own future revision of this contract once real usage patterns emerge.
+Mirrors `04-authentication-authorization.md` §7: no SSO/OAuth/OIDC, no true forgot-password flow, no MFA, no rate limiting, no API versioning strategy beyond the `/api/v1` prefix. Pagination is specified — see §3.

@@ -72,13 +72,19 @@ CourseSummary:
       format: int32
 
 CourseDetail:
-  description: A course's full record plus its current roster of enrolled students.
+  description: A course's full record plus a page of its current roster of enrolled students, paged via the `page`/`size` query params.
   allOf:
     - $ref: '#/CourseResponse'
     - type: object
       required: [roster]
       properties:
         roster:
-          type: array
-          items:
-            $ref: './student.yaml#/StudentSummary'
+          allOf:
+            - $ref: './common.yaml#/PageMeta'
+            - type: object
+              required: [content]
+              properties:
+                content:
+                  type: array
+                  items:
+                    $ref: './student.yaml#/StudentSummary'

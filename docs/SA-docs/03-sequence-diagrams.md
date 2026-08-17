@@ -188,19 +188,19 @@ sequenceDiagram
     participant Repo as JdbcStudentRepository
     participant DB as MySQL
 
-    Registrar->>Sec: GET /api/v1/students?query=...
+    Registrar->>Sec: GET /api/v1/students?query=...&page=0&size=20
     Sec->>Ctrl: forward request (auth gate as in §2.1)
-    Ctrl->>Svc: search(query)
-    Svc->>Repo: findByCodeOrNameOrEmail(query)
-    Repo->>DB: SELECT ... WHERE ...
-    DB-->>Repo: rows
-    Repo-->>Svc: matches
-    alt no match
-        Svc-->>Ctrl: empty list
-        Ctrl-->>Registrar: 200 OK ([])
+    Ctrl->>Svc: search(query, pageable)
+    Svc->>Repo: findByCodeOrNameOrEmail(query, pageable)
+    Repo->>DB: SELECT ... WHERE ... LIMIT/OFFSET (+ COUNT for totalElements)
+    DB-->>Repo: rows + count
+    Repo-->>Svc: Page<Student>
+    alt no match / page past the end
+        Svc-->>Ctrl: empty page
+        Ctrl-->>Registrar: 200 OK ({content: [], page, size, totalElements: 0, totalPages: 0})
     else match(es) found
-        Svc-->>Ctrl: List<StudentSummary>
-        Ctrl-->>Registrar: 200 OK (summaries)
+        Svc-->>Ctrl: Page<StudentSummary>
+        Ctrl-->>Registrar: 200 OK ({content: [summaries], page, size, totalElements, totalPages})
     end
     Note over Registrar: Selecting a result continues at UC-17 (§2.5)
 ```
@@ -404,19 +404,19 @@ sequenceDiagram
     participant Repo as JdbcBookRepository
     participant DB as MySQL
 
-    Librarian->>Sec: GET /api/v1/books?query=...&owner=...
+    Librarian->>Sec: GET /api/v1/books?query=...&owner=...&page=0&size=20
     Sec->>Ctrl: forward request (auth gate as in §2.1)
-    Ctrl->>Svc: search(query, ownerFilter)
-    Svc->>Repo: findByIsbnOrTitleOrAuthor(query, ownerFilter)
-    Repo->>DB: SELECT ... WHERE ...
-    DB-->>Repo: rows
-    Repo-->>Svc: matches
-    alt no match
-        Svc-->>Ctrl: empty list
-        Ctrl-->>Librarian: 200 OK ([])
+    Ctrl->>Svc: search(query, ownerFilter, pageable)
+    Svc->>Repo: findByIsbnOrTitleOrAuthor(query, ownerFilter, pageable)
+    Repo->>DB: SELECT ... WHERE ... LIMIT/OFFSET (+ COUNT for totalElements)
+    DB-->>Repo: rows + count
+    Repo-->>Svc: Page<Book>
+    alt no match / page past the end
+        Svc-->>Ctrl: empty page
+        Ctrl-->>Librarian: 200 OK ({content: [], page, size, totalElements: 0, totalPages: 0})
     else match(es) found
-        Svc-->>Ctrl: List<BookSummary>
-        Ctrl-->>Librarian: 200 OK (summaries)
+        Svc-->>Ctrl: Page<BookSummary>
+        Ctrl-->>Librarian: 200 OK ({content: [summaries], page, size, totalElements, totalPages})
     end
     Note over Librarian: Selecting a result continues at UC-18 (§3.6)
 ```
@@ -580,19 +580,19 @@ sequenceDiagram
     participant Repo as JdbcCourseRepository
     participant DB as MySQL
 
-    CourseAdmin->>Sec: GET /api/v1/courses?query=...
+    CourseAdmin->>Sec: GET /api/v1/courses?query=...&page=0&size=20
     Sec->>Ctrl: forward request (auth gate as in §2.1)
-    Ctrl->>Svc: search(query)
-    Svc->>Repo: findByCodeOrName(query)
-    Repo->>DB: SELECT ... WHERE ...
-    DB-->>Repo: rows
-    Repo-->>Svc: matches
-    alt no match
-        Svc-->>Ctrl: empty list
-        Ctrl-->>CourseAdmin: 200 OK ([])
+    Ctrl->>Svc: search(query, pageable)
+    Svc->>Repo: findByCodeOrName(query, pageable)
+    Repo->>DB: SELECT ... WHERE ... LIMIT/OFFSET (+ COUNT for totalElements)
+    DB-->>Repo: rows + count
+    Repo-->>Svc: Page<Course>
+    alt no match / page past the end
+        Svc-->>Ctrl: empty page
+        Ctrl-->>CourseAdmin: 200 OK ({content: [], page, size, totalElements: 0, totalPages: 0})
     else match(es) found
-        Svc-->>Ctrl: List<CourseSummary>
-        Ctrl-->>CourseAdmin: 200 OK (summaries)
+        Svc-->>Ctrl: Page<CourseSummary>
+        Ctrl-->>CourseAdmin: 200 OK ({content: [summaries], page, size, totalElements, totalPages})
     end
     Note over CourseAdmin: Selecting a result continues at UC-19 (§4.5)
 ```
@@ -611,9 +611,9 @@ sequenceDiagram
     participant EnrollSvc as EnrollmentService
     participant DB as MySQL
 
-    Caller->>Sec: GET /api/v1/courses/{code}
+    Caller->>Sec: GET /api/v1/courses/{code}?page=0&size=20
     Sec->>Ctrl: forward request (auth gate as in §2.1)
-    Ctrl->>Svc: getDetail(code)
+    Ctrl->>Svc: getDetail(code, rosterPageable)
     Svc->>Repo: findByCode(code)
     Repo->>DB: SELECT
     DB-->>Repo: result
@@ -623,9 +623,9 @@ sequenceDiagram
         Ctrl-->>Caller: 404 Not Found
     else course found
         Repo-->>Svc: Course
-        Svc->>EnrollSvc: findRosterByCourse(code)
-        EnrollSvc-->>Svc: List<StudentSummary>
-        Svc-->>Ctrl: CourseDetail (fields + roster)
+        Svc->>EnrollSvc: findRosterByCourse(code, rosterPageable)
+        EnrollSvc-->>Svc: Page<StudentSummary>
+        Svc-->>Ctrl: CourseDetail (fields + paged roster)
         Ctrl-->>Caller: 200 OK
     end
 ```
@@ -822,32 +822,32 @@ sequenceDiagram
     participant EnrollRepo as JdbcEnrollmentRepository
     participant DB as MySQL
 
-    Student->>Sec: GET /api/v1/me/books-and-courses
+    Student->>Sec: GET /api/v1/me/books-and-courses?booksPage=0&booksSize=20&coursesPage=0&coursesSize=20
     Sec->>Ctrl: forward request (auth gate as in §2.1, scoped to principal.studentId)
     par owned books
-        Ctrl->>BookSvc: findByOwner(studentId)
-        BookSvc->>BookRepo: findByOwnerId(studentId)
-        BookRepo->>DB: SELECT
-        DB-->>BookRepo: rows
-        BookRepo-->>BookSvc: books
-        alt no owned books
-            BookSvc-->>Ctrl: empty list
+        Ctrl->>BookSvc: findByOwner(studentId, booksPageable)
+        BookSvc->>BookRepo: findByOwnerId(studentId, booksPageable)
+        BookRepo->>DB: SELECT ... LIMIT/OFFSET (+ COUNT)
+        DB-->>BookRepo: rows + count
+        BookRepo-->>BookSvc: Page<Book>
+        alt no owned books / page past the end
+            BookSvc-->>Ctrl: empty page
         else owned books exist
-            BookSvc-->>Ctrl: List<BookSummary>
+            BookSvc-->>Ctrl: Page<BookSummary>
         end
     and active enrollments
-        Ctrl->>EnrollSvc: findByStudent(studentId)
-        EnrollSvc->>EnrollRepo: findByStudentId(studentId)
-        EnrollRepo->>DB: SELECT
-        DB-->>EnrollRepo: rows
-        EnrollRepo-->>EnrollSvc: enrollments
-        alt no active enrollments
-            EnrollSvc-->>Ctrl: empty list
+        Ctrl->>EnrollSvc: findByStudent(studentId, coursesPageable)
+        EnrollSvc->>EnrollRepo: findByStudentId(studentId, coursesPageable)
+        EnrollRepo->>DB: SELECT ... LIMIT/OFFSET (+ COUNT)
+        DB-->>EnrollRepo: rows + count
+        EnrollRepo-->>EnrollSvc: Page<Enrollment>
+        alt no active enrollments / page past the end
+            EnrollSvc-->>Ctrl: empty page
         else active enrollments exist
-            EnrollSvc-->>Ctrl: List<CourseSummary>
+            EnrollSvc-->>Ctrl: Page<CourseSummary>
         end
     end
-    Ctrl-->>Student: 200 OK (books[], courses[])
+    Ctrl-->>Student: 200 OK (books: page, courses: page)
     Note over Student: Selecting a book → UC-18 (§3.6), selecting a course → UC-19 (§4.5)
 ```
 

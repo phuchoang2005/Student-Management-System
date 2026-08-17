@@ -68,12 +68,12 @@ If a source document changes, the corresponding test cases here should be review
 
 | File | Test cases | UCs covered |
 | --- | --- | --- |
-| [student.md](./03-test-cases/student.md) | TC-STU-001–031 (31) | UC-1, 2, 3, 13, 17 |
-| [book.md](./03-test-cases/book.md) | TC-BOOK-001–020 (20) | UC-4, 5, 6, 7, 14, 18 |
-| [course.md](./03-test-cases/course.md) | TC-CRS-001–022 (22) | UC-8, 9, 10, 15, 19 |
+| [student.md](./03-test-cases/student.md) | TC-STU-001–034 (34) | UC-1, 2, 3, 13, 17 |
+| [book.md](./03-test-cases/book.md) | TC-BOOK-001–023 (23) | UC-4, 5, 6, 7, 14, 18 |
+| [course.md](./03-test-cases/course.md) | TC-CRS-001–027 (27) | UC-8, 9, 10, 15, 19 |
 | [enrollment.md](./03-test-cases/enrollment.md) | TC-ENR-001–012 (12) | UC-11, 12, 20 |
-| [identity-auth.md](./03-test-cases/identity-auth.md) | TC-IDN-001–021 (21) | UC-16, 21, 22, 23 |
-| [cross-cutting.md](./03-test-cases/cross-cutting.md) | TC-XC-001–035 (35) | Spans all modules, plus architecture/layering conformance (no UC — grounded in `06-low-level-design.md` §2 instead) |
-| **Total** | **141** | **All 23 UCs** |
+| [identity-auth.md](./03-test-cases/identity-auth.md) | TC-IDN-001–023 (23) | UC-16, 21, 22, 23 |
+| [cross-cutting.md](./03-test-cases/cross-cutting.md) | TC-XC-001–038 (38) | Spans all modules, plus architecture/layering conformance (no UC — grounded in `06-low-level-design.md` §2 instead) and pagination conventions (no UC — grounded in `api-specification.md` §3 instead) |
+| **Total** | **157** | **All 23 UCs** |
 
 Every `req.md` rule (Student.1–4, Book.1–5, Course.1–3, Enrollment.1–4, Identity.1–5) and every UC-1–23 main flow and lettered alternate/exception flow has at least one corresponding test case somewhere in this set — see each file's closing traceability table for the exact mapping.

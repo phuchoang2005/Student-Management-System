@@ -387,7 +387,7 @@ classDiagram
     class StudentController {
         -StudentService studentService
         -StudentMapper mapper
-        +searchStudents(String query) List~StudentSummaryDto~
+        +searchStudents(String query, Pageable pageable) Page~StudentSummaryDto~
         +registerStudent(RegisterStudentRequest request) StudentRegistrationResponse
         +getStudent(String code) StudentDetailDto
         +updateStudent(String code, UpdateStudentRequest request) StudentResponse
@@ -402,7 +402,7 @@ classDiagram
         +register(RegisterStudentCommand command) ProvisionedStudent
         +update(StudentCode code, UpdateStudentCommand command) Student
         +remove(StudentCode code) void
-        +search(String query) List~Student~
+        +search(String query, Pageable pageable) Page~Student~
         +getDetail(StudentCode code) StudentDetailView
     }
     class Student {
@@ -428,7 +428,7 @@ classDiagram
         +existsByCode(StudentCode code) boolean
         +existsByEmail(Email email) boolean
         +existsByEmailExcludingCode(Email email, StudentCode excluding) boolean
-        +search(String query) List~Student~
+        +search(String query, Pageable pageable) Page~Student~
         +save(Student student) Student
         +deleteByCode(StudentCode code) void
     }
@@ -484,7 +484,7 @@ classDiagram
     <tr><td><code>existsByCode</code></td><td><code>StudentCode code</code></td><td><code>boolean</code></td><td>UC-1</td></tr>
     <tr><td><code>existsByEmail</code></td><td><code>Email email</code></td><td><code>boolean</code></td><td>UC-1</td></tr>
     <tr><td><code>existsByEmailExcludingCode</code></td><td><code>Email email, StudentCode excluding</code></td><td><code>boolean</code></td><td>UC-2 — "email changed" branch, <code>03-sequence-diagrams.md</code> §2.2</td></tr>
-    <tr><td><code>search</code></td><td><code>String query</code></td><td><code>List&lt;Student&gt;</code></td><td>UC-13 — matches code/name/email</td></tr>
+    <tr><td><code>search</code></td><td><code>String query, Pageable pageable</code></td><td><code>Page&lt;Student&gt;</code></td><td>UC-13 — matches code/name/email, paged</td></tr>
     <tr><td><code>save</code></td><td><code>Student student</code></td><td><code>Student</code></td><td>Insert or update, decided by <code>id() == null</code></td></tr>
     <tr><td><code>deleteByCode</code></td><td><code>StudentCode code</code></td><td><code>void</code></td><td>UC-3</td></tr>
   </tbody>
@@ -497,7 +497,7 @@ classDiagram
     <tr><td><code>register</code></td><td><code>RegisterStudentCommand command</code></td><td><code>ProvisionedStudent</code> (<code>record ProvisionedStudent(Student student, String username, String initialPassword)</code>)</td><td><code>DuplicateCodeException</code>, <code>DuplicateEmailException</code>, <code>InvalidEmailException</code>, <code>DomainValidationException</code></td><td>§2.1: existsByCode → existsByEmail → <code>Student.register(...)</code> → save → <code>AccountProvisioning.provisionForStudent(...)</code> (same transaction)</td></tr>
     <tr><td><code>update</code></td><td><code>StudentCode code, UpdateStudentCommand command</code></td><td><code>Student</code></td><td><code>DuplicateEmailException</code>, <code>InvalidEmailException</code>, <code>DomainValidationException</code></td><td>§2.2: findByCode → (if email changed) existsByEmailExcludingCode → <code>applyChanges(...)</code> → save</td></tr>
     <tr><td><code>remove</code></td><td><code>StudentCode code</code></td><td><code>void</code></td><td>—</td><td>§2.3: deleteByCode → publish <code>StudentDeleted</code> (async, after commit)</td></tr>
-    <tr><td><code>search</code></td><td><code>String query</code></td><td><code>List&lt;Student&gt;</code></td><td>—</td><td>§2.4</td></tr>
+    <tr><td><code>search</code></td><td><code>String query, Pageable pageable</code></td><td><code>Page&lt;Student&gt;</code></td><td>—</td><td>§2.4</td></tr>
     <tr><td><code>getDetail</code></td><td><code>StudentCode code</code></td><td><code>StudentDetailView</code> (<code>record StudentDetailView(Student student, List&lt;BookSummary&gt; ownedBooks, List&lt;CourseSummary&gt; activeCourses)</code>)</td><td><code>NotFoundException</code></td><td>§2.5: findByCode, then <code>par</code> <code>BookService.findByOwner</code> / <code>EnrollmentService.findByStudent</code></td></tr>
   </tbody>
 </table>
@@ -507,7 +507,7 @@ classDiagram
 <table>
   <thead><tr><th>Method</th><th>HTTP</th><th>Parameters</th><th>Returns</th></tr></thead>
   <tbody>
-    <tr><td><code>searchStudents</code></td><td><code>GET /</code></td><td><code>String query</code> (optional)</td><td><code>List&lt;StudentSummaryDto&gt;</code> (200, <code>[]</code> if none)</td></tr>
+    <tr><td><code>searchStudents</code></td><td><code>GET /</code></td><td><code>String query</code> (optional), <code>Pageable pageable</code> (<code>page</code>/<code>size</code>)</td><td><code>Page&lt;StudentSummaryDto&gt;</code> (200, empty <code>content</code> if none or past the last page)</td></tr>
     <tr><td><code>registerStudent</code></td><td><code>POST /</code></td><td><code>RegisterStudentRequest request</code></td><td><code>StudentRegistrationResponse</code> (201)</td></tr>
     <tr><td><code>getStudent</code></td><td><code>GET /{code}</code></td><td><code>String code</code></td><td><code>StudentDetailDto</code> (200)</td></tr>
     <tr><td><code>updateStudent</code></td><td><code>PUT /{code}</code></td><td><code>String code, UpdateStudentRequest request</code></td><td><code>StudentResponse</code> (200)</td></tr>
@@ -531,9 +531,9 @@ classDiagram
 <pre class="mermaid">
 classDiagram
     class CourseController {
-        +searchCourses(String query) List~CourseSummaryDto~
+        +searchCourses(String query, Pageable pageable) Page~CourseSummaryDto~
         +createCourse(CourseCreateRequest request) CourseResponse
-        +getCourse(String code) CourseDetailDto
+        +getCourse(String code, Pageable rosterPageable) CourseDetailDto
         +updateCourse(String code, CourseUpdateRequest request) CourseResponse
         +removeCourse(String code) void
     }
@@ -544,8 +544,8 @@ classDiagram
         +create(CreateCourseCommand command) Course
         +update(CourseCode code, UpdateCourseCommand command) Course
         +remove(CourseCode code) void
-        +search(String query) List~Course~
-        +getDetail(CourseCode code) CourseDetailView
+        +search(String query, Pageable pageable) Page~Course~
+        +getDetail(CourseCode code, Pageable rosterPageable) CourseDetailView
     }
     class Course {
         -CourseId id
@@ -563,7 +563,7 @@ classDiagram
         &lt;&lt;interface&gt;&gt;
         +findByCode(CourseCode code) Optional~Course~
         +existsByCode(CourseCode code) boolean
-        +search(String query) List~Course~
+        +search(String query, Pageable pageable) Page~Course~
         +save(Course course) Course
         +deleteByCode(CourseCode code) void
     }
@@ -587,7 +587,7 @@ classDiagram
   <tbody>
     <tr><td>Value Objects</td><td><code>CourseId</code>, <code>CourseCode</code> (mirror <code>StudentId</code>/<code>StudentCode</code>); <code>Credits(int value)</code> — compact constructor throws <code>DomainValidationException</code> if <code>value &lt;= 0</code> (Course.3). <code>name</code>/<code>description</code> stay plain <code>String</code> fields — no VO, since neither has a format invariant beyond <code>name</code>'s non-blank check, which lives in <code>Course.create</code>/<code>applyChanges</code> directly</td></tr>
     <tr><td><code>createdAt</code>/<code>updatedAt</code>/<code>version</code></td><td>Same addition and same reasoning as <code>Student</code> (§4.4) — <code>CourseResponse</code> requires the timestamps, <code>courses</code> carries <code>version</code> per §10</td></tr>
-    <tr><td>Read composition</td><td><code>CourseService.getDetail(CourseCode code)</code> calls <code>EnrollmentService.findRosterByCourse(CourseCode code): List&lt;Enrollment&gt;</code> (UC-19, <code>03-sequence-diagrams.md</code> §4.5), mapped to <code>List&lt;StudentSummary&gt;</code> via <code>StudentLookup</code> inside <code>EnrollmentService</code></td></tr>
+    <tr><td>Read composition</td><td><code>CourseService.getDetail(CourseCode code, Pageable rosterPageable)</code> calls <code>EnrollmentService.findRosterByCourse(CourseCode code, Pageable pageable): Page&lt;Enrollment&gt;</code> (UC-19, <code>03-sequence-diagrams.md</code> §4.5), mapped to <code>Page&lt;StudentSummary&gt;</code> via <code>StudentLookup</code> inside <code>EnrollmentService</code></td></tr>
     <tr><td>No <code>initial-password</code>-style routing quirk</td><td><code>CourseController</code> owns all 5 of its endpoints directly, unlike <code>student</code>'s UC-23</td></tr>
     <tr><td>Event published</td><td><code>CourseDeleted(CourseCode courseCode)</code>, published from <code>remove(...)</code> the same way <code>StudentDeleted</code> is</td></tr>
   </tbody>
@@ -599,7 +599,7 @@ classDiagram
 <pre class="mermaid">
 classDiagram
     class BookController {
-        +searchBooks(String query, Long ownerId) List~BookSummaryDto~
+        +searchBooks(String query, Long ownerId, Pageable pageable) Page~BookSummaryDto~
         +addBook(BookCreateRequest request) BookResponse
         +getBook(String isbn) BookDetailDto
         +assignBookOwner(String isbn, BookOwnerRequest request) BookResponse
@@ -613,9 +613,10 @@ classDiagram
         +assign(Isbn isbn, StudentId ownerId) Book
         +unassign(Isbn isbn) Book
         +remove(Isbn isbn) void
-        +search(String query, StudentId ownerFilter) List~Book~
+        +search(String query, StudentId ownerFilter, Pageable pageable) Page~Book~
         +getDetail(Isbn isbn) BookDetailView
         +findByOwner(StudentId ownerId) List~Book~
+        +findByOwner(StudentId ownerId, Pageable pageable) Page~Book~
     }
     class Book {
         -BookId id
@@ -636,8 +637,9 @@ classDiagram
         +findByIsbn(Isbn isbn) Optional~Book~
         +existsByIsbn(Isbn isbn) boolean
         +findByOwnerId(StudentId ownerId) List~Book~
+        +findByOwnerId(StudentId ownerId, Pageable pageable) Page~Book~
         +clearOwnerByStudentId(StudentId studentId) void
-        +search(String query, StudentId ownerFilter) List~Book~
+        +search(String query, StudentId ownerFilter, Pageable pageable) Page~Book~
         +save(Book book) Book
         +deleteByIsbn(Isbn isbn) void
     }
@@ -659,6 +661,7 @@ classDiagram
     <tr><td>Cross-module dependency</td><td><code>BookService</code> constructor-injects <code>StudentLookup</code>; <code>addBook</code> and <code>assign</code> both call <code>existsById(ownerId)</code> before touching the aggregate (Book.4) — throws <code>UnknownStudentException</code></td></tr>
     <tr><td>No update method</td><td>Book has no <code>update</code> use case — only <code>assign</code>/<code>unassign</code>/<code>remove</code>; <code>title</code>/<code>author</code>/<code>publishedDate</code> are set once at <code>create</code> and never changed by any UC</td></tr>
     <tr><td>No <code>BookLookup</code> public API</td><td><code>book</code> is a pure consumer in this design — nothing currently needs to ask <code>book</code> a question the way <code>book</code> asks <code>student</code>/<code>course</code></td></tr>
+    <tr><td>Two <code>findByOwner</code> overloads</td><td><code>findByOwner(StudentId)</code> (unpaginated) stays as the call <code>StudentService.getDetail</code> makes for UC-17's embedded "owned books" list — out of scope for pagination. <code>findByOwner(StudentId, Pageable)</code> is the new overload <code>/me/books-and-courses</code> (UC-16) calls instead, since that endpoint's <code>books</code> field is now a page. Same split on <code>BookRepository.findByOwnerId</code></td></tr>
     <tr><td>No event published</td><td><code>remove(Isbn isbn)</code> does <strong>not</strong> publish an event — removing a book never cascades (<code>03-sequence-diagrams.md</code> §3.4)</td></tr>
     <tr><td>Event listener</td><td><code>onStudentDeleted(StudentDeleted event)</code> → <code>repository.clearOwnerByStudentId(event.studentId())</code> — see §13</td></tr>
   </tbody>
@@ -683,7 +686,8 @@ classDiagram
         +end(StudentId studentId, CourseCode courseCode) void
         +getDetail(StudentId studentId, CourseCode courseCode) EnrollmentDetailView
         +findByStudent(StudentId studentId) List~Enrollment~
-        +findRosterByCourse(CourseCode courseCode) List~Enrollment~
+        +findByStudent(StudentId studentId, Pageable pageable) Page~Enrollment~
+        +findRosterByCourse(CourseCode courseCode, Pageable pageable) Page~Enrollment~
     }
     class Enrollment {
         -EnrollmentId id
@@ -697,7 +701,8 @@ classDiagram
         +existsByStudentAndCourse(StudentId studentId, CourseCode courseCode) boolean
         +findByStudentAndCourse(StudentId studentId, CourseCode courseCode) Optional~Enrollment~
         +findByStudentId(StudentId studentId) List~Enrollment~
-        +findByCourseCode(CourseCode courseCode) List~Enrollment~
+        +findByStudentId(StudentId studentId, Pageable pageable) Page~Enrollment~
+        +findByCourseCode(CourseCode courseCode, Pageable pageable) Page~Enrollment~
         +save(Enrollment enrollment) Enrollment
         +deleteByStudentAndCourse(StudentId studentId, CourseCode courseCode) void
         +deleteByStudentId(StudentId studentId) void
@@ -720,7 +725,7 @@ classDiagram
     <tr><td>Value Objects</td><td><code>EnrollmentId</code> only — <code>studentId</code>/<code>courseCode</code> reuse <code>student.StudentId</code>/<code>course.CourseCode</code> directly (§6's reuse note); no <code>Enrollment</code>-owned VO wraps a format invariant of its own, since Enrollment.1–4 are all cross-aggregate existence/uniqueness rules, not format rules</td></tr>
     <tr><td><code>enrolledAt</code></td><td>Same class of gap as <code>Student</code>/<code>Course</code>/<code>Book</code>'s <code>createdAt</code>/<code>updatedAt</code> (§4.4): <code>EnrollmentResponse</code>/<code>EnrollmentDetail</code> require it, <code>enrollments.enrolled_at</code> exists in <code>05-database-schema.md</code> §3.4, but the aggregate had no field for it. <code>create(...)</code> sets it once to <code>Instant.now()</code>; there is no <code>updatedAt</code> counterpart because, per the "no update" row below, nothing about an <code>Enrollment</code> ever changes after creation</td></tr>
     <tr><td>Two published-interface dependencies</td><td><code>enroll(...)</code> calls <code>studentLookup.existsById</code> <strong>then</strong> <code>courseLookup.existsById</code> <strong>then</strong> <code>repository.existsByStudentAndCourse</code> — that exact order, per <code>03-sequence-diagrams.md</code> §5.1</td></tr>
-    <tr><td><code>findByStudent</code>/<code>findRosterByCourse</code></td><td>Read-side composition methods (§7 of <code>03-sequence-diagrams.md</code>) called by <code>StudentService.getDetail</code> (UC-17) and <code>CourseService.getDetail</code> (UC-19) respectively — each resolves the <em>other</em> side's summary via the relevant <code>Lookup</code> before returning</td></tr>
+    <tr><td><code>findByStudent</code>/<code>findRosterByCourse</code></td><td>Read-side composition methods (§7 of <code>03-sequence-diagrams.md</code>); each resolves the <em>other</em> side's summary via the relevant <code>Lookup</code> before returning. <code>findRosterByCourse</code> is fully paginated — its only caller, <code>CourseService.getDetail</code> (UC-19), always needs a page. <code>findByStudent</code> keeps both an unpaginated overload, called by <code>StudentService.getDetail</code> (UC-17, out of scope for pagination), and a paginated one, called by <code>/me/books-and-courses</code> (UC-16) — same split as <code>BookService.findByOwner</code> (§6)</td></tr>
     <tr><td>No <code>update</code></td><td>Enrollment.4 — "end removes only the link" — there is no field on <code>Enrollment</code> any UC ever changes after creation</td></tr>
     <tr><td>Two event listeners</td><td><code>onStudentDeleted</code> → <code>deleteByStudentId</code>; <code>onCourseDeleted</code> → <code>deleteByCourseCode</code> — see §13</td></tr>
   </tbody>

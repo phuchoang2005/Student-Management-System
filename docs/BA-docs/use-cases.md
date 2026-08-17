@@ -266,10 +266,11 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 **Main Flow**
 1. Registrar enters a student code, or a name/email search term.
 2. System looks up matching student record(s) and returns a summary for each (student code, name, email).
-3. System returns the matching record(s).
+3. System returns one page of the matching record(s).
 
 **Alternate / Exception Flows**
 - **2a.** No student matches the given code or search term → system returns an empty result.
+- **2b.** More records match than fit on one page → Registrar may request the next page rather than receiving every match at once.
 
 **Extension Points**
 - **Select a result:** Registrar selects one student from the results → continues at **UC-17: View Student Detail**.
@@ -289,10 +290,11 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 **Main Flow**
 1. Librarian enters an ISBN, or a title/author search term, optionally with an owner filter.
 2. System looks up matching book record(s) and returns a summary for each (ISBN, title, author, owner name if any).
-3. System returns the matching record(s).
+3. System returns one page of the matching record(s).
 
 **Alternate / Exception Flows**
 - **2a.** No book matches the given ISBN or search term → system returns an empty result.
+- **2b.** More records match than fit on one page → Librarian may request the next page rather than receiving every match at once.
 
 **Extension Points**
 - **Select a result:** Librarian selects one book from the results → continues at **UC-18: View Book Detail**.
@@ -312,10 +314,11 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 **Main Flow**
 1. Administrator enters a course code, or a name search term.
 2. System looks up matching course record(s) and returns a summary for each (course code, name, credits).
-3. System returns the matching record(s).
+3. System returns one page of the matching record(s).
 
 **Alternate / Exception Flows**
 - **2a.** No course matches the given code or search term → system returns an empty result.
+- **2b.** More records match than fit on one page → Administrator may request the next page rather than receiving every match at once.
 
 **Extension Points**
 - **Select a result:** Administrator selects one course from the results → continues at **UC-19: View Course Detail** (which includes the full enrolled-student roster).
@@ -334,13 +337,15 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 
 **Main Flow**
 1. Student selects "my books" and/or "my courses."
-2. System looks up books owned by the student and returns a summary for each.
-3. System looks up active enrollments for the student and returns a course summary for each.
+2. System looks up books owned by the student and returns one page of a summary for each.
+3. System looks up active enrollments for the student and returns one page of a course summary for each.
 4. System returns the requested information.
 
 **Alternate / Exception Flows**
 - **2a.** Student owns no books → system returns an empty list for books.
+- **2b.** More owned books exist than fit on one page → Student may request the next page of books, independently of the courses list.
 - **3a.** Student has no active enrollments → system returns an empty list for courses.
+- **3b.** More active enrollments exist than fit on one page → Student may request the next page of courses, independently of the books list.
 
 **Extension Points**
 - **Select a book:** Student selects one owned book → continues at **UC-18: View Book Detail**.
@@ -403,13 +408,14 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 
 **Main Flow**
 1. Actor selects one course from the list of results.
-2. System retrieves the full record for the selected course: course code, name, description, credits, and the full roster of currently enrolled students.
+2. System retrieves the full record for the selected course: course code, name, description, credits, and one page of the currently enrolled-student roster.
 3. System displays the full course detail.
 
 **Alternate / Exception Flows**
 - **2a.** The selected course no longer exists (e.g., removed after the results were shown) → system returns a not-found result; Actor returns to the results list.
+- **2b.** More students are enrolled than fit on one roster page → Actor may request the next page of the roster.
 
-**Postconditions:** No data is changed; the Actor sees the selected course's complete detail, including its enrolled-student roster.
+**Postconditions:** No data is changed; the Actor sees the selected course's complete detail, including a page of its enrolled-student roster.
 
 **Related User Story:** US-5.3, US-5.4.
 

@@ -6,15 +6,23 @@ booksAndCourses:
     description: |
       **Roles:** Student only. Composes the caller's owned books and active course
       enrollments in one call, scoped to `principal.studentId`. A non-Student caller
-      receives 403.
+      receives 403. `books` and `courses` page independently via the `books*`/`courses*`
+      params.
     x-roles: [STUDENT]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/BooksPageParam'
+      - $ref: '../components/parameters/common.yaml#/BooksSizeParam'
+      - $ref: '../components/parameters/common.yaml#/CoursesPageParam'
+      - $ref: '../components/parameters/common.yaml#/CoursesSizeParam'
     responses:
       '200':
-        description: The caller's own books and courses.
+        description: The caller's own books and courses, each as its own page.
         content:
           application/json:
             schema:
               $ref: '../components/schemas/common.yaml#/MeBooksAndCoursesResponse'
+      '400':
+        $ref: '../components/responses/errors.yaml#/BadRequest'
       '401':
         $ref: '../components/responses/errors.yaml#/Unauthorized'
       '403':

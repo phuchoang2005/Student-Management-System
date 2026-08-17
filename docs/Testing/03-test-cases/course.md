@@ -171,6 +171,47 @@ Covers **UC-8** (Create Course), **UC-9** (Update Course), **UC-10** (Remove Cou
 
 ---
 
+## UC-15: View/Search Courses — Pagination
+
+### TC-CRS-023 — Default `page`/`size` are applied when omitted
+- **Related UC / Rule:** UC-15 main flow (`api-specification.md` §3 Pagination)
+- **Priority:** P2 · **Type:** Functional
+- **Test Data:** `course-search-set-01`
+- **Steps:** `GET /api/v1/courses?q={term}` with no `page`/`size` given.
+- **Expected Result:** `200 OK`; body is `{content, page, size, totalElements, totalPages}` with `page: 0` and `size: 20`.
+
+### TC-CRS-024 — Custom `page`/`size` correctly slices the result set
+- **Related UC / Rule:** UC-15 flow 2b
+- **Priority:** P2 · **Type:** Functional
+- **Test Data:** `course-search-set-01`
+- **Steps:** `GET /api/v1/courses?q={term}&page=0&size=2`, then `GET /api/v1/courses?q={term}&page=1&size=2`.
+- **Expected Result:** Each call returns at most 2 records; `totalElements`/`totalPages` are consistent across both calls; no record appears on both pages.
+
+### TC-CRS-025 — A page past the last page returns an empty page, not an error
+- **Related UC / Rule:** UC-15 flow 2b (boundary)
+- **Priority:** P2 · **Type:** Boundary
+- **Test Data:** `course-search-set-01`
+- **Steps:** `GET /api/v1/courses?q={term}&page=99&size=20`.
+- **Expected Result:** `200 OK`; `content` is an empty array; `totalElements`/`totalPages` still reflect the real result set.
+
+## UC-19: View Course Detail — Roster Pagination
+
+### TC-CRS-026 — Course roster spanning multiple pages is sliced correctly
+- **Related UC / Rule:** UC-19 flow 2b
+- **Priority:** P2 · **Type:** Functional
+- **Test Data:** `course-with-enrollments-01` extended to at least 3 enrolled students
+- **Steps:** `GET /api/v1/courses/{code}?page=0&size=2`, then `GET /api/v1/courses/{code}?page=1&size=2`.
+- **Expected Result:** `200 OK` on both; `roster.content` has at most 2 entries per call; `roster.totalElements`/`totalPages` are consistent across both calls; no student appears in both pages' `roster.content`.
+
+### TC-CRS-027 — A roster page past the last page returns empty content, not `404`
+- **Related UC / Rule:** UC-19 flow 2b (boundary)
+- **Priority:** P2 · **Type:** Boundary
+- **Test Data:** `course-with-enrollments-01`
+- **Steps:** `GET /api/v1/courses/{code}?page=99&size=20`.
+- **Expected Result:** `200 OK`; the course's own fields are still returned; `roster.content` is an empty array — not `404`, since the course itself still exists.
+
+---
+
 ## Traceability Summary
 
 | UC / US | Test Case IDs |
@@ -178,5 +219,5 @@ Covers **UC-8** (Create Course), **UC-9** (Update Course), **UC-10** (Remove Cou
 | UC-8 / US-3.1 | TC-CRS-001–007 |
 | UC-9 / US-3.2 | TC-CRS-008–013 |
 | UC-10 / US-3.3 | TC-CRS-014–016 |
-| UC-15 / US-5.3 | TC-CRS-017–019 |
-| UC-19 / US-5.3, US-5.4 | TC-CRS-020–022 |
+| UC-15 / US-5.3 | TC-CRS-017–019, TC-CRS-023–025 |
+| UC-19 / US-5.3, US-5.4 | TC-CRS-020–022, TC-CRS-026–027 |

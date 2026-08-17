@@ -164,6 +164,31 @@ Covers **UC-4** (Add Book), **UC-5** (Assign Book to Student), **UC-6** (Unassig
 
 ---
 
+## UC-14: View/Search Books — Pagination
+
+### TC-BOOK-021 — Default `page`/`size` are applied when omitted
+- **Related UC / Rule:** UC-14 main flow (`api-specification.md` §3 Pagination)
+- **Priority:** P2 · **Type:** Functional
+- **Test Data:** `book-search-set-01`
+- **Steps:** `GET /api/v1/books?q={term}` with no `page`/`size` given.
+- **Expected Result:** `200 OK`; body is `{content, page, size, totalElements, totalPages}` with `page: 0` and `size: 20`.
+
+### TC-BOOK-022 — Custom `page`/`size` correctly slices the result set
+- **Related UC / Rule:** UC-14 flow 2b
+- **Priority:** P2 · **Type:** Functional
+- **Test Data:** `book-search-set-01`
+- **Steps:** `GET /api/v1/books?q={term}&page=0&size=2`, then `GET /api/v1/books?q={term}&page=1&size=2`.
+- **Expected Result:** Each call returns at most 2 records; `totalElements`/`totalPages` are consistent across both calls; no record appears on both pages.
+
+### TC-BOOK-023 — A page past the last page returns an empty page, not an error
+- **Related UC / Rule:** UC-14 flow 2b (boundary)
+- **Priority:** P2 · **Type:** Boundary
+- **Test Data:** `book-search-set-01`
+- **Steps:** `GET /api/v1/books?q={term}&page=99&size=20`.
+- **Expected Result:** `200 OK`; `content` is an empty array; `totalElements`/`totalPages` still reflect the real result set.
+
+---
+
 ## Traceability Summary
 
 | UC / US | Test Case IDs |
@@ -172,7 +197,7 @@ Covers **UC-4** (Add Book), **UC-5** (Assign Book to Student), **UC-6** (Unassig
 | UC-5 / US-2.2 | TC-BOOK-006–009 |
 | UC-6 / US-2.3 | TC-BOOK-010–011 |
 | UC-7 / US-2.4 | TC-BOOK-012–014 |
-| UC-14 / US-5.2 | TC-BOOK-015–017 |
+| UC-14 / US-5.2 | TC-BOOK-015–017, TC-BOOK-021–023 |
 | UC-18 / US-5.2, US-5.4 | TC-BOOK-018–020 |
 
 Note: UC-18 is also reachable by a Student viewing their own book via UC-16 ("my books") — see [identity-auth.md](./identity-auth.md) / [cross-cutting.md](./cross-cutting.md) §1 for the Student-scoped read path.

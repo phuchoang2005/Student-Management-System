@@ -51,16 +51,50 @@ ValidationError:
           items:
             $ref: '#/FieldError'
 
+PageMeta:
+  type: object
+  description: Page metadata shared by every paginated list/roster response, mirroring Spring Data's `Page<T>` JSON shape.
+  required: [page, size, totalElements, totalPages]
+  properties:
+    page:
+      type: integer
+      format: int32
+      example: 0
+    size:
+      type: integer
+      format: int32
+      example: 20
+    totalElements:
+      type: integer
+      format: int64
+      example: 57
+    totalPages:
+      type: integer
+      format: int32
+      example: 3
+
 MeBooksAndCoursesResponse:
   type: object
-  description: The calling Student's own owned books and active course enrollments, composed in one call.
+  description: The calling Student's own owned books and active course enrollments, composed in one call. `books` and `courses` page independently via the `books*`/`courses*` query params.
   required: [books, courses]
   properties:
     books:
-      type: array
-      items:
-        $ref: './book.yaml#/BookSummary'
+      allOf:
+        - $ref: '#/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items:
+                $ref: './book.yaml#/BookSummary'
     courses:
-      type: array
-      items:
-        $ref: './course.yaml#/CourseSummary'
+      allOf:
+        - $ref: '#/PageMeta'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: array
+              items:
+                $ref: './course.yaml#/CourseSummary'

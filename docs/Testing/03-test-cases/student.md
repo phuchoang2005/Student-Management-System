@@ -237,6 +237,31 @@ Covers **UC-1** (Register Student), **UC-2** (Update Student Details), **UC-3** 
 
 ---
 
+## UC-13: View/Search Students — Pagination
+
+### TC-STU-032 — Default `page`/`size` are applied when omitted
+- **Related UC / Rule:** UC-13 main flow (`api-specification.md` §3 Pagination)
+- **Priority:** P2 · **Type:** Functional
+- **Test Data:** `student-search-set-01`
+- **Steps:** `GET /api/v1/students?q={partial term}` with no `page`/`size` given.
+- **Expected Result:** `200 OK`; body is `{content, page, size, totalElements, totalPages}` with `page: 0` and `size: 20`.
+
+### TC-STU-033 — Custom `page`/`size` correctly slices the result set
+- **Related UC / Rule:** UC-13 flow 2b
+- **Priority:** P2 · **Type:** Functional
+- **Test Data:** `student-search-set-01` (3 students sharing a last name substring)
+- **Steps:** `GET /api/v1/students?q={term}&page=0&size=2`, then `GET /api/v1/students?q={term}&page=1&size=2`.
+- **Expected Result:** First call returns 2 records and `totalElements: 3`, `totalPages: 2`; second call returns the remaining 1 record; no record appears on both pages.
+
+### TC-STU-034 — A page past the last page returns an empty page, not an error
+- **Related UC / Rule:** UC-13 flow 2b (boundary)
+- **Priority:** P2 · **Type:** Boundary
+- **Test Data:** `student-search-set-01`
+- **Steps:** `GET /api/v1/students?q={term}&page=99&size=20`.
+- **Expected Result:** `200 OK`; `content` is an empty array; `totalElements`/`totalPages` still reflect the real result set.
+
+---
+
 ## Traceability Summary
 
 | UC / US | Test Case IDs |
@@ -244,7 +269,7 @@ Covers **UC-1** (Register Student), **UC-2** (Update Student Details), **UC-3** 
 | UC-1 / US-1.1 | TC-STU-001–012 |
 | UC-2 / US-1.2 | TC-STU-013–020 |
 | UC-3 / US-1.3 | TC-STU-021–026 |
-| UC-13 / US-5.1 | TC-STU-027–029 |
+| UC-13 / US-5.1 | TC-STU-027–029, TC-STU-032–034 |
 | UC-17 / US-5.1 | TC-STU-030–031 |
 
 Role-based access (who may call each endpoint) for this module: see [cross-cutting.md](./cross-cutting.md) §1.

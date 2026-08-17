@@ -157,6 +157,19 @@ Covers **UC-16** (View Own Books, Courses & Enrollments), **UC-21** (Login), **U
 - **Steps:** As Registrar/Librarian/Course Administrator, `GET /api/v1/me/books-and-courses`.
 - **Expected Result:** `403 Forbidden` — this endpoint is Student-only by design, even though the role can read everything via other endpoints.
 
+### TC-IDN-022 — `books` and `courses` page independently
+- **Related UC / Rule:** UC-16 flows 2b/3b (`api-specification.md` §3 Pagination)
+- **Priority:** P2 · **Type:** Functional
+- **Test Data:** A Student-role account whose linked student owns at least 3 books and holds at least 1 active enrollment.
+- **Steps:** As Student, `GET /api/v1/me/books-and-courses?booksPage=1&booksSize=2&coursesPage=0&coursesSize=20`.
+- **Expected Result:** `200 OK`; `books.page` is `1` (the second page of the caller's books) while `courses.page` is `0` — moving one collection's page does not affect the other's.
+
+### TC-IDN-023 — Empty `books`/`courses` pages are still `200`, not an error
+- **Related UC / Rule:** UC-16 flows 2a/3a, extended to the paginated envelope
+- **Priority:** P2 · **Type:** Boundary
+- **Steps:** As a Student with no owned books and no active enrollments, `GET /api/v1/me/books-and-courses`.
+- **Expected Result:** `200 OK`; both `books` and `courses` are `{content: [], page: 0, size: 20, totalElements: 0, totalPages: 0}`.
+
 ---
 
 ## Traceability Summary
@@ -166,6 +179,6 @@ Covers **UC-16** (View Own Books, Courses & Enrollments), **UC-21** (Login), **U
 | UC-21 / US-6.1 | TC-IDN-001–005 |
 | UC-22 / US-6.2 | TC-IDN-006–015 |
 | UC-23 / US-6.3 | TC-IDN-016–018 |
-| UC-16 / US-5.4 | TC-IDN-019–021 |
+| UC-16 / US-5.4 | TC-IDN-019–023 |
 
 Account auto-provisioning (UC-1 tail): [student.md](./student.md) TC-STU-008–010. Full RBAC matrix and must-change-password gate: [cross-cutting.md](./cross-cutting.md) §1–2.

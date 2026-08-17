@@ -9,15 +9,25 @@ collection:
     parameters:
       - $ref: '../components/parameters/common.yaml#/SearchQueryParam'
       - $ref: '../components/parameters/common.yaml#/OwnerFilterParam'
+      - $ref: '../components/parameters/common.yaml#/PageParam'
+      - $ref: '../components/parameters/common.yaml#/SizeParam'
     responses:
       '200':
-        description: Zero or more matching books.
+        description: A page of matching books.
         content:
           application/json:
             schema:
-              type: array
-              items:
-                $ref: '../components/schemas/book.yaml#/BookSummary'
+              allOf:
+                - $ref: '../components/schemas/common.yaml#/PageMeta'
+                - type: object
+                  required: [content]
+                  properties:
+                    content:
+                      type: array
+                      items:
+                        $ref: '../components/schemas/book.yaml#/BookSummary'
+      '400':
+        $ref: '../components/responses/errors.yaml#/BadRequest'
       '401':
         $ref: '../components/responses/errors.yaml#/Unauthorized'
 
