@@ -1,11 +1,14 @@
 package org.phuchoang.management.student.internal;
 
+import java.util.Optional;
+import org.phuchoang.management.shared.exception.StaleWriteException;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.domain.DateOfBirth;
 import org.phuchoang.management.student.domain.Email;
 import org.phuchoang.management.student.domain.Student;
 import org.phuchoang.management.student.domain.StudentCode;
 import org.phuchoang.management.student.port.StudentRepository;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -15,6 +18,11 @@ class JdbcStudentRepository implements StudentRepository {
 
   JdbcStudentRepository(SpringDataStudentRepository springRepo) {
     this.springRepo = springRepo;
+  }
+
+  @Override
+  public Optional<Student> findByCode(StudentCode code) {
+    return springRepo.findByStudentCode(code.value()).map(this::toDomain);
   }
 
   @Override
@@ -28,8 +36,17 @@ class JdbcStudentRepository implements StudentRepository {
   }
 
   @Override
+  public boolean existsByEmailExcludingCode(Email email, StudentCode excluding) {
+    return springRepo.existsByEmailAndStudentCodeNot(email.value(), excluding.value());
+  }
+
+  @Override
   public Student save(Student student) {
-    return toDomain(springRepo.save(toRow(student)));
+    try {
+      return toDomain(springRepo.save(toRow(student)));
+    } catch (OptimisticLockingFailureException e) {
+      throw new StaleWriteException("Student " + student.code().value() + " was modified concurrently");
+    }
   }
 
   private StudentRow toRow(Student student) {

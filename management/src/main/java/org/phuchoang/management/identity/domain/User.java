@@ -60,6 +60,11 @@ public class User {
     return new User(id, username, passwordHash, role, studentId, mustChangePassword, version);
   }
 
+  /** Identity.2/req.md §3 — keeps username equal to the owning student's email after it changes. */
+  public void renameUsername(Username newUsername) {
+    this.username = newUsername;
+  }
+
   public UserId id() {
     return id;
   }

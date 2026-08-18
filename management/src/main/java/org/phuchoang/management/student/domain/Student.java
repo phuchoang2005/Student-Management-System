@@ -67,6 +67,17 @@ public class Student {
     return new Student(id, code, firstName, lastName, email, dateOfBirth, createdAt, updatedAt, version);
   }
 
+  /** Student.2-4 — email/dob format is already enforced by their VO constructors; only the blank-name check (Student.3) happens here. */
+  public void applyChanges(String firstName, String lastName, Email email, DateOfBirth dateOfBirth) {
+    requireNonBlank(firstName, "First name");
+    requireNonBlank(lastName, "Last name");
+    this.firstName = firstName;
+    this.lastName = lastName;
+    this.email = email;
+    this.dateOfBirth = dateOfBirth;
+    this.updatedAt = Instant.now();
+  }
+
   private static void requireNonBlank(String value, String field) {
     if (value == null || value.isBlank()) {
       throw new DomainValidationException(field + " must not be blank");

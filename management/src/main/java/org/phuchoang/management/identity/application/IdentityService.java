@@ -35,4 +35,14 @@ public class IdentityService implements AccountProvisioning {
 
     return new ProvisionedAccount(username.value(), plaintextPassword);
   }
+
+  @Override
+  public void renameUsernameForStudent(Long studentId, String newEmail) {
+    User user =
+        repository
+            .findByStudentId(studentId)
+            .orElseThrow(() -> new IllegalStateException("No account found for student " + studentId));
+    user.renameUsername(new Username(newEmail));
+    repository.save(user);
+  }
 }

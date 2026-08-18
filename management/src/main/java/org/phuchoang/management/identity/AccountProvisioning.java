@@ -16,4 +16,11 @@ package org.phuchoang.management.identity;
 public interface AccountProvisioning {
 
   ProvisionedAccount provisionForStudent(Long studentId, String email);
+
+  /**
+   * req.md §3 "Student ↔ User Account" — a student's account username always equals their
+   * current email, so {@code student.StudentService.update} calls this whenever the email
+   * actually changes, in the same transaction as the {@code Student} save (TC-STU-018).
+   */
+  void renameUsernameForStudent(Long studentId, String newEmail);
 }
