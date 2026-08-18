@@ -60,6 +60,15 @@ public class Course {
     return new Course(id, code, name, description, credits, createdAt, updatedAt, version);
   }
 
+  /** Course.2-3 — {@code code} is immutable (never passed here); credits' positivity is already enforced by {@link Credits}'s constructor, only the blank-name check (Course.2) happens here. */
+  public void applyChanges(String name, String description, Credits credits) {
+    requireNonBlank(name, "Name");
+    this.name = name;
+    this.description = description;
+    this.credits = credits;
+    this.updatedAt = Instant.now();
+  }
+
   private static void requireNonBlank(String value, String field) {
     if (value == null || value.isBlank()) {
       throw new DomainValidationException(field + " must not be blank");

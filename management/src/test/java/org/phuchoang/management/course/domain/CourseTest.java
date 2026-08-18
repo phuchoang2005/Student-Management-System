@@ -36,4 +36,26 @@ class CourseTest {
     assertThatThrownBy(() -> Course.create(code, " ", "Basics", credits))
         .isInstanceOf(DomainValidationException.class);
   }
+
+  @Test
+  void applyChangesUpdatesFieldsAndTimestampButNotCode() {
+    Course course = Course.create(code, "Intro to CS", "Basics", credits);
+    Credits newCredits = new Credits(4);
+
+    course.applyChanges("Advanced CS", "Deeper dive", newCredits);
+
+    assertThat(course.code()).isEqualTo(code);
+    assertThat(course.name()).isEqualTo("Advanced CS");
+    assertThat(course.description()).isEqualTo("Deeper dive");
+    assertThat(course.credits()).isEqualTo(newCredits);
+    assertThat(course.updatedAt()).isAfterOrEqualTo(course.createdAt());
+  }
+
+  @Test
+  void applyChangesRejectsBlankName() {
+    Course course = Course.create(code, "Intro to CS", "Basics", credits);
+
+    assertThatThrownBy(() -> course.applyChanges(" ", "Basics", credits))
+        .isInstanceOf(DomainValidationException.class);
+  }
 }

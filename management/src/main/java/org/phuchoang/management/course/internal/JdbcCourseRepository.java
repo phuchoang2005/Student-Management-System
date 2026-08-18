@@ -1,5 +1,6 @@
 package org.phuchoang.management.course.internal;
 
+import java.util.Optional;
 import org.phuchoang.management.course.CourseId;
 import org.phuchoang.management.course.domain.Course;
 import org.phuchoang.management.course.domain.CourseCode;
@@ -16,6 +17,11 @@ class JdbcCourseRepository implements CourseRepository {
 
   JdbcCourseRepository(SpringDataCourseRepository springRepo) {
     this.springRepo = springRepo;
+  }
+
+  @Override
+  public Optional<Course> findByCode(CourseCode code) {
+    return springRepo.findByCourseCode(code.value()).map(this::toDomain);
   }
 
   @Override

@@ -1,8 +1,10 @@
 package org.phuchoang.management.course.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
@@ -15,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.phuchoang.management.course.application.CourseService;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
+import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.web.GlobalExceptionHandler;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -37,9 +40,19 @@ class CourseControllerTest {
     return new CourseService.CreatedCourse(1L, "CS101", "Intro to CS", "Basics", 3, now, now);
   }
 
+  private static CourseService.UpdatedCourse anUpdatedCourse() {
+    Instant now = Instant.now();
+    return new CourseService.UpdatedCourse(1L, "CS101", "Advanced CS", "Deeper dive", 4, now, now);
+  }
+
   private static final String VALID_BODY =
       """
       {"courseCode":"CS101","name":"Intro to CS","description":"Basics","credits":3}
+      """;
+
+  private static final String VALID_UPDATE_BODY =
+      """
+      {"name":"Advanced CS","description":"Deeper dive","credits":4}
       """;
 
   @Test
@@ -83,6 +96,56 @@ class CourseControllerTest {
 
     mockMvc
         .perform(post("/api/v1/courses").contentType(MediaType.APPLICATION_JSON).content(body))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void updateCourseReturns200WithCourseDetails() throws Exception {
+    when(courseService.update(eq("CS101"), any())).thenReturn(anUpdatedCourse());
+
+    mockMvc
+        .perform(
+            put("/api/v1/courses/CS101")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VALID_UPDATE_BODY))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.courseCode").value("CS101"))
+        .andExpect(jsonPath("$.name").value("Advanced CS"))
+        .andExpect(jsonPath("$.credits").value(4));
+  }
+
+  @Test
+  void updateCoursePropagatesNotFoundAs404() throws Exception {
+    when(courseService.update(eq("does-not-exist"), any()))
+        .thenThrow(new NotFoundException("Course 'does-not-exist' does not exist."));
+
+    mockMvc
+        .perform(
+            put("/api/v1/courses/does-not-exist")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VALID_UPDATE_BODY))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void updateCourseRejectsBlankNameBeforeReachingService() throws Exception {
+    String body = """
+        {"name":"","description":"Deeper dive","credits":4}
+        """;
+
+    mockMvc
+        .perform(put("/api/v1/courses/CS101").contentType(MediaType.APPLICATION_JSON).content(body))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void updateCourseRejectsNonPositiveCreditsBeforeReachingService() throws Exception {
+    String body = """
+        {"name":"Advanced CS","description":"Deeper dive","credits":0}
+        """;
+
+    mockMvc
+        .perform(put("/api/v1/courses/CS101").contentType(MediaType.APPLICATION_JSON).content(body))
         .andExpect(status().isBadRequest());
   }
 }
