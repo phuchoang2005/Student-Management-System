@@ -8,6 +8,7 @@ import org.phuchoang.management.shared.exception.DomainValidationException;
 import org.phuchoang.management.shared.exception.FieldError;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -40,6 +41,17 @@ public class GlobalExceptionHandler {
             .toList();
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(validationErrorResponse(HttpStatus.BAD_REQUEST, "Validation failed", request, errors));
+  }
+
+  // A field typed LocalDate/etc. that can't be parsed (e.g. a non-existent calendar date like
+  // "2023-02-30") never reaches a VO constructor -- Jackson rejects it during deserialization,
+  // before the controller method is even invoked. Normalized to the same envelope so callers see
+  // one consistent 400 shape regardless of which layer caught the malformed input.
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  public ResponseEntity<Object> handleMalformedRequest(
+      HttpMessageNotReadableException ex, HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(errorResponse(HttpStatus.BAD_REQUEST, "Malformed request body", request));
   }
 
   @ExceptionHandler(AccessDeniedException.class)

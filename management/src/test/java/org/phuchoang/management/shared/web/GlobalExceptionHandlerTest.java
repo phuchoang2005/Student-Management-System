@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standal
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -75,6 +76,18 @@ class GlobalExceptionHandlerTest {
   }
 
   @Test
+  void malformedRequestBodyMapsTo400() throws Exception {
+    mockMvc
+        .perform(
+            post("/throw/date")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"date\":\"2023-02-30\"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.error").value("Bad Request"));
+  }
+
+  @Test
   void invalidCredentialsExceptionMapsTo401() throws Exception {
     mockMvc
         .perform(get("/throw").param("type", "unauthorized"))
@@ -132,7 +145,12 @@ class GlobalExceptionHandlerTest {
 
     @PostMapping("/throw/valid")
     void throwOnInvalidBody(@Valid @RequestBody NameRequest request) {}
+
+    @PostMapping("/throw/date")
+    void throwOnMalformedDate(@RequestBody DateRequest request) {}
   }
 
   record NameRequest(@NotBlank String name) {}
+
+  record DateRequest(LocalDate date) {}
 }
