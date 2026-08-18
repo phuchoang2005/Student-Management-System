@@ -41,3 +41,22 @@ If someone tries to do something that doesn't make sense — like enrolling in t
 Under the hood, this is a Java/Spring Boot REST API — a backend service that other applications (a web dashboard, a mobile app, etc.) would talk to. It's built as a portfolio-grade example of clean, modular backend architecture, with layered code, input validation, proper error handling, and a real relational database (MySQL) enforcing data integrity.
 
 For architecture details, module boundaries, database design, and the technical roadmap, see the documentation: [Document](docs/).
+
+## Continuous Integration
+
+Every pull request against `main` triggers the [`CI` workflow](.github/workflows/ci.yml), which:
+
+1. Checks out the repository and sets up JDK 21 (Temurin), matching `management/pom.xml`.
+2. Starts a MySQL 8.4 service container (same defaults as `docker-compose.yml`) so Flyway-backed tests can run.
+3. Runs `./mvnw verify` from `management/`, which compiles, runs the full test suite (unit, [ArchUnit](https://www.archunit.org/) architecture rules, and the Spring Modulith module-boundary check), and packages the app.
+
+At this stage no `@DataJdbcTest`/Testcontainers-backed integration suites exist yet, so `mvn verify` only exercises the unit and architecture levels described in [`docs/Testing/01-test-strategy.md`](docs/Testing/01-test-strategy.md); the ArchUnit rules under `management/src/test/java/org/phuchoang/management/architecture/` and the `shared/ModuleBoundaryTest` are wired to fail as soon as code violates the module layout, even before any domain code exists.
+
+To run the same check locally:
+
+```sh
+cd management
+./mvnw verify
+```
+
+This requires a reachable MySQL instance matching `application.properties`' defaults — run `make up` from the repo root first.
