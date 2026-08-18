@@ -1,7 +1,11 @@
 package org.phuchoang.management.student.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -167,5 +171,23 @@ class StudentControllerTest {
     mockMvc
         .perform(put("/api/v1/students/S00123").contentType(MediaType.APPLICATION_JSON).content(body))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void removeStudentReturns204() throws Exception {
+    doNothing().when(studentService).remove("S00123");
+
+    mockMvc.perform(delete("/api/v1/students/S00123")).andExpect(status().isNoContent());
+
+    verify(studentService).remove("S00123");
+  }
+
+  @Test
+  void removeStudentPropagatesNotFoundAs404() throws Exception {
+    doThrow(new NotFoundException("Student 'S00123' does not exist."))
+        .when(studentService)
+        .remove("S00123");
+
+    mockMvc.perform(delete("/api/v1/students/S00123")).andExpect(status().isNotFound());
   }
 }

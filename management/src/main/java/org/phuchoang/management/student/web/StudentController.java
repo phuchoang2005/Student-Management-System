@@ -7,6 +7,7 @@ import org.phuchoang.management.student.web.dto.StudentRegistrationResponse;
 import org.phuchoang.management.student.web.dto.StudentResponse;
 import org.phuchoang.management.student.web.dto.UpdateStudentRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -39,5 +40,11 @@ public class StudentController {
       @PathVariable String code, @Valid @RequestBody UpdateStudentRequest request) {
     StudentService.UpdatedStudent updated = studentService.update(code, mapper.toCommand(request));
     return mapper.toResponse(updated);
+  }
+
+  @DeleteMapping("/{code}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void removeStudent(@PathVariable String code) {
+    studentService.remove(code);
   }
 }

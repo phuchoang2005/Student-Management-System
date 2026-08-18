@@ -12,4 +12,6 @@ interface SpringDataStudentRepository extends CrudRepository<StudentRow, Long> {
   boolean existsByEmail(String email);
 
   boolean existsByEmailAndStudentCodeNot(String email, String studentCode);
+
+  void deleteByStudentCode(String studentCode);
 }

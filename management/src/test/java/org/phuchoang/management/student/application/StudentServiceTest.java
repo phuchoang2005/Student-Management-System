@@ -21,6 +21,7 @@ import org.phuchoang.management.shared.exception.DomainValidationException;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.DuplicateEmailException;
 import org.phuchoang.management.shared.exception.NotFoundException;
+import org.phuchoang.management.student.StudentDeleted;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.application.command.RegisterStudentCommand;
 import org.phuchoang.management.student.application.command.UpdateStudentCommand;
@@ -29,12 +30,14 @@ import org.phuchoang.management.student.domain.Email;
 import org.phuchoang.management.student.domain.Student;
 import org.phuchoang.management.student.domain.StudentCode;
 import org.phuchoang.management.student.port.StudentRepository;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class StudentServiceTest {
 
   @Mock private StudentRepository repository;
   @Mock private AccountProvisioning accountProvisioning;
+  @Mock private ApplicationEventPublisher events;
 
   private StudentService service;
 
@@ -43,7 +46,7 @@ class StudentServiceTest {
 
   @Test
   void registerRejectsDuplicateCodeBeforeCheckingEmailOrProvisioning() {
-    service = new StudentService(repository, accountProvisioning);
+    service = new StudentService(repository, accountProvisioning, events);
     when(repository.existsByCode(new StudentCode("S00123"))).thenReturn(true);
 
     assertThatThrownBy(() -> service.register(command)).isInstanceOf(DuplicateCodeException.class);
@@ -53,7 +56,7 @@ class StudentServiceTest {
 
   @Test
   void registerRejectsDuplicateEmail() {
-    service = new StudentService(repository, accountProvisioning);
+    service = new StudentService(repository, accountProvisioning, events);
     when(repository.existsByCode(any())).thenReturn(false);
     when(repository.existsByEmail(any())).thenReturn(true);
 
@@ -64,7 +67,7 @@ class StudentServiceTest {
 
   @Test
   void registerSavesStudentAndProvisionsAccountInOrder() {
-    service = new StudentService(repository, accountProvisioning);
+    service = new StudentService(repository, accountProvisioning, events);
     when(repository.existsByCode(any())).thenReturn(false);
     when(repository.existsByEmail(any())).thenReturn(false);
     when(repository.save(any(Student.class)))
@@ -107,7 +110,7 @@ class StudentServiceTest {
 
   @Test
   void updateThrowsNotFoundWhenStudentDoesNotExist() {
-    service = new StudentService(repository, accountProvisioning);
+    service = new StudentService(repository, accountProvisioning, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.empty());
     UpdateStudentCommand update =
         new UpdateStudentCommand("Jane", "Doe", "jane.doe@example.edu", LocalDate.of(2000, 1, 1));
@@ -119,7 +122,7 @@ class StudentServiceTest {
 
   @Test
   void updateRejectsEmailThatCollidesWithAnotherStudent() {
-    service = new StudentService(repository, accountProvisioning);
+    service = new StudentService(repository, accountProvisioning, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
     when(repository.existsByEmailExcludingCode(new Email("taken@example.edu"), existingCode)).thenReturn(true);
     UpdateStudentCommand update =
@@ -132,7 +135,7 @@ class StudentServiceTest {
 
   @Test
   void updateRejectsBlankLastName() {
-    service = new StudentService(repository, accountProvisioning);
+    service = new StudentService(repository, accountProvisioning, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
     UpdateStudentCommand update =
         new UpdateStudentCommand("Jane", "", "jane.doe@example.edu", LocalDate.of(2000, 1, 1));
@@ -144,7 +147,7 @@ class StudentServiceTest {
 
   @Test
   void updateAppliesChangesAndSkipsUsernameRenameWhenEmailUnchanged() {
-    service = new StudentService(repository, accountProvisioning);
+    service = new StudentService(repository, accountProvisioning, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
     when(repository.save(any(Student.class))).thenAnswer(invocation -> invocation.getArgument(0));
     UpdateStudentCommand update =
@@ -161,7 +164,7 @@ class StudentServiceTest {
 
   @Test
   void updateAppliesChangesAndRenamesLinkedAccountUsernameWhenEmailChanged() {
-    service = new StudentService(repository, accountProvisioning);
+    service = new StudentService(repository, accountProvisioning, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
     when(repository.existsByEmailExcludingCode(new Email("jane.new@example.edu"), existingCode))
         .thenReturn(false);
@@ -173,5 +176,27 @@ class StudentServiceTest {
 
     assertThat(result.email()).isEqualTo("jane.new@example.edu");
     verify(accountProvisioning).renameUsernameForStudent(1L, "jane.new@example.edu");
+  }
+
+  @Test
+  void removeThrowsNotFoundWhenStudentDoesNotExist() {
+    service = new StudentService(repository, accountProvisioning, events);
+    when(repository.findByCode(existingCode)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.remove("S00123")).isInstanceOf(NotFoundException.class);
+
+    verify(repository, never()).deleteByCode(any());
+    verifyNoInteractions(events);
+  }
+
+  @Test
+  void removeDeletesTheStudentAndPublishesStudentDeleted() {
+    service = new StudentService(repository, accountProvisioning, events);
+    when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
+
+    service.remove("S00123");
+
+    verify(repository).deleteByCode(existingCode);
+    verify(events).publishEvent(new StudentDeleted(new StudentId(1L)));
   }
 }

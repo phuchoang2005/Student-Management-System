@@ -49,6 +49,11 @@ class JdbcStudentRepository implements StudentRepository {
     }
   }
 
+  @Override
+  public void deleteByCode(StudentCode code) {
+    springRepo.deleteByStudentCode(code.value());
+  }
+
   private StudentRow toRow(Student student) {
     StudentId id = student.id();
     return new StudentRow(

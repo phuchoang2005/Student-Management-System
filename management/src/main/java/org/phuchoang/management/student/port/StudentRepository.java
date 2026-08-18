@@ -6,9 +6,8 @@ import org.phuchoang.management.student.domain.Student;
 import org.phuchoang.management.student.domain.StudentCode;
 
 /**
- * Scoped to what US-1.1 (registration) and US-1.2 (update) need. {@code search}/{@code
- * deleteByCode} (06-low-level-design.md §4.5) are added when the remove/search use cases
- * (US-1.3/US-5.1) are implemented.
+ * Scoped to what US-1.1 (registration), US-1.2 (update), and US-1.3 (remove) need. {@code search}
+ * (06-low-level-design.md §4.5) is added when the search use case (US-5.1) is implemented.
  */
 public interface StudentRepository {
 
@@ -21,4 +20,6 @@ public interface StudentRepository {
   boolean existsByEmailExcludingCode(Email email, StudentCode excluding);
 
   Student save(Student student);
+
+  void deleteByCode(StudentCode code);
 }

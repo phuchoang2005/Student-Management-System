@@ -7,6 +7,7 @@ import org.phuchoang.management.identity.ProvisionedAccount;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.DuplicateEmailException;
 import org.phuchoang.management.shared.exception.NotFoundException;
+import org.phuchoang.management.student.StudentDeleted;
 import org.phuchoang.management.student.application.command.RegisterStudentCommand;
 import org.phuchoang.management.student.application.command.UpdateStudentCommand;
 import org.phuchoang.management.student.domain.DateOfBirth;
@@ -14,6 +15,7 @@ import org.phuchoang.management.student.domain.Email;
 import org.phuchoang.management.student.domain.Student;
 import org.phuchoang.management.student.domain.StudentCode;
 import org.phuchoang.management.student.port.StudentRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,10 +24,15 @@ public class StudentService {
 
   private final StudentRepository repository;
   private final AccountProvisioning accountProvisioning;
+  private final ApplicationEventPublisher events;
 
-  public StudentService(StudentRepository repository, AccountProvisioning accountProvisioning) {
+  public StudentService(
+      StudentRepository repository,
+      AccountProvisioning accountProvisioning,
+      ApplicationEventPublisher events) {
     this.repository = repository;
     this.accountProvisioning = accountProvisioning;
+    this.events = events;
   }
 
   /**
@@ -109,6 +116,27 @@ public class StudentService {
         student.dateOfBirth().value(),
         student.createdAt(),
         student.updatedAt());
+  }
+
+  /**
+   * findByCode (404 if absent) → {@code repository.deleteByCode} → publish {@code StudentDeleted}
+   * (06-low-level-design.md §2.3, §13). The `book`/`enrollment`/`identity` cascade listeners that
+   * consume this event don't exist until those modules ship in later sprints (04-sprint-backlog.md
+   * §3) — for now, the DB-level {@code ON DELETE CASCADE}/{@code SET NULL} constraints
+   * (05-database-schema.md §5) are the only cascade actually in effect; publishing here just makes
+   * sure the event is on the classpath and fires so those listeners can be wired in without
+   * touching this method again.
+   */
+  @Transactional
+  public void remove(String code) {
+    StudentCode studentCode = new StudentCode(code);
+    Student student =
+        repository
+            .findByCode(studentCode)
+            .orElseThrow(() -> new NotFoundException("Student '" + code + "' does not exist."));
+
+    repository.deleteByCode(studentCode);
+    events.publishEvent(new StudentDeleted(student.id()));
   }
 
   /**
