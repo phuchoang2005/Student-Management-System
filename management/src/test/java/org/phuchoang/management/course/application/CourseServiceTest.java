@@ -26,6 +26,10 @@ import org.phuchoang.management.shared.exception.DomainValidationException;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class CourseServiceTest {
@@ -164,5 +168,53 @@ class CourseServiceTest {
 
     verify(repository).deleteByCode(existingCode);
     verify(events).publishEvent(new CourseDeleted(existingCode));
+  }
+
+  @Test
+  void searchReturnsMappedSummariesFromRepositoryPage() {
+    service = new CourseService(repository, events);
+    Pageable pageable = PageRequest.of(0, 20);
+    Page<Course> repoPage = new PageImpl<>(java.util.List.of(existingCourse), pageable, 1);
+    when(repository.search("cs101", pageable)).thenReturn(repoPage);
+
+    Page<CourseService.CourseSummaryView> result = service.search("cs101", pageable);
+
+    assertThat(result.getTotalElements()).isEqualTo(1);
+    CourseService.CourseSummaryView summary = result.getContent().get(0);
+    assertThat(summary.id()).isEqualTo(1L);
+    assertThat(summary.courseCode()).isEqualTo("CS101");
+    assertThat(summary.name()).isEqualTo("Intro to CS");
+    assertThat(summary.credits()).isEqualTo(3);
+  }
+
+  @Test
+  void searchReturnsEmptyPageWhenNothingMatches() {
+    service = new CourseService(repository, events);
+    Pageable pageable = PageRequest.of(0, 20);
+    when(repository.search("nobody", pageable)).thenReturn(Page.empty(pageable));
+
+    Page<CourseService.CourseSummaryView> result = service.search("nobody", pageable);
+
+    assertThat(result.getContent()).isEmpty();
+  }
+
+  @Test
+  void getDetailThrowsNotFoundWhenCourseDoesNotExist() {
+    service = new CourseService(repository, events);
+    when(repository.findByCode(existingCode)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.getDetail("CS101")).isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void getDetailReturnsCourseFieldsWithEmptyRosterStub() {
+    service = new CourseService(repository, events);
+    when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingCourse));
+
+    CourseService.CourseDetailView detail = service.getDetail("CS101");
+
+    assertThat(detail.courseCode()).isEqualTo("CS101");
+    assertThat(detail.name()).isEqualTo("Intro to CS");
+    assertThat(detail.roster()).isEmpty();
   }
 }

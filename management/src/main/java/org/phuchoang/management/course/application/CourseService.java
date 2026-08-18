@@ -1,6 +1,7 @@
 package org.phuchoang.management.course.application;
 
 import java.time.Instant;
+import java.util.List;
 import org.phuchoang.management.course.CourseDeleted;
 import org.phuchoang.management.course.application.command.CreateCourseCommand;
 import org.phuchoang.management.course.application.command.UpdateCourseCommand;
@@ -11,6 +12,8 @@ import org.phuchoang.management.course.port.CourseRepository;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -104,6 +107,41 @@ public class CourseService {
     events.publishEvent(new CourseDeleted(course.code()));
   }
 
+  /** UC-15 — matches code/name, paged. {@code query} may be blank/{@code null}. */
+  public Page<CourseSummaryView> search(String query, Pageable pageable) {
+    return repository.search(query, pageable).map(this::toSummaryView);
+  }
+
+  /**
+   * findByCode (404 if absent), then composes the course's enrolled-student roster. {@code
+   * roster} is stubbed empty here — {@code EnrollmentService.findRosterByCourse} doesn't exist
+   * until `enrollment` ships in Sprint 3, and US-5.5 wires the real call in
+   * (04-sprint-backlog.md §1, §3), mirroring {@code StudentService.getDetail}'s stub for owned
+   * books/enrollments.
+   */
+  public CourseDetailView getDetail(String code) {
+    CourseCode courseCode = new CourseCode(code);
+    Course course =
+        repository
+            .findByCode(courseCode)
+            .orElseThrow(() -> new NotFoundException("Course '" + code + "' does not exist."));
+
+    return new CourseDetailView(
+        course.id().value(),
+        course.code().value(),
+        course.name(),
+        course.description(),
+        course.credits().value(),
+        course.createdAt(),
+        course.updatedAt(),
+        List.of());
+  }
+
+  private CourseSummaryView toSummaryView(Course course) {
+    return new CourseSummaryView(
+        course.id().value(), course.code().value(), course.name(), course.credits().value());
+  }
+
   /**
    * Unwraps {@code Course}'s Value Objects here rather than in {@code CourseMapper} — the web
    * layer may never call a method on a Domain-layer object directly (LayeringRulesTest), only the
@@ -127,4 +165,18 @@ public class CourseService {
       int credits,
       Instant createdAt,
       Instant updatedAt) {}
+
+  /** Same VO-unwrapping rationale as {@link CreatedCourse}, for one {@link #search} result. */
+  public record CourseSummaryView(Long id, String courseCode, String name, int credits) {}
+
+  /** Same VO-unwrapping rationale as {@link CreatedCourse}, for {@link #getDetail}'s result. */
+  public record CourseDetailView(
+      Long id,
+      String courseCode,
+      String name,
+      String description,
+      int credits,
+      Instant createdAt,
+      Instant updatedAt,
+      List<Object> roster) {}
 }

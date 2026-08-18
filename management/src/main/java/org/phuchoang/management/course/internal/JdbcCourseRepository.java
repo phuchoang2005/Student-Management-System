@@ -1,5 +1,6 @@
 package org.phuchoang.management.course.internal;
 
+import java.util.List;
 import java.util.Optional;
 import org.phuchoang.management.course.CourseId;
 import org.phuchoang.management.course.domain.Course;
@@ -8,6 +9,9 @@ import org.phuchoang.management.course.domain.Credits;
 import org.phuchoang.management.course.port.CourseRepository;
 import org.phuchoang.management.shared.exception.StaleWriteException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -27,6 +31,16 @@ class JdbcCourseRepository implements CourseRepository {
   @Override
   public boolean existsByCode(CourseCode code) {
     return springRepo.existsByCourseCode(code.value());
+  }
+
+  @Override
+  public Page<Course> search(String query, Pageable pageable) {
+    List<Course> content =
+        springRepo.search(query, pageable.getPageSize(), pageable.getOffset()).stream()
+            .map(this::toDomain)
+            .toList();
+    long total = springRepo.countBySearch(query);
+    return new PageImpl<>(content, pageable, total);
   }
 
   @Override
