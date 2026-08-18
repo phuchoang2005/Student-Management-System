@@ -136,7 +136,7 @@
 <ul>
   <li><strong>Epic</strong> — one of the 5 Spring Modulith modules (<code>student</code>, <code>course</code>, <code>book</code>, <code>enrollment</code>, <code>identity</code>) plus <code>shared</code>/platform and a final cross-cutting/hardening epic, matching the module boundaries fixed in <a href="../SA-docs/02-component-diagram.html">SA-docs/02-component-diagram.md</a>.</li>
   <li><strong>Item</strong> — either a user story ID (<code>US-x.x</code>, acceptance criteria live in <code>user-stories.md</code> and are not restated here) or a platform item (<code>PM-0xx</code>).</li>
-  <li><strong>Priority</strong> — MoSCoW. Nearly everything is <em>Must</em> because <a href="../Testing/README.md">Testing/README.md</a> already commits to covering all 23 UCs with at least one test case each; items marked <em>Should</em> are explicitly flagged as recommended-not-required in <code>Testing/02-test-plan.md</code> §8.</li>
+  <li><strong>Priority</strong> — MoSCoW. Nearly everything is <em>Must</em> because <a href="../Testing/README.md">Testing/README.md</a> already commits to covering all 25 UCs with at least one test case each; items marked <em>Should</em> are explicitly flagged as recommended-not-required in <code>Testing/02-test-plan.md</code> §8.</li>
   <li><strong>Estimate</strong> — ideal developer-hours, not story points. The confirmed delivery model is a solo developer, so a shared team velocity in points has no meaning here; hours are a sizing input for <a href="./02-sprint-plan.html">02-sprint-plan.md</a>, not a commitment.</li>
   <li><strong>Sprint</strong> — which sprint the item is pulled into, per the sequence fixed by <code>Testing/02-test-plan.md</code> §2 (dependency order: <code>shared</code> → <code>student</code>+<code>identity</code> provisioning → <code>course</code> → <code>book</code> → <code>enrollment</code> → <code>identity</code> auth → cross-cutting).</li>
 </ul>
@@ -218,7 +218,7 @@
 <hr>
 
 <h2 id="epic-f">7. Epic F — <code>identity</code> auth + self-service</h2>
-<p>Account provisioning itself ships with Epic B (US-1.1); these items are the rest of the <code>identity</code> module.</p>
+<p>Account provisioning itself ships with Epic B (US-1.1); these items are the rest of the <code>identity</code> module. <strong>Sudden addition (post-planning):</strong> staff-account provisioning (System Administrator role) and a dev/test-only demo-accounts endpoint, added to this epic per the updated <code>04-authentication-authorization.md</code> §3a/§3b/§8 — see <a href="./02-sprint-plan.html">02-sprint-plan.md</a> Sprint 3 for the capacity impact.</p>
 <table>
   <thead><tr><th>ID</th><th>Item</th><th>Priority</th><th>Estimate</th><th>Linked UC</th></tr></thead>
   <tbody>
@@ -226,9 +226,13 @@
     <tr><td>US-6.2</td><td>Change my password</td><td>Must</td><td>4h</td><td>UC-22</td></tr>
     <tr><td>US-6.3</td><td>View a student's initial password (Registrar-only, only until changed)</td><td>Must</td><td>3h</td><td>UC-23</td></tr>
     <tr><td>US-5.4</td><td>Student views their own owned books and enrolled courses</td><td>Must</td><td>4h</td><td>UC-16</td></tr>
+    <tr><td>PM-016</td><td>System Administrator role: extend <code>Role</code> enum + <code>SecurityFilterChain</code> RBAC rules for <code>/staff-accounts/**</code></td><td>Must</td><td>2h</td><td><code>06-low-level-design.md</code> §11.1</td></tr>
+    <tr><td>US-7.1</td><td>Create a staff account (System Administrator provisions Registrar/Librarian/Course Administrator)</td><td>Must</td><td>5h</td><td>UC-24</td></tr>
+    <tr><td>US-7.2</td><td>Deactivate/reactivate a staff account</td><td>Must</td><td>3h</td><td>UC-25</td></tr>
+    <tr><td>PM-017</td><td>Demo-accounts endpoint (<code>GET /auth/demo-accounts</code>), profile-gated via <code>app.demo-accounts.enabled</code></td><td>Must</td><td>3h</td><td><code>04-authentication-authorization.md</code> §8</td></tr>
   </tbody>
 </table>
-<p><strong class="subtotal">Epic F subtotal: 16h</strong></p>
+<p><strong class="subtotal">Epic F subtotal: 29h</strong> (16h original + 13h added by the staff-account/demo-account requirement)</p>
 
 <hr>
 
@@ -281,15 +285,19 @@
     <tr><td>25</td><td>US-6.2</td><td>Change my password</td><td>Sprint 3</td></tr>
     <tr><td>26</td><td>US-6.3</td><td>View a student's initial password</td><td>Sprint 3</td></tr>
     <tr><td>27</td><td>US-5.4</td><td>Student views own books/courses</td><td>Sprint 3</td></tr>
-    <tr><td>28</td><td>PM-010</td><td>RBAC matrix tests</td><td>Sprint 4</td></tr>
-    <tr><td>29</td><td>PM-011</td><td>Must-change-password gate</td><td>Sprint 4</td></tr>
-    <tr><td>30</td><td>PM-012</td><td>Optimistic locking</td><td>Sprint 4</td></tr>
-    <tr><td>31</td><td>PM-013</td><td>Cascade/lifecycle integration tests</td><td>Sprint 4</td></tr>
-    <tr><td>32</td><td>PM-014</td><td>7 ambiguity resolutions</td><td>Sprint 4</td></tr>
-    <tr><td>33</td><td>PM-015</td><td>Coverage report + traceability matrix</td><td>Sprint 4</td></tr>
+    <tr><td>28</td><td>PM-016</td><td>System Administrator role: RBAC extension</td><td>Sprint 3</td></tr>
+    <tr><td>29</td><td>US-7.1</td><td>Create a staff account</td><td>Sprint 3</td></tr>
+    <tr><td>30</td><td>US-7.2</td><td>Deactivate/reactivate a staff account</td><td>Sprint 3</td></tr>
+    <tr><td>31</td><td>PM-017</td><td>Demo-accounts endpoint</td><td>Sprint 3</td></tr>
+    <tr><td>32</td><td>PM-010</td><td>RBAC matrix tests</td><td>Sprint 4</td></tr>
+    <tr><td>33</td><td>PM-011</td><td>Must-change-password gate</td><td>Sprint 4</td></tr>
+    <tr><td>34</td><td>PM-012</td><td>Optimistic locking</td><td>Sprint 4</td></tr>
+    <tr><td>35</td><td>PM-013</td><td>Cascade/lifecycle integration tests</td><td>Sprint 4</td></tr>
+    <tr><td>36</td><td>PM-014</td><td>7 ambiguity resolutions</td><td>Sprint 4</td></tr>
+    <tr><td>37</td><td>PM-015</td><td>Coverage report + traceability matrix</td><td>Sprint 4</td></tr>
   </tbody>
 </table>
-<p><strong>Total: 147 ideal-hours across 33 backlog items</strong>, covering all 23 UCs / 18 user stories plus the 6 platform prerequisites and 6 hardening items identified in the Testing documentation.</p>
+<p><strong>Total: 160 ideal-hours across 37 backlog items</strong> (22 user stories, 15 platform/hardening <code>PM-0xx</code> items), covering all 25 UCs identified in the Testing documentation. PM-016/017 and US-7.1/7.2 (13h) are a sudden mid-plan addition — see <a href="./02-sprint-plan.html">02-sprint-plan.md</a> Sprint 3 for how this changed that sprint's capacity.</p>
 
 </body>
 </html>

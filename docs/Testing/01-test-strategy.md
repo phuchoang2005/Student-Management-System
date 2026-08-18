@@ -16,9 +16,9 @@ Define the testing approach for the Student Management System — a single-deplo
 
 ### 1.2 In Scope
 
-- All 23 use cases (UC-1–UC-23) — main flow and every alternate/exception flow.
-- All business rule invariants in `req.md` §4 (Student.1–4, Book.1–5, Course.1–3, Enrollment.1–4, Identity.1–5) and the lifecycle rules in §5 (cascading effects of removing a student, book, or course).
-- Role-based access control (RBAC) across the 4 roles (Registrar, Librarian, Course Administrator, Student), including the "own records only" scoping applied to the Student role.
+- All 25 use cases (UC-1–UC-25) — main flow and every alternate/exception flow.
+- All business rule invariants in `req.md` §4 (Student.1–4, Book.1–5, Course.1–3, Enrollment.1–4, Identity.1–7) and the lifecycle rules in §5 (cascading effects of removing a student, book, or course).
+- Role-based access control (RBAC) across the 5 roles (System Administrator, Registrar, Librarian, Course Administrator, Student), including the "own records only" scoping applied to the Student role and the System Administrator's no-domain-access scoping.
 - Session-based authentication, the must-change-password gate, and the password policy.
 - The error-response contract (`Error` / `ValidationError` envelope, and the exact HTTP status per exception type in `06-low-level-design.md` §3).
 - Database-level integrity: uniqueness constraints, foreign keys, `CHECK` constraints, and cascade (`ON DELETE`) behavior.
@@ -33,7 +33,7 @@ Define the testing approach for the Student Management System — a single-deplo
 | Load / stress / scalability testing beyond a basic smoke check | `01-system-overview.md` §5 fixes a single-process, no-clustering deployment with no stated throughput target; a full performance test program is not justified until real usage patterns emerge (`api-specification.md` §6 makes the same call for pagination). |
 | UI / frontend testing | The system is backend-only (`01-system-overview.md` §1) — no bundled frontend exists to test. |
 | Formal penetration testing / security audit | Basic authorization and session-handling coverage is included (§2.4 below); a dedicated audit is a separate, specialist engagement. |
-| SSO / OAuth / MFA / rate limiting / forgot-password flow testing | All explicitly out of scope of the design itself (`04-authentication-authorization.md` §7, `api-specification.md` §6) — nothing exists to test. |
+| SSO / OAuth / MFA / rate limiting / forgot-password flow testing | All explicitly out of scope of the design itself (`04-authentication-authorization.md` §9, `api-specification.md` §6) — nothing exists to test. |
 | Internationalization / accessibility | Not addressed anywhere in the BA/SA doc set; no requirement exists to verify. |
 | Horizontal scaling / distributed session behavior | Ruled out by the single-process topology (`01-system-overview.md` §5). |
 
@@ -72,7 +72,7 @@ Rule of thumb used throughout §3 of [03-test-cases/](./03-test-cases/): if a ru
 
 ### 2.4 Security testing scope
 
-Covers: the full role × endpoint matrix (`06-low-level-design.md` §11.1), unauthenticated access rejection, the must-change-password gate, session cookie issuance/invalidation, and password-policy enforcement (§5.2 of `04-authentication-authorization.md`). Does not cover: penetration testing, dependency/CVE scanning, or infrastructure hardening — those are operational concerns outside this application-level test scope.
+Covers: the full role × endpoint matrix (`06-low-level-design.md` §11.1, now including `SYSTEM_ADMINISTRATOR`), unauthenticated access rejection, the must-change-password gate, session cookie issuance/invalidation, password-policy enforcement (§5.2 of `04-authentication-authorization.md`), the disabled-account login rejection (Identity.7), and confirming the demo-accounts endpoint/seed data are environment-conditional (§8 of `04-authentication-authorization.md`) rather than always present. Does not cover: penetration testing, dependency/CVE scanning, or infrastructure hardening — those are operational concerns outside this application-level test scope.
 
 ---
 
@@ -127,7 +127,7 @@ None of these additions are made by this documentation task; they are strategy r
 
 | Priority | Category | Examples |
 | --- | --- | --- |
-| **P0** — must pass before any release | Uniqueness constraints (student code, email, ISBN, course code, username); cascade/lifecycle correctness on delete; authentication and RBAC; must-change-password gate; optimistic locking (`StaleWriteException`) | UC-1 duplicate student code, UC-3 full cascade, UC-21/UC-22 auth flows, any role attempting an out-of-scope write |
+| **P0** — must pass before any release | Uniqueness constraints (student code, email, ISBN, course code, username); cascade/lifecycle correctness on delete; authentication and RBAC; must-change-password gate; optimistic locking (`StaleWriteException`); the demo-accounts endpoint (`GET /auth/demo-accounts`) being unreachable and its seed accounts absent outside dev/test; staff-account creation (UC-24) rejecting a requested SYSTEM_ADMINISTRATOR role or any non-SYSTEM_ADMINISTRATOR caller | UC-1 duplicate student code, UC-3 full cascade, UC-21/UC-22 auth flows, any role attempting an out-of-scope write, UC-24 privilege-escalation attempts, demo-accounts route probed in a prod-profile build |
 | **P1** — required for feature completeness | Field-level validation on create/update (blank name, invalid DOB, non-positive credits, malformed email) | UC-2, UC-8, UC-9 alternate flows |
 | **P2** — required for correctness but lower blast radius | Read/search/detail views, empty-result handling, not-found-after-removal races | UC-13–20 |
 

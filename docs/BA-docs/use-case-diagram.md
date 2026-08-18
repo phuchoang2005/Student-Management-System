@@ -1,6 +1,6 @@
 # Student Management System — Use Case Diagrams
 
-Derived from [use-cases.md](./use-cases.md), which remains the authoritative source (actors, flows, business-rule traceability). This document is the visual companion: a system-wide **Overview** diagram followed by one **detail diagram per functional area**, so that no single diagram has to carry all 23 use cases at once. See also [req.md](./req.md) and [user-stories.md](./user-stories.md), and the [Activity Diagrams](./activity-diagram.md) for how each use case's request flow — validations, decisions, branches — actually plays out.
+Derived from [use-cases.md](./use-cases.md), which remains the authoritative source (actors, flows, business-rule traceability). This document is the visual companion: a system-wide **Overview** diagram followed by one **detail diagram per functional area**, so that no single diagram has to carry all 25 use cases at once. See also [req.md](./req.md) and [user-stories.md](./user-stories.md), and the [Activity Diagrams](./activity-diagram.md) for how each use case's request flow — validations, decisions, branches — actually plays out.
 
 Diagrams are drawn in standard UML use-case notation (stick-figure actors, oval use cases, a system-boundary rectangle) using [PlantUML](https://plantuml.com/use-case-diagram). Each `.svg` below is generated from the matching `.puml` source in [use-case-diagram-assets/](./use-case-diagram-assets/) — edit the `.puml` file and re-render with `plantuml -tsvg *.puml` to update a diagram. The [HTML version](./use-case-diagram.html) of this document embeds the same SVGs with click-to-zoom and drag-to-pan.
 
@@ -17,7 +17,7 @@ Diagrams are drawn in standard UML use-case notation (stick-figure actors, oval 
 | Dashed-border oval | An "external" reference to a use case drawn in full in a different diagram |
 | Dashed arrow, other label | A dependency that isn't a formal extend, e.g. "requires active session" |
 
-The six functional areas group the 23 use cases as follows:
+The six functional areas group the 25 use cases as follows:
 
 | Area | Use Cases |
 | ---- | --------- |
@@ -26,13 +26,13 @@ The six functional areas group the 23 use cases as follows:
 | Course Management | UC-8, UC-9, UC-10, UC-15, UC-19 |
 | Enrollment Management | UC-11, UC-12 |
 | Student Self-Service | UC-16, UC-20 |
-| Identity & Access | UC-21, UC-22, UC-23 |
+| Identity & Access | UC-21, UC-22, UC-23, UC-24, UC-25 |
 
 ---
 
 ## 1. System Overview
 
-Shows which functional areas each actor touches. The Student's reach into Book Management and Course Management is indirect — only through UC-16 ("my books / my courses") — so it's drawn as a dashed line rather than a direct association.
+Shows which functional areas each actor touches. The Student's reach into Book Management and Course Management is indirect — only through UC-16 ("my books / my courses") — so it's drawn as a dashed line rather than a direct association. The System Administrator only touches Identity & Access — it has no reach into any domain data.
 
 ![System Overview](./use-case-diagram-assets/01-overview.svg)
 
@@ -82,7 +82,7 @@ UC-16 (View Own Books, Courses & Enrollments) is Student-only. UC-20 (View Enrol
 
 ![Identity & Access](./use-case-diagram-assets/07-identity-access.svg)
 
-All four actors share Login and Change Password. UC-23 (View Student's Initial Password) is Registrar-only. UC-22 depends on an authenticated session from UC-21 — shown as a dependency rather than `«extend»`, since it's a precondition, not an optional insertion point.
+All five actors share Login and Change Password. UC-23 (View Student's Initial Password) is Registrar-only; UC-24 (Create Staff Account) and UC-25 (Deactivate/Reactivate Staff Account) are System Administrator-only. UC-22 depends on an authenticated session from UC-21 — shown as a dependency rather than `«extend»`, since it's a precondition, not an optional insertion point. UC-25 similarly depends on an account already having been created via UC-24.
 
 ---
 
@@ -113,3 +113,5 @@ All four actors share Login and Change Password. UC-23 (View Student's Initial P
 | UC-21 Login | §7 Identity & Access | All actors |
 | UC-22 Change Password | §7 Identity & Access | All actors |
 | UC-23 View Student's Initial Password | §7 Identity & Access | Registrar |
+| UC-24 Create Staff Account | §7 Identity & Access | System Administrator |
+| UC-25 Deactivate/Reactivate Staff Account | §7 Identity & Access | System Administrator |

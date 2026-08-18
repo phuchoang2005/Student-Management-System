@@ -1,0 +1,29 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|System Administrator|
+start
+:Select an existing staff account;
+
+|System|
+if (Account currently enabled?) then (yes)
+  :Set enabled = false;
+else (no)
+  :Set enabled = true;
+endif
+:Confirm updated state;
+
+|System Administrator|
+:See updated account status;
+stop
+@enduml

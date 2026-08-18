@@ -45,14 +45,15 @@ A course that students may take.
 
 ### User Account
 
-A login identity that lets an actor authenticate into the system. Every actor (Registrar, Librarian, Course Administrator, Student) acts through one of these; a Student's account is created automatically when they are registered (see Identity.1).
+A login identity that lets an actor authenticate into the system. Every actor (System Administrator, Registrar, Librarian, Course Administrator, Student) acts through one of these; a Student's account is created automatically when they are registered (see Identity.1), and a staff account (Registrar, Librarian, Course Administrator) is created by a System Administrator (see Identity.6).
 
 | Attribute             | Business Meaning                                                                 |
 | ---------------------- | --------------------------------------------------------------------------------- |
 | Username               | Unique login identifier; for a Student, this is always their email address        |
 | Password               | The account's current credential; never stored or displayed in recoverable form once chosen by the account holder |
-| Role                   | One of Registrar, Librarian, Course Administrator, Student — determines access    |
+| Role                   | One of System Administrator, Registrar, Librarian, Course Administrator, Student — determines access |
 | Must Change Password   | Whether the account is still using its system-issued initial password and must replace it before normal use |
+| Enabled                | Whether the account may currently log in; a System Administrator may disable a staff account without deleting it |
 
 ---
 
@@ -74,6 +75,11 @@ A login identity that lets an actor authenticate into the system. Every actor (R
 
 - Every student has **exactly one** associated user account, created automatically at registration.
 - The account's username is always the student's email; if the student's email changes, the account's username changes with it.
+
+### System Administrator ↔ Staff User Account — Provisioning
+
+- A staff user account (Registrar, Librarian, or Course Administrator) is created only by a System Administrator.
+- A System Administrator account is never created through the application — it exists only as a pre-seeded, out-of-band identity, to prevent an account from ever granting itself System Administrator privileges.
 
 ---
 
@@ -115,6 +121,8 @@ A login identity that lets an actor authenticate into the system. Every actor (R
 3. A newly created student account starts in a "must change password" state and cannot be used for anything beyond changing its own password until that password is replaced.
 4. Once an account holder replaces their initial password, the new password is never stored or displayed in a recoverable form again — not even to the Registrar.
 5. Until an account holder replaces their initial password, the Registrar may look up that initial password on demand. This access ends permanently the moment the password is replaced.
+6. A staff account (Registrar, Librarian, Course Administrator) is created only by a System Administrator, never automatically and never by self-registration. A System Administrator account itself is never created through the application.
+7. A System Administrator may disable a staff account at any time; a disabled account cannot log in until a System Administrator re-enables it. Disabling an account does not delete it or affect any records the account holder previously created.
 
 ---
 

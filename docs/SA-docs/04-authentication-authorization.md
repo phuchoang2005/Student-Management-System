@@ -2,7 +2,7 @@
 
 Solution Architecture Document — Part 4 of 6 ([System Overview](./01-system-overview.md) → [Component Diagram](./02-component-diagram.md) → [Sequence Diagram](./03-sequence-diagrams.md) → Authentication & Authorization → [Database Schema](./05-database-schema.md) → [Low-Level Design](./06-low-level-design.md)).
 
-Derived from [use-cases.md](../BA-docs/use-cases.md) (UC-1's account-provisioning step, UC-21 Login, UC-22 Change Password, UC-23 View Student's Initial Password) and [req.md](../BA-docs/req.md) (the User Account entity and Identity.1–5 rules). This document settles what `01-system-overview.md` §4.2 and its Deployment Characteristics table originally left as "an implementation decision" — the authentication scheme, the identity/session model, and the `identity` module introduced in `02-component-diagram.md` §2.1/§2.4. It reuses the lifeline, arrow-style, and `alt`/`par` conventions defined once in `03-sequence-diagrams.md` §1 rather than restating them, and does not repeat request/response DTO shapes, which stay in the OpenAPI contract per `02-component-diagram.md` §5.
+Derived from [use-cases.md](../BA-docs/use-cases.md) (UC-1's account-provisioning step, UC-21 Login, UC-22 Change Password, UC-23 View Student's Initial Password, UC-24 Create Staff Account, UC-25 Deactivate/Reactivate Staff Account) and [req.md](../BA-docs/req.md) (the User Account entity and Identity.1–7 rules). This document settles what `01-system-overview.md` §4.2 and its Deployment Characteristics table originally left as "an implementation decision" — the authentication scheme, the identity/session model, and the `identity` module introduced in `02-component-diagram.md` §2.1/§2.4. It reuses the lifeline, arrow-style, and `alt`/`par` conventions defined once in `03-sequence-diagrams.md` §1 rather than restating them, and does not repeat request/response DTO shapes, which stay in the OpenAPI contract per `02-component-diagram.md` §5.
 
 ---
 
@@ -11,10 +11,10 @@ Derived from [use-cases.md](../BA-docs/use-cases.md) (UC-1's account-provisionin
 | Concern | Decision | Supersedes |
 | --- | --- | --- |
 | State management | **Session-based (stateful).** Spring Security's default HTTP session management issues a server-side session (`JSESSIONID` cookie) on successful login. | `01-system-overview.md` Deployment Characteristics "State" row, previously "Stateless"; §4.2, previously "an implementation decision... not fixed at this level." |
-| Authorization model | **RBAC**, using the same 4 roles already named throughout the doc set (Registrar, Librarian, Course Administrator, Student) — no new role is introduced. | `02-component-diagram.md` §4's existing role/access table, which now has a concrete `role` column on `users` backing it instead of an abstract "authenticated principal." |
+| Authorization model | **RBAC**, using 5 roles: the 4 already named throughout the doc set (Registrar, Librarian, Course Administrator, Student) plus a new **System Administrator** role, scoped solely to staff-account provisioning (§3a) and deactivation (§3b) — it has no access to any domain module's data. | `02-component-diagram.md` §4's existing role/access table, which now has a concrete `role` column on `users` backing it instead of an abstract "authenticated principal," plus a new System Administrator row. |
 | Identity / SSO | **In-app identity.** A dedicated `users` table owned by a new `identity` module; login and password logic are built into the application itself. No external IdP, no OAuth/OIDC. | — (no prior decision existed; this scope was entirely unaddressed before). |
 
-Single-process deployment (`01-system-overview.md` Deployment Characteristics, "Process topology") makes an in-memory session store sufficient for this scope — no distributed session store is designed here (see §7).
+Single-process deployment (`01-system-overview.md` Deployment Characteristics, "Process topology") makes an in-memory session store sufficient for this scope — no distributed session store is designed here (see §9).
 
 ## 2. The `identity` module and the `users` table
 
@@ -39,14 +39,15 @@ Conceptual schema — Flyway DDL is future build-phase work, same status as the 
 | `username` | Unique, not null. For a Student account this is always the student's email (already validated unique by Student.2) — if the student's email later changes, the username changes with it (req.md §3, Student ↔ User Account). |
 | `password_hash` | BCrypt hash of the **current** password. One-way — used only to verify a login or a Change Password submission; never reversible, never displayed. |
 | `initial_password_encrypted` | Nullable. A **reversibly encrypted** (AES) copy of the *original* system-generated password, populated at account creation. **Cleared to `NULL` the instant the account holder completes their first password change.** This is the only recoverable form of any password in this design, and it exists solely to satisfy UC-23. |
-| `role` | One of `REGISTRAR`, `LIBRARIAN`, `COURSE_ADMINISTRATOR`, `STUDENT`. |
-| `student_id` | Nullable FK to the `student` module's aggregate. Required if and only if `role = STUDENT`; must be `NULL` for the 3 staff roles — a domain invariant on `User`, enforced the same way Student.3/4 are enforced on `Student`. |
-| `must_change_password` | Not null, default `false`. Set `true` at creation for auto-provisioned Student accounts (Identity.3); flips to `false` on the first successful Change Password (Identity.3–5). |
+| `role` | One of `SYSTEM_ADMINISTRATOR`, `REGISTRAR`, `LIBRARIAN`, `COURSE_ADMINISTRATOR`, `STUDENT`. |
+| `student_id` | Nullable FK to the `student` module's aggregate. Required if and only if `role = STUDENT`; must be `NULL` for the 4 non-Student roles — a domain invariant on `User`, enforced the same way Student.3/4 are enforced on `Student`. |
+| `must_change_password` | Not null, default `false`. Set `true` at creation for auto-provisioned Student accounts (Identity.3) and for accounts created via UC-24 (Identity.6); flips to `false` on the first successful Change Password (Identity.3–5). |
+| `enabled` | Not null, default `true`. Set `false` by UC-25 (Identity.7); a disabled account fails login (§4.1) regardless of password correctness. Only meaningful for staff roles — Student accounts have no deactivation use case and System Administrator accounts are never disabled through the application (there being no use case for a System Administrator to manage another System Administrator's account). |
 | `created_at` / `updated_at` | Timestamps. |
 
-**Security note.** Storing any reversible form of a password is a deliberate, narrow deviation from password-storage best practice, made only because Identity.5 requires the Registrar to be able to look up a student's still-active initial password. The deviation is scoped as tightly as the requirement allows: only the *original* system-generated password is ever recoverable (never one the account holder chose), only for as long as `must_change_password = true`, and only via `initial_password_encrypted` — `password_hash` itself is always one-way. The AES key used for this field is application-managed configuration (e.g. environment/secret store); its storage and rotation is a build/ops concern, out of scope here (§7).
+**Security note.** Storing any reversible form of a password is a deliberate, narrow deviation from password-storage best practice, made only because Identity.5 requires the Registrar to be able to look up a student's still-active initial password. The deviation is scoped as tightly as the requirement allows: only the *original* system-generated password is ever recoverable (never one the account holder chose), only for as long as `must_change_password = true`, and only via `initial_password_encrypted` — `password_hash` itself is always one-way. The AES key used for this field is application-managed configuration (e.g. environment/secret store); its storage and rotation is a build/ops concern, out of scope here (§9).
 
-**Staff accounts (Registrar, Librarian, Course Administrator) are out of scope for auto-provisioning.** No use case in `use-cases.md` defines who creates a staff account or through what flow — only UC-1 (Student registration) triggers auto-provisioning. Staff accounts are assumed pre-seeded by some out-of-band process (§7).
+**Staff accounts (Registrar, Librarian, Course Administrator) are never auto-provisioned** — only a Student account is, as a side effect of UC-1. A staff account is instead created deliberately, one at a time, by a System Administrator via UC-24 (§3a below). The **System Administrator** account itself is the one identity in this table that stays pre-seeded/out-of-band (§9) — the application has no use case for creating one, precisely to prevent any in-app path to self-granting that role.
 
 ## 3. Account provisioning (UC-1 tail)
 
@@ -75,6 +76,78 @@ sequenceDiagram
 
 No `alt` for a username collision is modeled — consistent with this doc set's rule of only modeling branches `use-cases.md` actually lists (`03-sequence-diagrams.md` §1): a collision is unreachable here since the username is always the already-Student.2-validated-unique email. The returned `plaintextPassword` is included once in UC-1's `201 Created` response (`03-sequence-diagrams.md` §2.1); after that response, it is retrievable again only through UC-23 (§5.3), and only until the student changes it.
 
+## 3a. Staff account provisioning (UC-24)
+
+System Administrator-only (`03-sequence-diagrams.md` §2.1 auth gate, `hasRole("SYSTEM_ADMINISTRATOR")`). Manual trigger, not a side effect of another module's save — this is the one place `identity` is called directly by an end user rather than by another module.
+
+```mermaid
+sequenceDiagram
+    actor SysAdmin as System Administrator
+    participant Ctrl as StaffAccountController
+    participant Svc as IdentityService
+    participant Agg as User (aggregate)
+    participant Repo as JdbcUserRepository
+    participant DB as MySQL
+
+    SysAdmin->>Ctrl: POST /api/v1/staff-accounts {username, role}
+    Ctrl->>Svc: provisionStaff(command)
+    alt role not one of REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR
+        Svc-->>Ctrl: ValidationException
+        Ctrl-->>SysAdmin: 400 Bad Request
+    else role is a valid staff role
+        Svc->>Repo: findByUsername(username)
+        Repo->>DB: SELECT ... WHERE username = ?
+        DB-->>Repo: result
+        Repo-->>Svc: user or empty
+        alt username already in use
+            Svc-->>Ctrl: DuplicateUsernameException
+            Ctrl-->>SysAdmin: 409 Conflict
+        else username available
+            Svc->>Svc: generate 8-char alphanumeric password (SecureRandom)
+            Svc->>Agg: create(username, role, plaintextPassword)
+            Agg->>Agg: hash(plaintextPassword) → passwordHash (BCrypt)
+            Agg->>Agg: encrypt(plaintextPassword) → initialPasswordEncrypted (AES)
+            Agg-->>Svc: User instance (mustChangePassword = true, enabled = true) (Identity.3, Identity.6)
+            Svc->>Repo: save(user)
+            Repo->>DB: INSERT INTO users (username, password_hash, initial_password_encrypted, role, must_change_password, enabled) ...
+            DB-->>Repo: OK
+            Repo-->>Svc: saved
+            Svc-->>Ctrl: ProvisionedAccount(username, plaintextPassword)
+            Ctrl-->>SysAdmin: 201 Created {username, role, initialPassword}
+        end
+    end
+```
+
+Reuses exactly the same password-generate/hash/encrypt steps as §3's Student provisioning — the only differences are who triggers it (a person, not another module), the role being one of the 3 staff values instead of always `STUDENT`, and `student_id` staying `NULL`. As with §3, the plaintext password is returned exactly once, in this response; after that it's gone — there is no UC-23-equivalent "view a staff account's initial password" use case, so a lost initial password for a staff account has no in-app recovery path (§9).
+
+## 3b. Staff account deactivation (UC-25)
+
+System Administrator-only. Symmetric — the same endpoint toggles `enabled` in either direction.
+
+```mermaid
+sequenceDiagram
+    actor SysAdmin as System Administrator
+    participant Ctrl as StaffAccountController
+    participant Svc as IdentityService
+    participant Repo as JdbcUserRepository
+    participant DB as MySQL
+
+    SysAdmin->>Ctrl: PATCH /api/v1/staff-accounts/{id}/status {enabled}
+    Ctrl->>Svc: setAccountEnabled(userId, enabled)
+    Svc->>Repo: findById(userId)
+    Repo->>DB: SELECT ... WHERE id = ?
+    DB-->>Repo: user
+    Repo-->>Svc: user
+    Svc->>Repo: save(user with enabled = requested value)
+    Repo->>DB: UPDATE users SET enabled = ? ...
+    DB-->>Repo: OK
+    Repo-->>Svc: saved
+    Svc-->>Ctrl: OK
+    Ctrl-->>SysAdmin: 200 OK {username, enabled}
+```
+
+Deactivation does not force-terminate an already-open session for the target account — this single-process deployment has no distributed session store to invalidate against (§1), so an account disabled mid-session may retain access until that session naturally expires. This is called out explicitly as a limitation in §9, not silently assumed away.
+
 ## 4. Login & the must-change-password gate
 
 ### 4.1 UC-21: Login
@@ -96,7 +169,10 @@ sequenceDiagram
     alt username not found
         UDS-->>Sec: UsernameNotFoundException
         Sec-->>User: 401 Unauthorized
-    else user found
+    else user found, but enabled = false
+        UDS-->>Sec: DisabledException (Identity.7)
+        Sec-->>User: 401 Unauthorized
+    else user found and enabled
         Sec->>Sec: PasswordEncoder.matches(password, user.passwordHash)
         alt password mismatch
             Sec-->>User: 401 Unauthorized
@@ -106,6 +182,8 @@ sequenceDiagram
         end
     end
 ```
+
+A disabled account and a wrong password both return the same `401 Unauthorized` with no distinguishing detail — otherwise the response would leak an account's enabled-state to an unauthenticated caller.
 
 ### 4.2 Must-change-password gate
 
@@ -192,7 +270,7 @@ Kept minimal — this is a small internal system, not a public-facing one:
 3. New password **must differ** from the current password — otherwise "changing" it could be a no-op that still clears `must_change_password`, defeating the gate in §4.2.
 4. New and Re-type must match exactly (already enforced as the first check in §5.1).
 5. Maximum length **72 characters** — BCrypt silently truncates beyond 72 bytes; capping input avoids that surprise.
-6. No password history, expiry, or rotation policy — out of scope (§7).
+6. No password history, expiry, or rotation policy — out of scope (§9).
 
 ### 5.3 UC-23: View Student's Initial Password
 
@@ -228,20 +306,46 @@ sequenceDiagram
 
 Extends `02-component-diagram.md` §4's role/access table with the `identity`-specific permissions that table deliberately excludes (§4's closing note):
 
-| Role | Can log in (UC-21) | Can change own password (UC-22) | Can view a student's initial password (UC-23) |
-| --- | --- | --- | --- |
-| Registrar | Yes | Yes | Yes |
-| Librarian | Yes | Yes | No |
-| Course Administrator | Yes | Yes | No |
-| Student | Yes | Yes | No |
+| Role | Can log in (UC-21) | Can change own password (UC-22) | Can view a student's initial password (UC-23) | Can create/deactivate staff accounts (UC-24/25) |
+| --- | --- | --- | --- | --- |
+| System Administrator | Yes | Yes | No | Yes |
+| Registrar | Yes | Yes | Yes | No |
+| Librarian | Yes | Yes | No | No |
+| Course Administrator | Yes | Yes | No | No |
+| Student | Yes | Yes | No | No |
 
-No role may view or change another principal's *changed* password — that is never possible for anyone, by construction (§2.2, §5.1).
+No role may view or change another principal's *changed* password — that is never possible for anyone, by construction (§2.2, §5.1). The System Administrator's own account is never created or deactivated through the application (§3a) — that column has no entry for its own row by construction, not by omission.
 
-## 7. Out of Scope (this document)
+## 8. Demo accounts for development/testing
+
+**Purpose:** a developer exercising the frontend needs a one-click way to log in as each actor, without knowing or typing any real credentials. This is a development/QA convenience only — it has no business use case and is not part of `use-cases.md`.
+
+**Endpoint:** `GET /api/v1/auth/demo-accounts` — public (`x-roles: []`, no `Authorization`/session required, since its whole purpose is to be callable *before* login). Returns the 5 fixed demo identities, one per actor:
+
+```json
+[
+  { "role": "SYSTEM_ADMINISTRATOR", "username": "demo.sysadmin", "password": "Demo#12345" },
+  { "role": "REGISTRAR",            "username": "demo.registrar", "password": "Demo#12345" },
+  { "role": "LIBRARIAN",             "username": "demo.librarian", "password": "Demo#12345" },
+  { "role": "COURSE_ADMINISTRATOR",  "username": "demo.courseadmin", "password": "Demo#12345" },
+  { "role": "STUDENT",               "username": "demo.student", "password": "Demo#12345" }
+]
+```
+
+The frontend calls this once (e.g. on the login screen), renders one button per entry, and on click submits the returned `{username, password}` straight to UC-21 Login (§4.1) — no special-cased "demo login" code path in `identity` itself, it's an ordinary login.
+
+**Production safety (the load-bearing constraint of this design):** the route is registered only when `app.demo-accounts.enabled=true`, a property defaulted to `true` in the `dev`/`test`/`local` Spring profiles and hard-`false` in the `prod` profile, enforced by making the controller bean itself conditional (`@ConditionalOnProperty`) rather than gating it with a security rule. A disabled feature that returns `404` because the route doesn't exist is a stronger guarantee than one that returns `403` because a filter blocked it — the latter still tells an attacker the endpoint exists and still ships the handler code. See `06-low-level-design.md` §11 for the bean wiring and `Testing/01-test-strategy.md` §6 for this being tracked as an explicit P0 risk.
+
+**Seed data:** the 5 accounts are inserted by a dev/test-only data seed (`Testing/04-test-data-preparation.md`), never by the production Flyway migration path — they exist in a `prod` database not at all, which is the second, independent layer of the same guarantee (even if the route were somehow reachable, the accounts wouldn't exist to log into).
+
+## 9. Out of Scope (this document)
 
 - SSO, OAuth/OIDC, or any external identity provider — identity is entirely in-app, per §1.
-- A "true" forgot-password flow for a user with no active session and no known current password (email/SMS/token-based reset) — not designed; an account holder who cannot authenticate at all must be handled operationally.
-- How staff (Registrar/Librarian/Course Administrator) accounts are created — assumed pre-seeded; no use case defines this flow (§2.2).
+- A "true" forgot-password flow for a user with no active session and no known current password (email/SMS/token-based reset) — not designed; an account holder who cannot authenticate at all must be handled operationally. This applies equally to a staff account created via UC-24 that loses its initial password — there is no UC-23-equivalent lookup for staff accounts (§3a).
+- Further System Administrator accounts — always pre-seeded/out-of-band, never created through the application (§2.2, §3a).
+- Self-service staff registration — a staff account can only come from UC-24; there is no "sign up" flow.
+- Force-terminating an already-open session when its account is deactivated mid-session (§3b) — the single-process, in-memory session store (§1) has no session-by-user-id invalidation mechanism designed here.
+- The demo-accounts endpoint (§8) being reachable, or its seed accounts existing, in a production environment — treated as a P0 risk, not merely "out of scope," per `01-test-strategy.md` §6.
 - Horizontal scaling of the session store (Spring Session JDBC/Redis, sticky sessions) — the single-process deployment in `01-system-overview.md` makes this unnecessary for current scope.
 - Multi-factor authentication, password expiry/rotation, and password history beyond the single "must differ from current" check (§5.2).
 - AES key management/rotation for `initial_password_encrypted` — application configuration, a build/ops concern.

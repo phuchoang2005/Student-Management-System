@@ -215,7 +215,7 @@
   <span class="pill">Part 5</span> Database Schema
 </nav>
 
-<p>Derived from <a href="../BA-docs/req.md">req.md</a> (business entities, invariants, and lifecycle rules) and <a href="./04-authentication-authorization.html">04-authentication-authorization.md</a> §2.2 (the <code>users</code> table). Both of those documents deliberately left column-level design out of scope (<code>02-component-diagram.md</code> §5: "Database schema / column-level design — tracked separately, not duplicated here"; <code>04-authentication-authorization.md</code> §7: "Flyway migration DDL... future build-phase work"). This document is that separate design: a concrete MySQL 8 table-by-table schema, still <strong>conceptual</strong> — no Flyway migration file is written here, since no entity/repository code exists yet in <code>management/</code> to run against it (see §7).</p>
+<p>Derived from <a href="../BA-docs/req.md">req.md</a> (business entities, invariants, and lifecycle rules) and <a href="./04-authentication-authorization.html">04-authentication-authorization.md</a> §2.2 (the <code>users</code> table). Both of those documents deliberately left column-level design out of scope (<code>02-component-diagram.md</code> §5: "Database schema / column-level design — tracked separately, not duplicated here"; <code>04-authentication-authorization.md</code> §9: "Flyway migration DDL... future build-phase work"). This document is that separate design: a concrete MySQL 8 table-by-table schema, still <strong>conceptual</strong> — no Flyway migration file is written here, since no entity/repository code exists yet in <code>management/</code> to run against it (see §7).</p>
 
 <hr>
 
@@ -269,6 +269,7 @@ erDiagram
         ENUM role
         BIGINT student_id FK "nullable, UK"
         BOOLEAN must_change_password
+        BOOLEAN enabled
     }
 </pre>
 </div>
@@ -342,9 +343,10 @@ erDiagram
     <tr><td><code>username</code></td><td><code>VARCHAR(255)</code></td><td><code>UNIQUE NOT NULL</code></td><td>Identity.2. For a Student account, equals <code>students.email</code> at provisioning time; not itself FK-linked to <code>students.email</code> (see §6).</td></tr>
     <tr><td><code>password_hash</code></td><td><code>CHAR(60)</code></td><td><code>NOT NULL</code></td><td>Fixed-length BCrypt hash.</td></tr>
     <tr><td><code>initial_password_encrypted</code></td><td><code>VARCHAR(255)</code></td><td><code>NULL</code></td><td>AES ciphertext (base64), cleared to <code>NULL</code> on first password change (Identity.4).</td></tr>
-    <tr><td><code>role</code></td><td><code>ENUM('REGISTRAR','LIBRARIAN','COURSE_ADMINISTRATOR','STUDENT')</code></td><td><code>NOT NULL</code></td><td>Fixed set of 4 roles per <code>01-system-overview.md</code> §2 — no dynamic role management is in scope, so <code>ENUM</code> is used instead of a lookup table.</td></tr>
-    <tr><td><code>student_id</code></td><td><code>BIGINT</code></td><td><code>NULL</code>, <code>UNIQUE</code>, FK → <code>students.id</code>, <code>ON DELETE CASCADE</code></td><td>Nullable for the 3 staff roles, required for <code>STUDENT</code> (see the <code>CHECK</code> below). <code>UNIQUE</code> enforces the 1:1 Student↔User relationship (req.md §3).</td></tr>
-    <tr><td><code>must_change_password</code></td><td><code>BOOLEAN</code></td><td><code>NOT NULL DEFAULT FALSE</code></td><td>Identity.3.</td></tr>
+    <tr><td><code>role</code></td><td><code>ENUM('SYSTEM_ADMINISTRATOR','REGISTRAR','LIBRARIAN','COURSE_ADMINISTRATOR','STUDENT')</code></td><td><code>NOT NULL</code></td><td>Fixed set of 5 roles per <code>01-system-overview.md</code> §2 — no dynamic role management is in scope, so <code>ENUM</code> is used instead of a lookup table.</td></tr>
+    <tr><td><code>student_id</code></td><td><code>BIGINT</code></td><td><code>NULL</code>, <code>UNIQUE</code>, FK → <code>students.id</code>, <code>ON DELETE CASCADE</code></td><td>Nullable for the 4 non-Student roles, required for <code>STUDENT</code> (see the <code>CHECK</code> below). <code>UNIQUE</code> enforces the 1:1 Student↔User relationship (req.md §3).</td></tr>
+    <tr><td><code>must_change_password</code></td><td><code>BOOLEAN</code></td><td><code>NOT NULL DEFAULT FALSE</code></td><td>Identity.3, Identity.6.</td></tr>
+    <tr><td><code>enabled</code></td><td><code>BOOLEAN</code></td><td><code>NOT NULL DEFAULT TRUE</code></td><td>Identity.7. Toggled by UC-25 for staff accounts; never toggled for <code>STUDENT</code> or <code>SYSTEM_ADMINISTRATOR</code> rows (no use case does so).</td></tr>
     <tr><td><code>created_at</code></td><td><code>DATETIME</code></td><td><code>NOT NULL DEFAULT CURRENT_TIMESTAMP</code></td><td>Audit.</td></tr>
     <tr><td><code>updated_at</code></td><td><code>DATETIME</code></td><td><code>NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP</code></td><td>Audit.</td></tr>
     <tr><td>—</td><td>—</td><td><code>CHECK ((role = 'STUDENT' AND student_id IS NOT NULL) OR (role &lt;&gt; 'STUDENT' AND student_id IS NULL))</code></td><td>The role/<code>student_id</code> co-invariant described in <code>04-authentication-authorization.md</code> §2.2.</td></tr>
@@ -371,6 +373,8 @@ erDiagram
     <tr><td>Enrollment.3 (student must exist)</td><td><code>enrollments.student_id</code> FK → <code>students.id</code></td></tr>
     <tr><td>Identity.2 (unique username)</td><td><code>users.username UNIQUE</code></td></tr>
     <tr><td>Identity.3 (must-change-password state)</td><td><code>users.must_change_password NOT NULL DEFAULT FALSE</code>, set <code>TRUE</code> at provisioning</td></tr>
+    <tr><td>Identity.6 (staff accounts created only by System Administrator; no in-app System Administrator creation)</td><td><code>users.role</code> <code>ENUM</code> includes <code>SYSTEM_ADMINISTRATOR</code>, but application-level only — no schema constraint can express "only UC-24 may insert this row," see <code>04-authentication-authorization.md</code> §3a</td></tr>
+    <tr><td>Identity.7 (disabled account cannot log in)</td><td><code>users.enabled NOT NULL DEFAULT TRUE</code>, checked at login (<code>04-authentication-authorization.md</code> §4.1)</td></tr>
     <tr><td>Student↔User 1:1 (req.md §3)</td><td><code>users.student_id UNIQUE</code></td></tr>
     <tr><td>role/<code>student_id</code> co-invariant (auth doc §2.2)</td><td><code>users</code> <code>CHECK</code> constraint</td></tr>
   </tbody>
@@ -402,7 +406,7 @@ erDiagram
 
 <h2 id="out-of-scope">7. Out of Scope</h2>
 <ul>
-  <li><strong>Flyway migration SQL</strong> (<code>V1__*.sql</code> or similar) — this document is the design; the runnable migration is future build-phase work, tracked the same way <code>04-authentication-authorization.md</code> §7 already tracks the <code>identity</code> module's DDL.</li>
+  <li><strong>Flyway migration SQL</strong> (<code>V1__*.sql</code> or similar) — this document is the design; the runnable migration is future build-phase work, tracked the same way <code>04-authentication-authorization.md</code> §9 already tracks the <code>identity</code> module's DDL.</li>
   <li><strong>JDBC entity/<code>@Table</code> class definitions</strong> (<code>StudentRow</code>, <code>UserRow</code>, etc.) — Java implementation detail, not a schema concern (<code>02-component-diagram.md</code> §3).</li>
   <li><strong>Indexing beyond what <code>UNIQUE</code>/<code>FOREIGN KEY</code> constraints already create</strong> — InnoDB auto-indexes PKs, unique constraints, and FK columns; no additional composite/covering indexes are specified without a known query pattern to justify them.</li>
   <li><strong>Read replicas, partitioning, sharding</strong> — ruled out by the single-schema, single-process deployment already fixed in <code>01-system-overview.md</code> §5.</li>

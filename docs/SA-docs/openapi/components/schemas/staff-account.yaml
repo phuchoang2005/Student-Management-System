@@ -1,0 +1,50 @@
+StaffRole:
+  type: string
+  description: The 3 roles a System Administrator may grant via `POST /staff-accounts`. Excludes SYSTEM_ADMINISTRATOR (never granted through the API) and STUDENT (only ever auto-provisioned via student registration).
+  enum:
+    - REGISTRAR
+    - LIBRARIAN
+    - COURSE_ADMINISTRATOR
+
+CreateStaffAccountRequest:
+  type: object
+  required: [username, role]
+  properties:
+    username:
+      type: string
+    role:
+      $ref: './staff-account.yaml#/StaffRole'
+
+StaffAccountResponse:
+  type: object
+  required: [username, role]
+  properties:
+    username:
+      type: string
+    role:
+      $ref: './staff-account.yaml#/StaffRole'
+    initialPassword:
+      type: string
+      description: Present only on the `201 Created` response from `POST /staff-accounts` — shown once and never recoverable through the API afterward.
+    enabled:
+      type: boolean
+      description: Present only on the response from `PATCH /staff-accounts/{id}/status`.
+
+SetStaffAccountStatusRequest:
+  type: object
+  required: [enabled]
+  properties:
+    enabled:
+      type: boolean
+
+DemoAccountResponse:
+  type: object
+  required: [role, username, password]
+  properties:
+    role:
+      $ref: './common.yaml#/Role'
+    username:
+      type: string
+    password:
+      type: string
+      description: Plaintext, intentionally — this endpoint exists only so a developer can copy these credentials straight into the login form. Never enabled in production (see the operation description).

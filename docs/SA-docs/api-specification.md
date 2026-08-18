@@ -63,4 +63,4 @@ Where the sequence-diagram/auth docs left a status code ambiguous or unspecified
 
 ## 6. Out of scope
 
-Mirrors `04-authentication-authorization.md` §7: no SSO/OAuth/OIDC, no true forgot-password flow, no MFA, no rate limiting, no API versioning strategy beyond the `/api/v1` prefix. Pagination is specified — see §3.
+Mirrors `04-authentication-authorization.md` §9: no SSO/OAuth/OIDC, no true forgot-password flow, no MFA, no rate limiting, no API versioning strategy beyond the `/api/v1` prefix. Pagination is specified — see §3.

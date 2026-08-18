@@ -207,6 +207,26 @@ As a **registrar**, I want to view a student's system-issued initial password, s
 
 ---
 
+## 7. Staff Identity Administration
+
+### US-7.1 — Create a staff account
+As a **system administrator**, I want to create a staff account with a chosen role, so that a new registrar, librarian, or course administrator can log in.
+
+**Acceptance Criteria**
+- Given a username and a role of registrar, librarian, or course administrator, when I create the account, then it's created in a "must change password" state and I receive its initial password once. *(req.md §4 Identity.3, Identity.6)*
+- Given a username already in use, when I try to create the account, then the request is rejected. *(req.md §4 Identity.2)*
+- Given a role of system administrator, when I try to create the account, then the request is rejected — system administrator accounts are never created through the application. *(req.md §4 Identity.6)*
+
+### US-7.2 — Deactivate or reactivate a staff account
+As a **system administrator**, I want to disable or re-enable a staff account, so that I can revoke or restore a staff member's access without deleting their account.
+
+**Acceptance Criteria**
+- Given an active staff account, when I disable it, then it can no longer log in. *(req.md §4 Identity.7)*
+- Given a disabled staff account, when I re-enable it, then it can log in again. *(req.md §4 Identity.7)*
+- Disabling or re-enabling an account does not affect any data the account holder previously created.
+
+---
+
 ## Traceability Summary
 
 | User Story | Business Rule Source |
@@ -230,3 +250,5 @@ As a **registrar**, I want to view a student's system-issued initial password, s
 | US-6.1 | req.md §4 Identity.2–3 |
 | US-6.2 | req.md §4 Identity.3–5 |
 | US-6.3 | req.md §4 Identity.4–5 (read-only) |
+| US-7.1 | req.md §4 Identity.2–3, Identity.6 |
+| US-7.2 | req.md §4 Identity.7 |

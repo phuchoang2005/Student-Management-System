@@ -225,12 +225,13 @@ Spring Security's filter chain sits in front of every controller, not inside any
 
 | Role (principal) | Write access | Read access |
 | --- | --- | --- |
+| System Administrator | `identity` (staff accounts only, via UC-24/25) | none — no `student`/`book`/`course`/`enrollment` access |
 | Registrar | `student`, `enrollment` | all |
 | Librarian | `book` | all |
 | Course Administrator | `course` | all |
 | Student | none | own records only (`student`, `book`, `enrollment` scoped to `principal.studentId`) |
 
-The exact scoping check ("own records only") is implemented as a method-level authorization check in each module's `application/` service — it needs the authenticated principal's student identity compared against the aggregate being read, which is domain-specific logic, not something the filter chain alone can express. `identity` doesn't fit this table's per-domain-module shape and isn't added as a row: every role may write to `identity`, but only ever their own credentials (UC-22) — no role may change another principal's password. The one asymmetric exception is UC-23: the Registrar additionally gets read access to a student's *initial* password, and only for as long as that student hasn't changed it yet — see [Authentication & Authorization](./04-authentication-authorization.md) §5.
+The exact scoping check ("own records only") is implemented as a method-level authorization check in each module's `application/` service — it needs the authenticated principal's student identity compared against the aggregate being read, which is domain-specific logic, not something the filter chain alone can express. `identity`'s *own-credential* surface (login, change password) doesn't fit this table's per-domain-module shape and isn't added as a row: every role may write to `identity`, but only ever their own credentials (UC-22) — no role may change another principal's password. The one asymmetric exception is UC-23: the Registrar additionally gets read access to a student's *initial* password, and only for as long as that student hasn't changed it yet. `identity`'s *staff-account-management* surface (UC-24/25) is asymmetric the other way — it's the System Administrator row above, and no other role may reach it. See [Authentication & Authorization](./04-authentication-authorization.md) §5–§6 for both.
 
 ## 5. Out of Scope (this document)
 

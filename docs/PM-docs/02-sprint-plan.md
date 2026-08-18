@@ -83,14 +83,18 @@ gantt
 ## Sprint 3 — `enrollment` + `identity` auth
 
 **Dates:** 2026-09-28 → 2026-10-11
-**Goal:** Students can be enrolled and unenrolled, every actor can log in and change their password, and a student can view their own books/courses/enrollments — closing out all 23 UCs' functional scope.
+**Goal:** Students can be enrolled and unenrolled, every actor can log in and change their password, a student can view their own books/courses/enrollments, and a System Administrator can provision and deactivate staff accounts — closing out all 25 UCs' functional scope.
 
-**Scope:** US-4.1, US-4.2, US-5.5, US-6.1, US-6.2, US-6.3, US-5.4 — **27h / 40h capacity (68%)**. Deliberately under capacity: this sprint absorbs any spillover from Sprint 2's cascade-hook rework and gives room to revisit the course-removal cascade now that `enrollment` actually exists.
+**Scope:** US-4.1, US-4.2, US-5.5, US-6.1, US-6.2, US-6.3, US-5.4, PM-016, US-7.1, US-7.2, PM-017 — **40h / 40h capacity (100%)**.
+
+> **Sudden mid-sprint-plan addition — capacity note.** This sprint was originally scoped at 27h/40h (68%), deliberately left under capacity to absorb spillover from Sprint 2's cascade-hook rework (see Sprint 2's DoD). The staff-account-provisioning + demo-accounts requirement (PM-016, US-7.1, US-7.2, PM-017 — 13h, added after the original plan was written) exactly consumes that headroom. **Sprint 3 now has no slack**: if Sprint 2's cascade rework spills over as anticipated, it has nowhere to land within Sprint 3 and will need to either slip into Sprint 4 or bump PM-017 (demo accounts, the lowest-priority item of the four — it's a developer convenience, not a functional requirement) out to Sprint 4 instead. Revisit this trade-off at the Sprint 2 retro, before Sprint 3 starts.
 
 **Sprint Definition of Done:**
-- `Testing/03-test-cases/enrollment.md` (TC-ENR-001–012) and `identity-auth.md` (TC-IDN-001–021) fully automated and green.
+- `Testing/03-test-cases/enrollment.md` (TC-ENR-001–012) and `identity-auth.md` (TC-IDN-001–032) fully automated and green.
 - Course removal (US-3.3) and student removal (US-1.3) are re-verified end-to-end now that `enrollment` exists — this closes the gap flagged in Sprint 2.
 - Login (UC-21) correctly indicates must-change-password state; Change Password (UC-22) clears it and makes the initial password permanently unrecoverable (US-6.2's last acceptance criterion).
+- A System Administrator can create a Registrar/Librarian/Course Administrator account (UC-24) and deactivate/reactivate one (UC-25); a disabled account cannot log in (`Testing/03-test-cases/identity-auth.md` TC-IDN-024–030; `cross-cutting.md` TC-XC-039–041).
+- `GET /api/v1/auth/demo-accounts` returns the 5 fixed demo identities when `app.demo-accounts.enabled=true`, and the route does not exist (`404`, not `403`) when built with the `prod` profile (TC-IDN-031–032, TC-XC-042).
 
 ---
 
@@ -103,12 +107,12 @@ gantt
 
 **Sprint Definition of Done (= Release Definition of Done):**
 - All of `Testing/03-test-cases/cross-cutting.md` (TC-XC-001–035) automated and green — RBAC matrix, must-change-password gate, optimistic locking, cascade/lifecycle scenarios, error envelope, all 7 `api-specification.md` §5 ambiguity resolutions, architecture conformance.
-- JaCoCo coverage report generated; living traceability matrix (`Testing/README.md` UC → File Index) has every UC-1–23 marked implemented and tested.
+- JaCoCo coverage report generated; living traceability matrix (`Testing/README.md` UC → File Index) has every UC-1–25 marked implemented and tested.
 - `mvn verify` green in CI on `main`.
-- **v1.0 release condition met:** all 23 UCs implemented and tested; see [03-scrum-artifacts.md](./03-scrum-artifacts.md) §5 for what stays explicitly out of scope.
+- **v1.0 release condition met:** all 25 UCs implemented and tested; see [03-scrum-artifacts.md](./03-scrum-artifacts.md) §5 for what stays explicitly out of scope.
 
 ---
 
 ## Backlog coverage check
 
-Every item in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears in exactly one sprint above; no item is dropped or duplicated. Total scoped: 147h across 5 sprints (10 weeks) against a 200h capacity budget (5 × 40h), leaving ~26% aggregate slack for the estimation risk inherent in sizing 33 items against a spec that has never been implemented before.
+Every item in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears in exactly one sprint above; no item is dropped or duplicated. Total scoped: 160h across 5 sprints (10 weeks) against a 200h capacity budget (5 × 40h), leaving ~20% aggregate slack for the estimation risk inherent in sizing 37 items against a spec that has never been implemented before — down from the original plan's ~26%, entirely because Sprint 3 absorbed the 13h staff-account/demo-account addition with no other sprint's scope changing.

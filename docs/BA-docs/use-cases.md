@@ -8,6 +8,7 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 
 | Actor | Description |
 | ----- | ----------- |
+| **System Administrator** | Provisions and disables staff user accounts (Registrar, Librarian, Course Administrator). Has no access to student, book, course, or enrollment data. |
 | **Registrar** | Manages student records and enrollments. |
 | **Librarian** | Manages the book catalog and book ownership assignments. |
 | **Course Administrator** | Manages course offerings. |
@@ -509,6 +510,48 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 
 ---
 
+## UC-24: Create Staff Account
+
+- **Actor:** System Administrator
+- **Preconditions:** None — the System Administrator holds an authenticated session.
+- **Trigger:** System Administrator submits a username, a role (Registrar, Librarian, or Course Administrator), and requests the account be created.
+
+**Main Flow**
+1. System Administrator selects a role and enters a username for the new staff account.
+2. System validates the username is not already in use. *(Identity.2)*
+3. System validates the requested role is one of Registrar, Librarian, or Course Administrator. *(Identity.6)*
+4. System generates an initial password, creates the account in a "must change password" state, and returns the initial password once. *(Identity.3, Identity.6)*
+
+**Alternate / Exception Flows**
+- **2a.** Username already in use → system rejects with a validation error; return to step 1.
+- **3a.** Requested role is System Administrator, or any other value outside the 3 staff roles → system rejects with a validation error; return to step 1.
+
+**Postconditions:** A new staff account exists, disabled-for-normal-use until its first password change, exactly like an auto-provisioned Student account (Identity.3). The System Administrator sees the initial password exactly once, in this response.
+
+**Related Rules:** Identity.2, Identity.3, Identity.6.
+
+---
+
+## UC-25: Deactivate/Reactivate Staff Account
+
+- **Actor:** System Administrator
+- **Preconditions:** The target staff account exists.
+- **Trigger:** System Administrator selects a staff account and toggles it disabled or enabled.
+
+**Main Flow**
+1. System Administrator selects an existing staff account.
+2. System Administrator sets the account's enabled state to disabled (or, for an already-disabled account, back to enabled).
+3. System updates the account accordingly. *(Identity.7)*
+
+**Alternate / Exception Flows**
+- None — disabling and re-enabling are symmetric and idempotent from the actor's point of view.
+
+**Postconditions:** A disabled account cannot log in (UC-21) until a System Administrator re-enables it. No data the account previously created is affected.
+
+**Related Rules:** Identity.7.
+
+---
+
 ## Use Case Summary Table
 
 | Use Case | Primary Actor | Business Rules |
@@ -536,3 +579,5 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 | UC-21 Login | Registrar/Librarian/Course Administrator/Student | Identity.2–3 |
 | UC-22 Change Password | Registrar/Librarian/Course Administrator/Student | Identity.3–5 |
 | UC-23 View Student's Initial Password | Registrar | Identity.4–5 |
+| UC-24 Create Staff Account | System Administrator | Identity.2–3, Identity.6 |
+| UC-25 Deactivate/Reactivate Staff Account | System Administrator | Identity.7 |
