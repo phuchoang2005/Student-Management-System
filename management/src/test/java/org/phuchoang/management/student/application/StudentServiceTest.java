@@ -31,6 +31,10 @@ import org.phuchoang.management.student.domain.Student;
 import org.phuchoang.management.student.domain.StudentCode;
 import org.phuchoang.management.student.port.StudentRepository;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class StudentServiceTest {
@@ -198,5 +202,53 @@ class StudentServiceTest {
 
     verify(repository).deleteByCode(existingCode);
     verify(events).publishEvent(new StudentDeleted(new StudentId(1L)));
+  }
+
+  @Test
+  void searchReturnsMappedSummariesFromRepositoryPage() {
+    service = new StudentService(repository, accountProvisioning, events);
+    Pageable pageable = PageRequest.of(0, 20);
+    Page<Student> repoPage = new PageImpl<>(java.util.List.of(existingStudent), pageable, 1);
+    when(repository.search("jane", pageable)).thenReturn(repoPage);
+
+    Page<StudentService.StudentSummaryView> result = service.search("jane", pageable);
+
+    assertThat(result.getTotalElements()).isEqualTo(1);
+    StudentService.StudentSummaryView summary = result.getContent().get(0);
+    assertThat(summary.id()).isEqualTo(1L);
+    assertThat(summary.studentCode()).isEqualTo("S00123");
+    assertThat(summary.email()).isEqualTo("jane.doe@example.edu");
+  }
+
+  @Test
+  void searchReturnsEmptyPageWhenNothingMatches() {
+    service = new StudentService(repository, accountProvisioning, events);
+    Pageable pageable = PageRequest.of(0, 20);
+    when(repository.search("nobody", pageable)).thenReturn(Page.empty(pageable));
+
+    Page<StudentService.StudentSummaryView> result = service.search("nobody", pageable);
+
+    assertThat(result.getContent()).isEmpty();
+  }
+
+  @Test
+  void getDetailThrowsNotFoundWhenStudentDoesNotExist() {
+    service = new StudentService(repository, accountProvisioning, events);
+    when(repository.findByCode(existingCode)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.getDetail("S00123")).isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void getDetailReturnsStudentFieldsWithEmptyBooksAndCoursesStub() {
+    service = new StudentService(repository, accountProvisioning, events);
+    when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
+
+    StudentService.StudentDetailView detail = service.getDetail("S00123");
+
+    assertThat(detail.studentCode()).isEqualTo("S00123");
+    assertThat(detail.firstName()).isEqualTo("Jane");
+    assertThat(detail.ownedBooks()).isEmpty();
+    assertThat(detail.activeCourses()).isEmpty();
   }
 }

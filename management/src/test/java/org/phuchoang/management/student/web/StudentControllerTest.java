@@ -6,6 +6,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -14,6 +15,7 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standal
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +26,9 @@ import org.phuchoang.management.shared.exception.DuplicateEmailException;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.web.GlobalExceptionHandler;
 import org.phuchoang.management.student.application.StudentService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -37,7 +42,12 @@ class StudentControllerTest {
   @BeforeEach
   void setUp() {
     StudentController controller = new StudentController(studentService, new StudentMapperImpl());
-    mockMvc = standaloneSetup(controller).setControllerAdvice(new GlobalExceptionHandler()).build();
+    mockMvc =
+        standaloneSetup(controller)
+            .setControllerAdvice(new GlobalExceptionHandler())
+            .setCustomArgumentResolvers(
+                new org.springframework.data.web.PageableHandlerMethodArgumentResolver())
+            .build();
   }
 
   private static StudentService.ProvisionedStudent aProvisionedStudent() {
@@ -189,5 +199,61 @@ class StudentControllerTest {
         .remove("S00123");
 
     mockMvc.perform(delete("/api/v1/students/S00123")).andExpect(status().isNotFound());
+  }
+
+  private static final StudentService.StudentSummaryView A_SUMMARY =
+      new StudentService.StudentSummaryView(1L, "S00123", "Jane", "Doe", "jane.doe@example.edu");
+
+  @Test
+  void searchStudentsReturnsPagedSummaries() throws Exception {
+    Page<StudentService.StudentSummaryView> page =
+        new PageImpl<>(List.of(A_SUMMARY), PageRequest.of(0, 20), 1);
+    when(studentService.search(any(), any())).thenReturn(page);
+
+    mockMvc
+        .perform(get("/api/v1/students").param("query", "jane"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.totalElements").value(1))
+        .andExpect(jsonPath("$.content[0].studentCode").value("S00123"));
+  }
+
+  @Test
+  void searchStudentsReturnsEmptyContentWhenNoMatch() throws Exception {
+    when(studentService.search(any(), any()))
+        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+    mockMvc
+        .perform(get("/api/v1/students").param("query", "nobody"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content").isArray())
+        .andExpect(jsonPath("$.content").isEmpty());
+  }
+
+  private static StudentService.StudentDetailView aStudentDetailView() {
+    Instant now = Instant.now();
+    return new StudentService.StudentDetailView(
+        1L, "S00123", "Jane", "Doe", "jane.doe@example.edu", LocalDate.of(2000, 1, 1), now, now, List.of(), List.of());
+  }
+
+  @Test
+  void getStudentReturnsDetailWithEmptyBooksAndCourses() throws Exception {
+    when(studentService.getDetail("S00123")).thenReturn(aStudentDetailView());
+
+    mockMvc
+        .perform(get("/api/v1/students/S00123"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.studentCode").value("S00123"))
+        .andExpect(jsonPath("$.books").isArray())
+        .andExpect(jsonPath("$.books").isEmpty())
+        .andExpect(jsonPath("$.courses").isArray())
+        .andExpect(jsonPath("$.courses").isEmpty());
+  }
+
+  @Test
+  void getStudentPropagatesNotFoundAs404() throws Exception {
+    when(studentService.getDetail("S00123"))
+        .thenThrow(new NotFoundException("Student 'S00123' does not exist."));
+
+    mockMvc.perform(get("/api/v1/students/S00123")).andExpect(status().isNotFound());
   }
 }

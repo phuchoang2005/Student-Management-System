@@ -4,11 +4,9 @@ import java.util.Optional;
 import org.phuchoang.management.student.domain.Email;
 import org.phuchoang.management.student.domain.Student;
 import org.phuchoang.management.student.domain.StudentCode;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
-/**
- * Scoped to what US-1.1 (registration), US-1.2 (update), and US-1.3 (remove) need. {@code search}
- * (06-low-level-design.md §4.5) is added when the search use case (US-5.1) is implemented.
- */
 public interface StudentRepository {
 
   Optional<Student> findByCode(StudentCode code);
@@ -18,6 +16,9 @@ public interface StudentRepository {
   boolean existsByEmail(Email email);
 
   boolean existsByEmailExcludingCode(Email email, StudentCode excluding);
+
+  /** UC-13 — matches code/name/email; {@code query} may be {@code null} to return every student. */
+  Page<Student> search(String query, Pageable pageable);
 
   Student save(Student student);
 

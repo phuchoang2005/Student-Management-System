@@ -2,6 +2,7 @@ package org.phuchoang.management.student.application;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import org.phuchoang.management.identity.AccountProvisioning;
 import org.phuchoang.management.identity.ProvisionedAccount;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
@@ -16,6 +17,8 @@ import org.phuchoang.management.student.domain.Student;
 import org.phuchoang.management.student.domain.StudentCode;
 import org.phuchoang.management.student.port.StudentRepository;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -139,6 +142,46 @@ public class StudentService {
     events.publishEvent(new StudentDeleted(student.id()));
   }
 
+  /** UC-13 — matches code/name/email, paged. {@code query} may be blank/{@code null}. */
+  public Page<StudentSummaryView> search(String query, Pageable pageable) {
+    return repository.search(query, pageable).map(this::toSummaryView);
+  }
+
+  /**
+   * findByCode (404 if absent), then composes the student's owned books and active enrollments.
+   * {@code ownedBooks}/{@code activeCourses} are stubbed empty here — {@code BookService.findByOwner}/
+   * {@code EnrollmentService.findByStudent} don't exist until `book`/`enrollment` ship in Sprint
+   * 2/3, and US-5.5 wires the real calls in (04-sprint-backlog.md §1, §3).
+   */
+  public StudentDetailView getDetail(String code) {
+    StudentCode studentCode = new StudentCode(code);
+    Student student =
+        repository
+            .findByCode(studentCode)
+            .orElseThrow(() -> new NotFoundException("Student '" + code + "' does not exist."));
+
+    return new StudentDetailView(
+        student.id().value(),
+        student.code().value(),
+        student.firstName(),
+        student.lastName(),
+        student.email().value(),
+        student.dateOfBirth().value(),
+        student.createdAt(),
+        student.updatedAt(),
+        List.of(),
+        List.of());
+  }
+
+  private StudentSummaryView toSummaryView(Student student) {
+    return new StudentSummaryView(
+        student.id().value(),
+        student.code().value(),
+        student.firstName(),
+        student.lastName(),
+        student.email().value());
+  }
+
   /**
    * Unwraps {@code Student}'s Value Objects here rather than in {@code StudentMapper} — the web
    * layer may never call a method on a Domain-layer object directly (LayeringRulesTest), only the
@@ -166,4 +209,21 @@ public class StudentService {
       LocalDate dateOfBirth,
       Instant createdAt,
       Instant updatedAt) {}
+
+  /** Same VO-unwrapping rationale as {@link ProvisionedStudent}, for one {@link #search} result. */
+  public record StudentSummaryView(
+      Long id, String studentCode, String firstName, String lastName, String email) {}
+
+  /** Same VO-unwrapping rationale as {@link ProvisionedStudent}, for {@link #getDetail}'s result. */
+  public record StudentDetailView(
+      Long id,
+      String studentCode,
+      String firstName,
+      String lastName,
+      String email,
+      LocalDate dateOfBirth,
+      Instant createdAt,
+      Instant updatedAt,
+      List<Object> ownedBooks,
+      List<Object> activeCourses) {}
 }
