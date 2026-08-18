@@ -2,19 +2,19 @@
 export
 
 DC := docker compose
-POSTGRES_USER ?= management
-POSTGRES_DB ?= management
-CONTAINER := management-postgres
+MYSQL_USER ?= management
+MYSQL_DATABASE ?= management
+CONTAINER := management-mysql
 
-.PHONY: help env up down restart logs ps psql clean reset
+.PHONY: help env up down restart logs ps mysql clean reset
 
 help:
-	@echo "make up       - start the postgres container (creates .env from .env.example if missing)"
-	@echo "make down     - stop the postgres container"
-	@echo "make restart  - restart the postgres container"
-	@echo "make logs     - tail postgres logs"
+	@echo "make up       - start the mysql container (creates .env from .env.example if missing)"
+	@echo "make down     - stop the mysql container"
+	@echo "make restart  - restart the mysql container"
+	@echo "make logs     - tail mysql logs"
 	@echo "make ps       - show container status"
-	@echo "make psql     - open a psql shell inside the container"
+	@echo "make mysql    - open a mysql shell inside the container"
 	@echo "make clean    - stop the container and delete its data volume"
 	@echo "make reset    - clean + up (fresh database)"
 
@@ -24,7 +24,7 @@ env:
 up: env
 	colima start
 	$(DC) up -d
-	@echo "Postgres is starting on port $${POSTGRES_PORT:-5432}..."
+	@echo "MySQL is starting on port $${MYSQL_PORT:-3306}..."
 
 down_temp:
 	$(DC) down
@@ -36,13 +36,13 @@ down:
 restart: down up
 
 logs:
-	$(DC) logs -f postgres
+	$(DC) logs -f mysql
 
 ps:
 	$(DC) ps
 
-psql: env
-	docker exec -it $(CONTAINER) psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+mysql: env
+	docker exec -it $(CONTAINER) mysql -u$(MYSQL_USER) -p$(MYSQL_PASSWORD) $(MYSQL_DATABASE)
 
 clean:
 	$(DC) down -v
