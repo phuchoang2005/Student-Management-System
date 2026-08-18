@@ -1,6 +1,6 @@
 # Student Management System — Activity Diagrams
 
-Derived from [use-cases.md](./use-cases.md), which remains the authoritative source (actors, flows, business-rule traceability). Where the [use-case diagrams](./use-case-diagram.md) show *what* actors can do and how use cases relate, this document shows *how* each request actually flows: the actor/system steps, the validation decisions drawn from each use case's alternate/exception flows, and where each path terminates. One activity diagram is drawn per use case (23 total), grouped into the same six functional areas as the use-case diagrams, so the two document sets read side by side.
+Derived from [use-cases.md](./use-cases.md), which remains the authoritative source (actors, flows, business-rule traceability). Where the [use-case diagrams](./use-case-diagram.md) show *what* actors can do and how use cases relate, this document shows *how* each request actually flows: the actor/system steps, the validation decisions drawn from each use case's alternate/exception flows, and where each path terminates. One activity diagram is drawn per use case (25 total), grouped into the same six functional areas as the use-case diagrams, so the two document sets read side by side.
 
 Diagrams are drawn in standard UML activity notation (swimlanes, decision diamonds, start/stop nodes) using [PlantUML](https://plantuml.com/activity-diagram-beta). Each `.svg` below is generated from the matching `.puml` source in [activity-diagram-assets/](./activity-diagram-assets/); edit the `.puml` file and re-render with `plantuml -tsvg *.puml` to update a diagram. The [HTML version](./activity-diagram.html) of this document embeds the same SVGs with click-to-zoom and drag-to-pan.
 
@@ -17,7 +17,7 @@ Diagrams are drawn in standard UML activity notation (swimlanes, decision diamon
 | Circle with ring (◉) | Stop node — either a successful completion or a terminal rejection |
 | Dashed reference, e.g. `Continue at UC-17` | Hand-off to another use case's activity diagram, rather than inlining it |
 
-The six functional areas group the 23 use cases as follows (same grouping as [use-case-diagram.md](./use-case-diagram.md)):
+The six functional areas group the 25 use cases as follows (same grouping as [use-case-diagram.md](./use-case-diagram.md)):
 
 | Area | Use Cases |
 | ---- | --------- |
@@ -26,7 +26,7 @@ The six functional areas group the 23 use cases as follows (same grouping as [us
 | Course Management | UC-8, UC-9, UC-10, UC-15, UC-19 |
 | Enrollment Management | UC-11, UC-12 |
 | Student Self-Service | UC-16, UC-20 |
-| Identity & Access | UC-21, UC-22, UC-23 |
+| Identity & Access | UC-21, UC-22, UC-23, UC-24, UC-25 |
 
 ---
 
@@ -190,6 +190,18 @@ Three validations in sequence: retyped password matches, current password is cor
 
 Registrar-only. The single branch reflects that this access is permanently revoked the moment the student replaces their initial password.
 
+### UC-24 Create Staff Account
+
+![UC-24 Create Staff Account](./activity-diagram-assets/uc24-create-staff-account.svg)
+
+System Administrator-only. Role is restricted server-side to the 3 staff roles — a System Administrator account can never be created this way. Reuses the same initial-password generation as UC-1's provisioning tail.
+
+### UC-25 Deactivate/Reactivate Staff Account
+
+![UC-25 Deactivate/Reactivate Staff Account](./activity-diagram-assets/uc25-deactivate-staff-account.svg)
+
+System Administrator-only. Enabling and disabling are symmetric — the same flow toggles the account's `enabled` state in either direction.
+
 ---
 
 ## Use Case Coverage
@@ -219,3 +231,5 @@ Registrar-only. The single branch reflects that this access is permanently revok
 | UC-21 Login | `uc21-login.svg` | All actors |
 | UC-22 Change Password | `uc22-change-password.svg` | All actors |
 | UC-23 View Student's Initial Password | `uc23-view-initial-password.svg` | Registrar |
+| UC-24 Create Staff Account | `uc24-create-staff-account.svg` | System Administrator |
+| UC-25 Deactivate/Reactivate Staff Account | `uc25-deactivate-staff-account.svg` | System Administrator |

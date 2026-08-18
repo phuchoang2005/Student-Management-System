@@ -8,20 +8,41 @@ Defines the test data referenced by ID throughout [03-test-cases/](./03-test-cas
 
 ## 1. Seed / Reference Data
 
-### 1.1 Staff accounts
+### 1.1 System Administrator account
 
-`04-authentication-authorization.md` §2.2 states staff (Registrar, Librarian, Course Administrator) account creation is **out of scope for auto-provisioning** — "assumed pre-seeded by some out-of-band process." Test environments therefore need a documented, explicit seed set rather than relying on any in-app flow:
+`04-authentication-authorization.md` §2.2/§3a states the System Administrator account is the one identity that is **always pre-seeded out-of-band** — no use case creates it. Test environments need exactly one, since it's the only caller that can exercise UC-24/UC-25:
 
 | ID | Username | Role | Initial state |
 | --- | --- | --- | --- |
-| `staff-registrar-01` | `registrar.test@example.test` | REGISTRAR | Password already set (not in must-change-password state), for use as the default authorized caller across most write test cases |
-| `staff-librarian-01` | `librarian.test@example.test` | LIBRARIAN | Password already set |
-| `staff-course-admin-01` | `course-admin.test@example.test` | COURSE_ADMINISTRATOR | Password already set |
-| `staff-registrar-02` | `registrar2.test@example.test` | REGISTRAR | Password already set — a second Registrar for concurrency test cases (e.g. TC-XC-015) needing two independent authenticated sessions |
+| `staff-sysadmin-01` | `sysadmin.test@example.test` | SYSTEM_ADMINISTRATOR | Password already set, for use as the default authorized caller across UC-24/UC-25 test cases |
 
-**Seeding mechanism (recommendation for implementation):** a Flyway `R__` repeatable migration or a `@Sql`/Testcontainers init script scoped to test profiles only — never bundled into the production migration set — inserting these 4 rows with a fixed, known password (e.g. hashed `TestPass123!`) so integration tests can log in deterministically.
+### 1.2 Staff accounts
 
-### 1.2 Student-linked accounts
+Registrar/Librarian/Course Administrator accounts now have a defined in-app provisioning flow (UC-24), and TC-IDN-024–030 exercise that flow directly. Most other write test cases don't need to exercise provisioning itself, though, so this document still names a pre-seeded baseline set for speed and determinism — treat these as "created via UC-24 once, at environment setup" rather than "pre-seeded because no flow exists":
+
+| ID | Username | Role | Initial state |
+| --- | --- | --- | --- |
+| `staff-registrar-01` | `registrar.test@example.test` | REGISTRAR | Password already set (not in must-change-password state), enabled — the default authorized caller across most write test cases |
+| `staff-librarian-01` | `librarian.test@example.test` | LIBRARIAN | Password already set, enabled |
+| `staff-course-admin-01` | `course-admin.test@example.test` | COURSE_ADMINISTRATOR | Password already set, enabled |
+| `staff-registrar-02` | `registrar2.test@example.test` | REGISTRAR | Password already set, enabled — a second Registrar for concurrency test cases (e.g. TC-XC-015) needing two independent authenticated sessions |
+| `staff-disabled-01` | `disabled-librarian.test@example.test` | LIBRARIAN | Password already set, **`enabled = false`** — used by TC-IDN-030 (login rejected: disabled account) |
+
+**Seeding mechanism (recommendation for implementation):** a Flyway `R__` repeatable migration or a `@Sql`/Testcontainers init script scoped to test profiles only — never bundled into the production migration set — inserting `staff-sysadmin-01` and these 5 rows with a fixed, known password (e.g. hashed `TestPass123!`) so integration tests can log in deterministically.
+
+### 1.3 Demo accounts (development/testing convenience, `GET /auth/demo-accounts`)
+
+The 5 fixed identities `04-authentication-authorization.md` §8 specifies, one per actor — distinct from the fixtures in §1.1/§1.2 above (those exist for automated test cases; these exist for a human developer to click through the frontend). Seeded by the same dev/test-only mechanism, gated by the same `app.demo-accounts.enabled` flag as the endpoint itself (`06-low-level-design.md` §11.4) — **never present in a `prod`-migrated database**, which TC-IDN-032 verifies directly.
+
+| Username | Role | Password |
+| --- | --- | --- |
+| `demo.sysadmin` | SYSTEM_ADMINISTRATOR | `Demo#12345` |
+| `demo.registrar` | REGISTRAR | `Demo#12345` |
+| `demo.librarian` | LIBRARIAN | `Demo#12345` |
+| `demo.courseadmin` | COURSE_ADMINISTRATOR | `Demo#12345` |
+| `demo.student` | STUDENT | `Demo#12345` |
+
+### 1.4 Student-linked accounts
 
 Every `student-*` fixture in §2 automatically implies a corresponding `users` row per Identity.1 (auto-provisioned at creation) — these are not separately seeded; they're a side effect of creating the student fixture through the real `POST /students` flow, which is itself the mechanism under test for most student-related cases.
 

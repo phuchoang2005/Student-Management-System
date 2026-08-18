@@ -2,7 +2,7 @@
 
 Testing Documentation — [Test Strategy](../01-test-strategy.md) → [Test Plan](../02-test-plan.md) → Test Cases (`identity`) → [Test Data Preparation](../04-test-data-preparation.md).
 
-Covers **UC-16** (View Own Books, Courses & Enrollments), **UC-21** (Login), **UC-22** (Change Password), **UC-23** (View Student's Initial Password), and related user stories US-5.4, US-6.1–6.3. Endpoints: `POST /auth/login`, `POST /auth/password`, `GET /students/{code}/initial-password`, `GET /me/books-and-courses`. Account auto-provisioning at registration (UC-1's identity tail) is tested in [student.md](./student.md) TC-STU-008–010; this file covers the account once it exists. The full RBAC matrix and the must-change-password gate as a cross-cutting concern are in [cross-cutting.md](./cross-cutting.md) §1–2.
+Covers **UC-16** (View Own Books, Courses & Enrollments), **UC-21** (Login), **UC-22** (Change Password), **UC-23** (View Student's Initial Password), **UC-24** (Create Staff Account), **UC-25** (Deactivate/Reactivate Staff Account), the demo-accounts convenience, and related user stories US-5.4, US-6.1–6.3, US-7.1–7.2. Endpoints: `POST /auth/login`, `POST /auth/password`, `GET /auth/demo-accounts`, `GET /students/{code}/initial-password`, `GET /me/books-and-courses`, `POST /staff-accounts`, `PATCH /staff-accounts/{id}/status`. Account auto-provisioning at registration (UC-1's identity tail) is tested in [student.md](./student.md) TC-STU-008–010; this file covers the account once it exists. The full RBAC matrix and the must-change-password gate as a cross-cutting concern are in [cross-cutting.md](./cross-cutting.md) §1–2, §9.
 
 ---
 
@@ -172,6 +172,78 @@ Covers **UC-16** (View Own Books, Courses & Enrollments), **UC-21** (Login), **U
 
 ---
 
+## UC-24: Create Staff Account
+
+### TC-IDN-024 — System Administrator creates a staff account successfully
+- **Related UC / Rule:** UC-24 main flow; Identity.3, Identity.6
+- **Priority:** P0 · **Type:** Functional
+- **Steps:** As SYSTEM_ADMINISTRATOR, `POST /api/v1/staff-accounts` with `{username, role: "LIBRARIAN"}`.
+- **Expected Result:** `201 Created` with `{username, role, initialPassword}`; the account can log in (TC-IDN-001-style) and reports `mustChangePassword: true`.
+
+### TC-IDN-025 — Create staff account rejected: non-System-Administrator caller
+- **Related UC / Rule:** `06-low-level-design.md` §11.1; see also [cross-cutting.md](./cross-cutting.md) TC-XC-039
+- **Priority:** P0 · **Type:** Security-RBAC
+- **Steps:** As REGISTRAR, `POST /api/v1/staff-accounts` with a valid body.
+- **Expected Result:** `403 Forbidden`; no account created.
+
+### TC-IDN-026 — Create staff account rejected: requested role is SYSTEM_ADMINISTRATOR
+- **Related UC / Rule:** UC-24 flow 3a; Identity.6
+- **Priority:** P0 · **Type:** Security-Negative
+- **Steps:** As SYSTEM_ADMINISTRATOR, `POST /api/v1/staff-accounts` with `{username, role: "SYSTEM_ADMINISTRATOR"}`.
+- **Expected Result:** `400 Bad Request` — a System Administrator account can never be created through the API, per `04-authentication-authorization.md` §3a.
+
+### TC-IDN-027 — Create staff account rejected: username already in use
+- **Related UC / Rule:** UC-24 flow 2a; Identity.2
+- **Priority:** P0 · **Type:** Negative
+- **Preconditions:** A user (staff or student) already exists with the requested username.
+- **Steps:** As SYSTEM_ADMINISTRATOR, `POST /api/v1/staff-accounts` with that username.
+- **Expected Result:** `409 Conflict`; no account created or overwritten.
+
+---
+
+## UC-25: Deactivate/Reactivate Staff Account
+
+### TC-IDN-028 — System Administrator disables an active staff account
+- **Related UC / Rule:** UC-25 main flow; Identity.7
+- **Priority:** P0 · **Type:** Functional
+- **Preconditions:** An enabled staff account (chain from TC-IDN-024).
+- **Steps:** As SYSTEM_ADMINISTRATOR, `PATCH /api/v1/staff-accounts/{id}/status` with `{enabled: false}`.
+- **Expected Result:** `200 OK` with `{username, enabled: false}`.
+
+### TC-IDN-029 — System Administrator re-enables a disabled staff account
+- **Related UC / Rule:** UC-25 main flow; Identity.7
+- **Priority:** P0 · **Type:** Functional
+- **Preconditions:** A disabled staff account (chain from TC-IDN-028).
+- **Steps:** As SYSTEM_ADMINISTRATOR, `PATCH /api/v1/staff-accounts/{id}/status` with `{enabled: true}`.
+- **Expected Result:** `200 OK` with `{username, enabled: true}`; the account can log in again (TC-IDN-030).
+
+### TC-IDN-030 — Login rejected: disabled account
+- **Related UC / Rule:** `04-authentication-authorization.md` §4.1 (`enabled = false` branch); Identity.7
+- **Priority:** P0 · **Type:** Security-Negative
+- **Preconditions:** A disabled staff account (chain from TC-IDN-028) with otherwise-correct credentials.
+- **Steps:** `POST /api/v1/auth/login` with the disabled account's correct username and password.
+- **Expected Result:** `401 Unauthorized`, with the same generic error shape as TC-IDN-002/003 — the response does not reveal that the account exists and is merely disabled, as opposed to the credentials being wrong.
+
+---
+
+## Demo Accounts (development/testing convenience)
+
+### TC-IDN-031 — Demo-accounts endpoint returns exactly the 5 fixed identities when enabled
+- **Related UC / Rule:** `04-authentication-authorization.md` §8; see also [cross-cutting.md](./cross-cutting.md) TC-XC-042
+- **Priority:** P1 · **Type:** Functional
+- **Preconditions:** Built/run with `app.demo-accounts.enabled=true` (test profile).
+- **Steps:** `GET /api/v1/auth/demo-accounts` with no session cookie.
+- **Expected Result:** `200 OK`; an array of exactly 5 entries, one per role (`SYSTEM_ADMINISTRATOR`, `REGISTRAR`, `LIBRARIAN`, `COURSE_ADMINISTRATOR`, `STUDENT`), each `{role, username, password}`. Every returned `{username, password}` pair successfully logs in via TC-IDN-001's flow.
+
+### TC-IDN-032 — Demo-accounts route does not exist when disabled
+- **Related UC / Rule:** `04-authentication-authorization.md` §8; `06-low-level-design.md` §11.4; see also [cross-cutting.md](./cross-cutting.md) TC-XC-042; P0 risk per [01-test-strategy.md](../01-test-strategy.md) §6
+- **Priority:** P0 · **Type:** Security
+- **Preconditions:** Built/run with the `prod` profile (`app.demo-accounts.enabled=false`).
+- **Steps:** `GET /api/v1/auth/demo-accounts` with no session cookie.
+- **Expected Result:** `404 Not Found`, identical in shape to any other unmapped path — not `403`. Confirms `DemoAccountsController` is never registered as a bean in this profile, not merely access-blocked, and that none of the 5 demo accounts' seed rows exist in a `prod`-migrated database.
+
+---
+
 ## Traceability Summary
 
 | UC / US | Test Case IDs |
@@ -180,5 +252,8 @@ Covers **UC-16** (View Own Books, Courses & Enrollments), **UC-21** (Login), **U
 | UC-22 / US-6.2 | TC-IDN-006–015 |
 | UC-23 / US-6.3 | TC-IDN-016–018 |
 | UC-16 / US-5.4 | TC-IDN-019–023 |
+| UC-24 / US-7.1 | TC-IDN-024–027 |
+| UC-25 / US-7.2 | TC-IDN-028–030 |
+| Demo accounts | TC-IDN-031–032 |
 
-Account auto-provisioning (UC-1 tail): [student.md](./student.md) TC-STU-008–010. Full RBAC matrix and must-change-password gate: [cross-cutting.md](./cross-cutting.md) §1–2.
+Account auto-provisioning (UC-1 tail): [student.md](./student.md) TC-STU-008–010. Full RBAC matrix, must-change-password gate, and staff-account/demo-account RBAC: [cross-cutting.md](./cross-cutting.md) §1–2, §9.

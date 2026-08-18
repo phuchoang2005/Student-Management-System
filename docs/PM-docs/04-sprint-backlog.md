@@ -243,7 +243,7 @@ Per `06-low-level-design.md` §6.
 
 ---
 
-## 5. Sprint 3 — `enrollment` + `identity` auth (27h)
+## 5. Sprint 3 — `enrollment` + `identity` auth (40h)
 
 ### US-4.1 — Enroll a student in a course (5h)
 
@@ -310,7 +310,49 @@ Per `06-low-level-design.md` §8.5/§8.6, §11.2.
 | Scope `BookController`/`EnrollmentController` read paths to `principal.studentId` for the `STUDENT` role | Web | 1.5h |
 | TC-STU/TC-BOOK/TC-ENR self-service view cases | Tests | 1h |
 
-**Sprint 3 subtotal: 5 + 3 + 3 + 5 + 4 + 3 + 4 = 27h** ✓ matches `02-sprint-plan.md`.
+### PM-016 — System Administrator role: RBAC extension (2h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| Add `SYSTEM_ADMINISTRATOR` to the `Role` enum; add `.hasRole("SYSTEM_ADMINISTRATOR")` matchers for `/staff-accounts/**` in `SecurityFilterChain` (built in PM-006) | Security config | 1.5h |
+| TC-XC-039–041 RBAC negative cases | Tests | 0.5h |
+
+Per `06-low-level-design.md` §11.1. **Sudden mid-plan addition** — see [02-sprint-plan.md](./02-sprint-plan.md) Sprint 3's capacity note.
+
+### US-7.1 — Create a staff account (5h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `User.provisionStaff()` factory; `Role.STAFF_ROLES` constant | Domain | 0.5h |
+| `existsByUsername` on `UserRepository` (already listed in §8.3, first real caller); `DuplicateUsernameException` | Port/Internal | 0.5h |
+| `ProvisionStaffCommand`, `IdentityService.provisionStaff()` — validate role → `existsByUsername` → generate password → `provisionStaff()` → save | Application | 1.5h |
+| `StaffAccountController.createStaffAccount`, DTOs | Web | 1h |
+| TC-IDN-024–027 | Tests | 1.5h |
+
+Per `06-low-level-design.md` §8.4/§8.7, `04-authentication-authorization.md` §3a.
+
+### US-7.2 — Deactivate/reactivate a staff account (3h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `User.setEnabled()`; `findById` on `UserRepository`; `UserNotFoundException` | Domain/Port | 0.5h |
+| `IdentityService.setAccountEnabled()` | Application | 0.5h |
+| `StaffAccountController.setStatus`; `enabled` check in `AppUserDetailsService.loadUserByUsername` (`DisabledException`) | Web/security | 1h |
+| TC-IDN-028–030 | Tests | 1h |
+
+Per `06-low-level-design.md` §8.4/§8.7/§11.3, `04-authentication-authorization.md` §3b/§4.1.
+
+### PM-017 — Demo-accounts endpoint (3h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `DemoAccountsController` (`@ConditionalOnProperty(app.demo-accounts.enabled)`), `IdentityService.listDemoAccounts()` returning the 5 fixed identities | Web/Application | 1h |
+| `application-prod.properties` override (`app.demo-accounts.enabled=false`); dev/test seed data for the 5 demo accounts | Config/Test data | 1h |
+| TC-IDN-031–032, TC-XC-042 | Tests | 1h |
+
+Per `06-low-level-design.md` §11.4, `04-authentication-authorization.md` §8. **Lowest-priority item of this sprint's addition** — first to move to Sprint 4 if Sprint 3 needs to shed scope (see capacity note in `02-sprint-plan.md`).
+
+**Sprint 3 subtotal: 5 + 3 + 3 + 5 + 4 + 3 + 4 + 2 + 5 + 3 + 3 = 40h** ✓ matches `02-sprint-plan.md`.
 
 ---
 
@@ -366,7 +408,7 @@ Per `06-low-level-design.md` §10.
 | --- | --- | --- |
 | Add the JaCoCo Maven plugin + CI report-publish step | Build config | 1h |
 | Run the full suite; capture coverage numbers | Verification | 0.5h |
-| Update `Testing/README.md`'s UC → File Index: mark UC-1–23 implemented + tested | Docs | 1.5h |
+| Update `Testing/README.md`'s UC → File Index: mark UC-1–25 implemented + tested | Docs | 1.5h |
 
 **Sprint 4 subtotal: 8 + 4 + 5 + 6 + 5 + 3 = 31h** ✓ matches `02-sprint-plan.md`.
 
@@ -379,8 +421,8 @@ Per `06-low-level-design.md` §10.
 | Sprint 0 | 19h | 19h | ✓ |
 | Sprint 1 | 36h | 36h | ✓ |
 | Sprint 2 | 34h | 34h | ✓ |
-| Sprint 3 | 27h | 27h | ✓ |
+| Sprint 3 | 40h | 40h | ✓ |
 | Sprint 4 | 31h | 31h | ✓ |
-| **Total** | **147h** | **147h** | ✓ |
+| **Total** | **160h** | **160h** | ✓ |
 
-Every one of the 33 items in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears exactly once above, decomposed into 3–6 tasks apiece. If a source document changes (LLD, test cases, or the Product Backlog's estimates), review this set for drift the same way [README.md](./README.md) already flags for the other three PM docs.
+Every one of the 37 items in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears exactly once above, decomposed into 3–6 tasks apiece. If a source document changes (LLD, test cases, or the Product Backlog's estimates), review this set for drift the same way [README.md](./README.md) already flags for the other three PM docs.

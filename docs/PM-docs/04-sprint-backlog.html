@@ -412,7 +412,7 @@
 
 <hr>
 
-<h2 id="sprint-3">5. Sprint 3 — <code>enrollment</code> + <code>identity</code> auth (27h)</h2>
+<h2 id="sprint-3">5. Sprint 3 — <code>enrollment</code> + <code>identity</code> auth (40h)</h2>
 
 <h3>US-4.1 — Enroll a student in a course (5h)</h3>
 <table>
@@ -491,7 +491,53 @@
   </tbody>
 </table>
 
-<p><strong class="subtotal">Sprint 3 subtotal: 5 + 3 + 3 + 5 + 4 + 3 + 4 = 27h</strong> ✓ matches <code>02-sprint-plan.md</code>.</p>
+<h3>PM-016 — System Administrator role: RBAC extension (2h)</h3>
+<table>
+  <thead><tr><th>Task</th><th>Layer</th><th>Est.</th></tr></thead>
+  <tbody>
+    <tr><td>Add <code>SYSTEM_ADMINISTRATOR</code> to the <code>Role</code> enum; add <code>.hasRole("SYSTEM_ADMINISTRATOR")</code> matchers for <code>/staff-accounts/**</code> in <code>SecurityFilterChain</code> (built in PM-006)</td><td>Security config</td><td>1.5h</td></tr>
+    <tr><td>TC-XC-039–041 RBAC negative cases</td><td>Tests</td><td>0.5h</td></tr>
+  </tbody>
+</table>
+<p class="src-note">Per <code>06-low-level-design.md</code> §11.1. <strong>Sudden mid-plan addition</strong> — see <a href="./02-sprint-plan.html">02-sprint-plan.md</a> Sprint 3's capacity note.</p>
+
+<h3>US-7.1 — Create a staff account (5h)</h3>
+<table>
+  <thead><tr><th>Task</th><th>Layer</th><th>Est.</th></tr></thead>
+  <tbody>
+    <tr><td><code>User.provisionStaff()</code> factory; <code>Role.STAFF_ROLES</code> constant</td><td>Domain</td><td>0.5h</td></tr>
+    <tr><td><code>existsByUsername</code> on <code>UserRepository</code> (already listed in §8.3, first real caller); <code>DuplicateUsernameException</code></td><td>Port/Internal</td><td>0.5h</td></tr>
+    <tr><td><code>ProvisionStaffCommand</code>, <code>IdentityService.provisionStaff()</code> — validate role → <code>existsByUsername</code> → generate password → <code>provisionStaff()</code> → save</td><td>Application</td><td>1.5h</td></tr>
+    <tr><td><code>StaffAccountController.createStaffAccount</code>, DTOs</td><td>Web</td><td>1h</td></tr>
+    <tr><td>TC-IDN-024–027</td><td>Tests</td><td>1.5h</td></tr>
+  </tbody>
+</table>
+<p class="src-note">Per <code>06-low-level-design.md</code> §8.4/§8.7, <code>04-authentication-authorization.md</code> §3a.</p>
+
+<h3>US-7.2 — Deactivate/reactivate a staff account (3h)</h3>
+<table>
+  <thead><tr><th>Task</th><th>Layer</th><th>Est.</th></tr></thead>
+  <tbody>
+    <tr><td><code>User.setEnabled()</code>; <code>findById</code> on <code>UserRepository</code>; <code>UserNotFoundException</code></td><td>Domain/Port</td><td>0.5h</td></tr>
+    <tr><td><code>IdentityService.setAccountEnabled()</code></td><td>Application</td><td>0.5h</td></tr>
+    <tr><td><code>StaffAccountController.setStatus</code>; <code>enabled</code> check in <code>AppUserDetailsService.loadUserByUsername</code> (<code>DisabledException</code>)</td><td>Web/security</td><td>1h</td></tr>
+    <tr><td>TC-IDN-028–030</td><td>Tests</td><td>1h</td></tr>
+  </tbody>
+</table>
+<p class="src-note">Per <code>06-low-level-design.md</code> §8.4/§8.7/§11.3, <code>04-authentication-authorization.md</code> §3b/§4.1.</p>
+
+<h3>PM-017 — Demo-accounts endpoint (3h)</h3>
+<table>
+  <thead><tr><th>Task</th><th>Layer</th><th>Est.</th></tr></thead>
+  <tbody>
+    <tr><td><code>DemoAccountsController</code> (<code>@ConditionalOnProperty(app.demo-accounts.enabled)</code>), <code>IdentityService.listDemoAccounts()</code> returning the 5 fixed identities</td><td>Web/Application</td><td>1h</td></tr>
+    <tr><td><code>application-prod.properties</code> override (<code>app.demo-accounts.enabled=false</code>); dev/test seed data for the 5 demo accounts</td><td>Config/Test data</td><td>1h</td></tr>
+    <tr><td>TC-IDN-031–032, TC-XC-042</td><td>Tests</td><td>1h</td></tr>
+  </tbody>
+</table>
+<p class="src-note">Per <code>06-low-level-design.md</code> §11.4, <code>04-authentication-authorization.md</code> §8. <strong>Lowest-priority item of this sprint's addition</strong> — first to move to Sprint 4 if Sprint 3 needs to shed scope (see capacity note in <code>02-sprint-plan.md</code>).</p>
+
+<p><strong class="subtotal">Sprint 3 subtotal: 5 + 3 + 3 + 5 + 4 + 3 + 4 + 2 + 5 + 3 + 3 = 40h</strong> ✓ matches <code>02-sprint-plan.md</code>.</p>
 
 <hr>
 
@@ -556,7 +602,7 @@
   <tbody>
     <tr><td>Add the JaCoCo Maven plugin + CI report-publish step</td><td>Build config</td><td>1h</td></tr>
     <tr><td>Run the full suite; capture coverage numbers</td><td>Verification</td><td>0.5h</td></tr>
-    <tr><td>Update <code>Testing/README.md</code>'s UC → File Index: mark UC-1–23 implemented + tested</td><td>Docs</td><td>1.5h</td></tr>
+    <tr><td>Update <code>Testing/README.md</code>'s UC → File Index: mark UC-1–25 implemented + tested</td><td>Docs</td><td>1.5h</td></tr>
   </tbody>
 </table>
 
@@ -571,12 +617,12 @@
     <tr><td>Sprint 0</td><td>19h</td><td>19h</td><td>✓</td></tr>
     <tr><td>Sprint 1</td><td>36h</td><td>36h</td><td>✓</td></tr>
     <tr><td>Sprint 2</td><td>34h</td><td>34h</td><td>✓</td></tr>
-    <tr><td>Sprint 3</td><td>27h</td><td>27h</td><td>✓</td></tr>
+    <tr><td>Sprint 3</td><td>40h</td><td>40h</td><td>✓</td></tr>
     <tr><td>Sprint 4</td><td>31h</td><td>31h</td><td>✓</td></tr>
-    <tr><td><strong>Total</strong></td><td><strong>147h</strong></td><td><strong>147h</strong></td><td>✓</td></tr>
+    <tr><td><strong>Total</strong></td><td><strong>160h</strong></td><td><strong>160h</strong></td><td>✓</td></tr>
   </tbody>
 </table>
-<p>Every one of the 33 items in <a href="./01-product-backlog.md">01-product-backlog.md</a> §9's ranked list appears exactly once above, decomposed into 3–6 tasks apiece. If a source document changes (LLD, test cases, or the Product Backlog's estimates), review this set for drift the same way <a href="./README.md">README.md</a> already flags for the other three PM docs.</p>
+<p>Every one of the 37 items in <a href="./01-product-backlog.md">01-product-backlog.md</a> §9's ranked list appears exactly once above, decomposed into 3–6 tasks apiece. If a source document changes (LLD, test cases, or the Product Backlog's estimates), review this set for drift the same way <a href="./README.md">README.md</a> already flags for the other three PM docs.</p>
 
 </body>
 </html>

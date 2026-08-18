@@ -10,7 +10,7 @@ Turns the completed specification ([BA-docs](../BA-docs/), [SA-docs](../SA-docs/
 
 - **Epic** — one of the 5 Spring Modulith modules (`student`, `course`, `book`, `enrollment`, `identity`) plus `shared`/platform and a final cross-cutting/hardening epic, matching the module boundaries fixed in [SA-docs/02-component-diagram.md](../SA-docs/02-component-diagram.md).
 - **Item** — either a user story ID (`US-x.x`, acceptance criteria live in `user-stories.md` and are not restated here) or a platform item (`PM-0xx`).
-- **Priority** — MoSCoW. Nearly everything is *Must* because [Testing/README.md](../Testing/README.md) already commits to covering all 23 UCs with at least one test case each; items marked *Should* are explicitly flagged as recommended-not-required in `Testing/02-test-plan.md` §8.
+- **Priority** — MoSCoW. Nearly everything is *Must* because [Testing/README.md](../Testing/README.md) already commits to covering all 25 UCs with at least one test case each; items marked *Should* are explicitly flagged as recommended-not-required in `Testing/02-test-plan.md` §8.
 - **Estimate** — ideal developer-hours, not story points. The confirmed delivery model is a solo developer, so a shared team velocity in points has no meaning here; hours are a sizing input for [02-sprint-plan.md](./02-sprint-plan.md), not a commitment.
 - **Sprint** — which sprint the item is pulled into, per the sequence fixed by `Testing/02-test-plan.md` §2 (dependency order: `shared` → `student`+`identity` provisioning → `course` → `book` → `enrollment` → `identity` auth → cross-cutting).
 
@@ -88,7 +88,7 @@ No user-facing UC; unblocks every other epic.
 
 ## 7. Epic F — `identity` auth + self-service
 
-Account provisioning itself ships with Epic B (US-1.1); these items are the rest of the `identity` module.
+Account provisioning itself ships with Epic B (US-1.1); these items are the rest of the `identity` module. **Sudden addition (post-planning):** staff-account provisioning (System Administrator role) and a dev/test-only demo-accounts endpoint, added to this epic per the updated `04-authentication-authorization.md` §3a/§3b/§8 — see [02-sprint-plan.md](./02-sprint-plan.md) Sprint 3 for the capacity impact.
 
 | ID | Item | Priority | Estimate | Linked UC |
 | --- | --- | --- | --- | --- |
@@ -96,8 +96,12 @@ Account provisioning itself ships with Epic B (US-1.1); these items are the rest
 | US-6.2 | Change my password | Must | 4h | UC-22 |
 | US-6.3 | View a student's initial password (Registrar-only, only until changed) | Must | 3h | UC-23 |
 | US-5.4 | Student views their own owned books and enrolled courses | Must | 4h | UC-16 |
+| PM-016 | System Administrator role: extend `Role` enum + `SecurityFilterChain` RBAC rules for `/staff-accounts/**` | Must | 2h | `06-low-level-design.md` §11.1 |
+| US-7.1 | Create a staff account (System Administrator provisions Registrar/Librarian/Course Administrator) | Must | 5h | UC-24 |
+| US-7.2 | Deactivate/reactivate a staff account | Must | 3h | UC-25 |
+| PM-017 | Demo-accounts endpoint (`GET /auth/demo-accounts`), profile-gated via `app.demo-accounts.enabled` | Must | 3h | `04-authentication-authorization.md` §8 |
 
-**Epic F subtotal: 16h**
+**Epic F subtotal: 29h** (16h original + 13h added by the staff-account/demo-account requirement)
 
 ---
 
@@ -151,11 +155,15 @@ Matches the sprint sequence in [02-sprint-plan.md](./02-sprint-plan.md); this is
 | 25 | US-6.2 | Change my password | Sprint 3 |
 | 26 | US-6.3 | View a student's initial password | Sprint 3 |
 | 27 | US-5.4 | Student views own books/courses | Sprint 3 |
-| 28 | PM-010 | RBAC matrix tests | Sprint 4 |
-| 29 | PM-011 | Must-change-password gate | Sprint 4 |
-| 30 | PM-012 | Optimistic locking | Sprint 4 |
-| 31 | PM-013 | Cascade/lifecycle integration tests | Sprint 4 |
-| 32 | PM-014 | 7 ambiguity resolutions | Sprint 4 |
-| 33 | PM-015 | Coverage report + traceability matrix | Sprint 4 |
+| 28 | PM-016 | System Administrator role: RBAC extension | Sprint 3 |
+| 29 | US-7.1 | Create a staff account | Sprint 3 |
+| 30 | US-7.2 | Deactivate/reactivate a staff account | Sprint 3 |
+| 31 | PM-017 | Demo-accounts endpoint | Sprint 3 |
+| 32 | PM-010 | RBAC matrix tests | Sprint 4 |
+| 33 | PM-011 | Must-change-password gate | Sprint 4 |
+| 34 | PM-012 | Optimistic locking | Sprint 4 |
+| 35 | PM-013 | Cascade/lifecycle integration tests | Sprint 4 |
+| 36 | PM-014 | 7 ambiguity resolutions | Sprint 4 |
+| 37 | PM-015 | Coverage report + traceability matrix | Sprint 4 |
 
-**Total: 147 ideal-hours across 33 backlog items**, covering all 23 UCs / 18 user stories plus the 6 platform prerequisites and 6 hardening items identified in the Testing documentation.
+**Total: 160 ideal-hours across 37 backlog items** (22 user stories, 15 platform/hardening `PM-0xx` items), covering all 25 UCs identified in the Testing documentation. PM-016/017 and US-7.1/7.2 (13h) are a sudden mid-plan addition — see [02-sprint-plan.md](./02-sprint-plan.md) Sprint 3 for how this changed that sprint's capacity.

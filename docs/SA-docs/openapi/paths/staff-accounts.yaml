@@ -1,0 +1,89 @@
+collection:
+  post:
+    operationId: createStaffAccount
+    tags: [Staff Accounts]
+    summary: Create a staff account
+    description: |
+      **Roles:** System Administrator only.
+
+      Creates a Registrar, Librarian, or Course Administrator account (UC-24). The requested
+      `role` is restricted server-side to those 3 values — SYSTEM_ADMINISTRATOR is rejected,
+      since a System Administrator account is never created through this API. The account is
+      created with a system-generated initial password, in a "must change password" state
+      identical to an auto-provisioned Student account.
+    x-roles: [SYSTEM_ADMINISTRATOR]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/staff-account.yaml#/CreateStaffAccountRequest'
+    responses:
+      '201':
+        description: Account created. The initial password is returned exactly once, in this response.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/staff-account.yaml#/StaffAccountResponse'
+      '400':
+        description: Requested role is not one of REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/ValidationError'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '409':
+        description: Username already in use.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/Error'
+            example:
+              timestamp: '2026-01-15T09:24:00Z'
+              status: 409
+              error: Conflict
+              message: Username 'j.smith' is already in use.
+              path: /api/v1/staff-accounts
+
+status:
+  patch:
+    operationId: setStaffAccountStatus
+    tags: [Staff Accounts]
+    summary: Deactivate or reactivate a staff account
+    description: |
+      **Roles:** System Administrator only.
+
+      Toggles whether the target staff account may log in (UC-25). Symmetric — the same
+      operation both disables and re-enables, depending on the request body. Does not
+      force-terminate an already-open session for the target account (see
+      `04-authentication-authorization.md` §3b).
+    x-roles: [SYSTEM_ADMINISTRATOR]
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/staff-account.yaml#/SetStaffAccountStatusRequest'
+    responses:
+      '200':
+        description: Status updated.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/staff-account.yaml#/StaffAccountResponse'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../components/responses/errors.yaml#/NotFound'

@@ -349,6 +349,9 @@ classDiagram
     <tr><td><code>UnknownCourseException</code></td><td>400</td><td><code>EnrollmentService</code> (course ref) via <code>CourseLookup.existsById</code></td><td>Enrollment.2</td></tr>
     <tr><td><code>InvalidCredentialsException</code></td><td>401</td><td>Login (Spring Security <code>AuthenticationFailureHandler</code>), <code>IdentityService.changePassword</code> (current-password mismatch)</td><td>UC-21, UC-22</td></tr>
     <tr><td><code>PasswordNoLongerAvailableException</code></td><td>404</td><td><code>IdentityService.viewInitialPassword</code> when <code>mustChangePassword = false</code></td><td>Identity.4/5, UC-23</td></tr>
+    <tr><td><code>DuplicateUsernameException</code></td><td>409</td><td><code>IdentityService.provisionStaff</code></td><td>Identity.2, Identity.6, UC-24</td></tr>
+    <tr><td><code>UserNotFoundException</code></td><td>404</td><td><code>IdentityService.setAccountEnabled</code></td><td>UC-25</td></tr>
+    <tr><td>Spring Security <code>DisabledException</code> (not an <code>ApiException</code> subtype — handled entirely inside the auth filter chain, same as <code>InvalidCredentialsException</code> at login)</td><td>401</td><td><code>AppUserDetailsService.loadUserByUsername</code> when <code>!user.enabled()</code></td><td>Identity.7, UC-21, UC-25</td></tr>
   </tbody>
 </table>
 <p><code>shared.web.GlobalExceptionHandler</code> (<code>@RestControllerAdvice</code>) maps each branch of this hierarchy to the <code>Error</code>/<code>ValidationError</code> envelope already fixed in <code>api-specification.md</code> §3 (<code>timestamp</code>, <code>status</code>, <code>error</code>, <code>message</code>, <code>path</code>) — one <code>@ExceptionHandler(ApiException.class)</code> reading <code>getStatus()</code> off the exception, no per-exception-type handler methods needed.</p>
@@ -739,6 +742,11 @@ classDiagram
     class AuthController {
         +changePassword(ChangePasswordRequest request) void
         +viewStudentInitialPassword(String studentCode) InitialPasswordResponse
+        +listDemoAccounts() List~DemoAccountResponse~
+    }
+    class StaffAccountController {
+        +createStaffAccount(CreateStaffAccountRequest request) StaffAccountResponse
+        +setStatus(Long userId, SetStatusRequest request) StaffAccountResponse
     }
     class AppUserDetailsService {
         &lt;&lt;Spring Security UserDetailsService&gt;&gt;
@@ -755,9 +763,12 @@ classDiagram
         -PasswordCipher cipher
         -InitialPasswordGenerator passwordGenerator
         +provisionForStudent(StudentId studentId, Email email) ProvisionedAccount
+        +provisionStaff(ProvisionStaffCommand command) ProvisionedAccount
+        +setAccountEnabled(UserId userId, boolean enabled) User
         +changePassword(ChangePasswordCommand command) void
         +viewInitialPassword(StudentCode studentCode) InitialPasswordView
         +studentIdOf(Authentication authentication) Optional~StudentId~
+        +listDemoAccounts() List~DemoAccount~
     }
     class User {
         -UserId id
@@ -767,9 +778,12 @@ classDiagram
         -Role role
         -StudentId studentId
         -boolean mustChangePassword
+        -boolean enabled
         -long version
         +provisionForStudent(Username username, StudentId studentId, String plaintextPassword, PasswordHasher hasher, PasswordCipher cipher)$ User
+        +provisionStaff(Username username, Role role, String plaintextPassword, PasswordHasher hasher, PasswordCipher cipher)$ User
         +changePassword(String newPlaintext, PasswordHasher hasher) void
+        +setEnabled(boolean enabled) void
     }
     class PasswordHasher {
         &lt;&lt;interface&gt;&gt;
@@ -803,6 +817,7 @@ classDiagram
     }
 
     AuthController --&gt; IdentityService
+    StaffAccountController --&gt; IdentityService
     AppUserDetailsService --&gt; UserRepository
     IdentityService --&gt; User
     IdentityService --&gt; UserRepository
@@ -826,7 +841,7 @@ classDiagram
     <tr><td><code>UserId(Long value)</code>, <code>Username(String value)</code></td><td>Mirror <code>StudentId</code>/<code>StudentCode</code>'s nullable-before-save / non-blank pattern</td></tr>
     <tr><td><code>PasswordHash(String value)</code></td><td>Wraps a 60-char BCrypt digest; no public constructor validation beyond non-blank — the <em>policy</em> (min length, etc.) is checked on the plaintext, before hashing, in <code>IdentityService.changePassword</code></td></tr>
     <tr><td><code>EncryptedInitialPassword(String cipherText)</code> — nullable field on <code>User</code>, not a null-safe VO itself</td><td>Represents the AES ciphertext; <code>User</code> holds <code>EncryptedInitialPassword</code> or <code>null</code>, matching <code>initial_password_encrypted</code>'s nullable column (<code>05-database-schema.md</code> §3.5)</td></tr>
-    <tr><td><code>Role</code></td><td><code>enum { REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT }</code></td></tr>
+    <tr><td><code>Role</code></td><td><code>enum { SYSTEM_ADMINISTRATOR, REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT }</code>. <code>Role.STAFF_ROLES = {REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR}</code> — the constrained subset <code>User.provisionStaff(...)</code> accepts (<code>04-auth.md</code> §3a); <code>SYSTEM_ADMINISTRATOR</code> and <code>STUDENT</code> are never valid arguments to it.</td></tr>
     <tr><td><code>PasswordHasher</code> (<code>port/</code>)</td><td>Domain-owned interface — <strong>not</strong> Spring Security's <code>PasswordEncoder</code> directly, so <code>domain/User</code> stays framework-free while still calling <code>hasher.hash(...)</code>/<code>hasher.matches(...)</code>. <code>internal/BCryptPasswordHasher</code> implements it, wrapping the <code>PasswordEncoder</code> bean <code>shared</code> configures</td></tr>
     <tr><td><code>PasswordCipher</code> (<code>port/</code>)</td><td>Same reasoning for the reversible AES step. <code>internal/AesPasswordCipher</code> implements it</td></tr>
     <tr><td><code>InitialPasswordGenerator</code> (<code>port/</code>, or <code>application/</code> — either is defensible since it has no infrastructure dependency beyond <code>SecureRandom</code>)</td><td>The one genuine Domain Service candidate identified in <code>tactical-ddd-design.md</code> §5; <code>internal/SecureRandomInitialPasswordGenerator implements InitialPasswordGenerator</code>, <code>generate(): String</code> returns an 8-char alphanumeric string</td></tr>
@@ -836,8 +851,10 @@ classDiagram
 <table>
   <thead><tr><th>Method</th><th>Parameters</th><th>Returns</th><th>Throws</th><th>Rule</th></tr></thead>
   <tbody>
-    <tr><td><code>provisionForStudent(...)</code> <em>(static factory)</em></td><td><code>Username username, StudentId studentId, String plaintextPassword, PasswordHasher hasher, PasswordCipher cipher</code></td><td><code>User</code></td><td>—</td><td>Sets <code>role = STUDENT</code>, <code>mustChangePassword = true</code> (Identity.3); <code>passwordHash = hasher.hash(plaintextPassword)</code>, <code>initialPasswordEncrypted = cipher.encrypt(plaintextPassword)</code></td></tr>
+    <tr><td><code>provisionForStudent(...)</code> <em>(static factory)</em></td><td><code>Username username, StudentId studentId, String plaintextPassword, PasswordHasher hasher, PasswordCipher cipher</code></td><td><code>User</code></td><td>—</td><td>Sets <code>role = STUDENT</code>, <code>mustChangePassword = true</code>, <code>enabled = true</code> (Identity.3); <code>passwordHash = hasher.hash(plaintextPassword)</code>, <code>initialPasswordEncrypted = cipher.encrypt(plaintextPassword)</code></td></tr>
+    <tr><td><code>provisionStaff(...)</code> <em>(static factory)</em></td><td><code>Username username, Role role, String plaintextPassword, PasswordHasher hasher, PasswordCipher cipher</code></td><td><code>User</code></td><td>— (caller, <code>IdentityService.provisionStaff</code>, already validated <code>role ∈ Role.STAFF_ROLES</code> before calling)</td><td>Sets <code>studentId = null</code>, <code>mustChangePassword = true</code>, <code>enabled = true</code> (Identity.3, Identity.6); hashing/encryption identical to <code>provisionForStudent</code></td></tr>
     <tr><td><code>changePassword(...)</code></td><td><code>String newPlaintext, PasswordHasher hasher</code></td><td><code>void</code></td><td>—</td><td><code>passwordHash = hasher.hash(newPlaintext)</code>; <code>initialPasswordEncrypted = null</code>; <code>mustChangePassword = false</code> (Identity.4/5)</td></tr>
+    <tr><td><code>setEnabled(...)</code></td><td><code>boolean enabled</code></td><td><code>void</code></td><td>—</td><td>Sets <code>this.enabled = enabled</code> (Identity.7); no other field changes — deactivation is not a soft-delete of any other state</td></tr>
     <tr><td><code>matchesCurrentPassword</code></td><td><code>String plaintext, PasswordHasher hasher</code></td><td><code>boolean</code></td><td>—</td><td>Thin delegate to <code>hasher.matches(plaintext, this.passwordHash)</code>, kept on the aggregate so <code>IdentityService</code> never reaches into <code>passwordHash</code> directly</td></tr>
   </tbody>
 </table>
@@ -849,8 +866,9 @@ classDiagram
   <tbody>
     <tr><td><code>findByUsername</code></td><td><code>Username username</code></td><td><code>Optional&lt;User&gt;</code></td><td><code>AppUserDetailsService.loadUserByUsername</code>, <code>IdentityService.changePassword</code></td></tr>
     <tr><td><code>findByStudentCode</code></td><td><code>StudentCode studentCode</code></td><td><code>Optional&lt;User&gt;</code></td><td><code>IdentityService.viewInitialPassword</code> (UC-23)</td></tr>
-    <tr><td><code>existsByUsername</code></td><td><code>Username username</code></td><td><code>boolean</code></td><td>Available for a future staff-provisioning flow (§7 of <code>04-authentication-authorization.md</code> notes none exists yet — never actually called for Student accounts, since <code>Email</code> is already Student.2-unique)</td></tr>
-    <tr><td><code>save</code></td><td><code>User user</code></td><td><code>User</code></td><td>Provisioning, change-password</td></tr>
+    <tr><td><code>existsByUsername</code></td><td><code>Username username</code></td><td><code>boolean</code></td><td><code>IdentityService.provisionStaff</code> (§3a of <code>04-authentication-authorization.md</code>) — never called for Student accounts, since <code>Email</code> is already Student.2-unique</td></tr>
+    <tr><td><code>findById</code></td><td><code>UserId userId</code></td><td><code>Optional&lt;User&gt;</code></td><td><code>IdentityService.setAccountEnabled</code> (UC-25)</td></tr>
+    <tr><td><code>save</code></td><td><code>User user</code></td><td><code>User</code></td><td>Provisioning, change-password, enable/disable</td></tr>
     <tr><td><code>deleteByStudentId</code></td><td><code>StudentId studentId</code></td><td><code>void</code></td><td><strong>Addition beyond <code>tactical-ddd-design.md</code> §7's "representative methods" list</strong> — needed by the <code>StudentDeleted</code> listener (§13) so account removal goes through the application layer rather than relying solely on <code>users.student_id ON DELETE CASCADE</code> as the <em>only</em> mechanism, consistent with <code>05-database-schema.md</code> §5's "DB-level is a safety net, not a replacement"</td></tr>
   </tbody>
 </table>
@@ -859,20 +877,24 @@ classDiagram
   <thead><tr><th>Method</th><th>Parameters</th><th>Returns</th><th>Throws</th><th>Orchestration</th></tr></thead>
   <tbody>
     <tr><td><code>provisionForStudent</code></td><td><code>StudentId studentId, Email email</code></td><td><code>ProvisionedAccount</code> (<code>record ProvisionedAccount(String username, String plaintextPassword)</code>)</td><td>—</td><td><code>04-auth.md</code> §3: generate plaintext via <code>InitialPasswordGenerator</code> → <code>User.provisionForStudent(...)</code> → <code>repository.save(user)</code>. This is <code>AccountProvisioning.provisionForStudent</code>; called synchronously by <code>StudentService.register</code>, same transaction</td></tr>
+    <tr><td><code>provisionStaff</code></td><td><code>ProvisionStaffCommand command</code> (<code>record ProvisionStaffCommand(String username, Role role)</code>)</td><td><code>ProvisionedAccount</code></td><td><code>DomainValidationException</code> (<code>role</code> not in <code>Role.STAFF_ROLES</code>), <code>DuplicateUsernameException</code> (<code>existsByUsername</code>)</td><td><code>04-auth.md</code> §3a: validate role → <code>existsByUsername</code> → generate plaintext via <code>InitialPasswordGenerator</code> → <code>User.provisionStaff(...)</code> → <code>repository.save(user)</code>. Called only from <code>StaffAccountController</code>, never from another module</td></tr>
+    <tr><td><code>setAccountEnabled</code></td><td><code>UserId userId, boolean enabled</code></td><td><code>User</code></td><td><code>UserNotFoundException</code></td><td><code>04-auth.md</code> §3b: <code>findById</code> → <code>agg.setEnabled(enabled)</code> → <code>repository.save(user)</code></td></tr>
     <tr><td><code>changePassword</code></td><td><code>ChangePasswordCommand command</code> (<code>record ChangePasswordCommand(String currentPassword, String newPassword, String retypeNewPassword)</code>, principal resolved from <code>SecurityContext</code>)</td><td><code>void</code></td><td><code>DomainValidationException</code> (retype mismatch or policy failure — §5.2 of <code>04-auth.md</code>: min 8 / max 72 chars, must differ from current), <code>InvalidCredentialsException</code> (current-password mismatch)</td><td>§5.1: retype check → <code>findByUsername</code> → <code>matchesCurrentPassword</code> → policy check → <code>agg.changePassword(...)</code> → save</td></tr>
     <tr><td><code>viewInitialPassword</code></td><td><code>StudentCode studentCode</code></td><td><code>InitialPasswordView</code> (<code>record InitialPasswordView(String username, String initialPassword)</code>)</td><td><code>PasswordNoLongerAvailableException</code></td><td>§5.3: <code>findByStudentCode</code> → if <code>!mustChangePassword</code> throw, else <code>cipher.decrypt(initialPasswordEncrypted)</code></td></tr>
     <tr><td><code>studentIdOf</code> (<code>PrincipalStudentResolver</code>)</td><td><code>Authentication authentication</code></td><td><code>Optional&lt;StudentId&gt;</code></td><td>—</td><td>Used by <code>student</code>/<code>book</code>/<code>enrollment</code> controllers or services to scope a <code>STUDENT</code>-role caller to <code>principal.studentId</code> (<code>02-component-diagram.md</code> §4's "own records only" row)</td></tr>
+    <tr><td><code>listDemoAccounts</code></td><td>—</td><td><code>List&lt;DemoAccount&gt;</code> (<code>record DemoAccount(Role role, String username, String password)</code>)</td><td>—</td><td>§8 of <code>04-auth.md</code>: returns the 5 fixed, hardcoded demo identities — not read from <code>UserRepository</code>, since the demo password must be returned in plaintext, which <code>User</code>/<code>password_hash</code> can never do. Only wired up when <code>app.demo-accounts.enabled=true</code> (§11.4)</td></tr>
   </tbody>
 </table>
 <p><code>IdentityService</code> implements both <code>AccountProvisioning</code> and <code>PrincipalStudentResolver</code> — no separate façade class, mirroring <code>StudentService</code>/<code>StudentLookup</code> in §4.8.</p>
 <h3>8.5 Web-layer / security-adapter classes</h3>
-<p>Three classes sit in <code>identity/web/</code> alongside <code>AuthController</code>, none of them owning business rules — they exist because Spring Security's contracts (<code>UserDetailsService</code>, <code>OncePerRequestFilter</code>) have to be implemented <em>somewhere</em>, and <code>identity</code> is the module that owns <code>User</code>:</p>
+<p>Four classes sit in <code>identity/web/</code> alongside <code>AuthController</code>, none of them owning business rules — two exist because Spring Security's contracts (<code>UserDetailsService</code>, <code>OncePerRequestFilter</code>) have to be implemented <em>somewhere</em>, and <code>identity</code> is the module that owns <code>User</code>:</p>
 <table>
   <thead><tr><th>Class</th><th>Role</th></tr></thead>
   <tbody>
     <tr><td><code>AppUserDetailsService implements UserDetailsService</code></td><td><code>loadUserByUsername(String username): UserDetails</code> — delegates to <code>UserRepository.findByUsername</code>, throws Spring Security's own <code>UsernameNotFoundException</code> if absent (§4.1 of <code>04-auth.md</code>); wraps the found <code>User</code> in a small <code>AuthenticatedPrincipal</code> (custom <code>UserDetails</code> implementation carrying <code>role</code>, <code>studentId</code>, <code>mustChangePassword</code>)</td></tr>
     <tr><td><code>MustChangePasswordFilter extends OncePerRequestFilter</code></td><td><code>doFilterInternal(HttpServletRequest, HttpServletResponse, FilterChain): void</code> — the gate in <code>04-auth.md</code> §4.2: 403 if <code>principal.mustChangePassword &amp;&amp; path != "/api/v1/auth/password"</code></td></tr>
-    <tr><td><code>AuthController</code></td><td>Hosts only <code>changePassword</code> and <code>viewStudentInitialPassword</code> (<code>operationId</code>s <code>changePassword</code>, <code>viewStudentInitialPassword</code>) — <strong>not</strong> <code>login</code>. <code>POST /api/v1/auth/login</code> is handled entirely inside Spring Security's authentication filter chain (a <code>UsernamePasswordAuthenticationFilter</code>-family filter configured with a JSON <code>AuthenticationSuccessHandler</code>/<code>AuthenticationFailureHandler</code>), per <code>04-auth.md</code> §4.1's sequence lifeline (<code>User-&gt;&gt;Sec</code>, never reaching a <code>@Controller</code>). This filter and its handlers are <code>shared</code>/<code>identity</code> Spring-config, designed in full in §11</td></tr>
+    <tr><td><code>AuthController</code></td><td>Hosts only <code>changePassword</code>, <code>viewStudentInitialPassword</code>, and <code>listDemoAccounts</code> (<code>operationId</code>s <code>changePassword</code>, <code>viewStudentInitialPassword</code>, <code>listDemoAccounts</code>) — <strong>not</strong> <code>login</code>. <code>POST /api/v1/auth/login</code> is handled entirely inside Spring Security's authentication filter chain (a <code>UsernamePasswordAuthenticationFilter</code>-family filter configured with a JSON <code>AuthenticationSuccessHandler</code>/<code>AuthenticationFailureHandler</code>), per <code>04-auth.md</code> §4.1's sequence lifeline (<code>User-&gt;&gt;Sec</code>, never reaching a <code>@Controller</code>). This filter and its handlers are <code>shared</code>/<code>identity</code> Spring-config, designed in full in §11</td></tr>
+    <tr><td><code>StaffAccountController</code></td><td>Hosts <code>createStaffAccount</code> and <code>setStatus</code> (UC-24/25) — a separate controller class from <code>AuthController</code>, not just separate methods, because every one of its endpoints requires <code>hasRole("SYSTEM_ADMINISTRATOR")</code> (§11.1) while <code>AuthController</code>'s endpoints don't share a single uniform role rule; keeping them apart keeps the <code>SecurityFilterChain</code>'s per-controller-package matchers simple</td></tr>
   </tbody>
 </table>
 <h3>8.6 <code>AuthController</code></h3>
@@ -881,8 +903,18 @@ classDiagram
   <tbody>
     <tr><td><code>changePassword</code></td><td><code>POST /api/v1/auth/password</code></td><td><code>ChangePasswordRequest request</code></td><td><code>void</code> (200)</td></tr>
     <tr><td><code>viewStudentInitialPassword</code></td><td><code>GET /api/v1/students/{code}/initial-password</code></td><td><code>String code</code></td><td><code>InitialPasswordResponse</code> (200)</td></tr>
+    <tr><td><code>listDemoAccounts</code></td><td><code>GET /api/v1/auth/demo-accounts</code></td><td>—</td><td><code>List&lt;DemoAccountResponse&gt;</code> (200) — bean only registered when <code>app.demo-accounts.enabled=true</code> (§11.4); the route doesn't exist otherwise</td></tr>
   </tbody>
 </table>
+<h3>8.7 <code>StaffAccountController</code></h3>
+<table>
+  <thead><tr><th>Method</th><th>HTTP</th><th>Parameters</th><th>Returns</th></tr></thead>
+  <tbody>
+    <tr><td><code>createStaffAccount</code></td><td><code>POST /api/v1/staff-accounts</code></td><td><code>CreateStaffAccountRequest request</code> (<code>{username, role}</code>)</td><td><code>StaffAccountResponse</code> (201) — <code>{username, role, initialPassword}</code></td></tr>
+    <tr><td><code>setStatus</code></td><td><code>PATCH /api/v1/staff-accounts/{id}/status</code></td><td><code>Long id, SetStatusRequest request</code> (<code>{enabled}</code>)</td><td><code>StaffAccountResponse</code> (200) — <code>{username, enabled}</code></td></tr>
+  </tbody>
+</table>
+<p>Both delegate straight to <code>IdentityService.provisionStaff</code>/<code>setAccountEnabled</code> (§8.4) — no additional orchestration at the web layer, matching every other controller in this document.</p>
 <hr>
 <h2 id="persistence-mapping-flyway-migration">9. Persistence Mapping &amp; Flyway Migration</h2>
 <h3>9.1 Annotation conventions</h3>
@@ -1029,8 +1061,11 @@ public SecurityFilterChain filterChain(HttpSecurity http, AuthenticationManager 
         .sessionManagement(session -&gt; session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
         .authorizeHttpRequests(auth -&gt; auth
             .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/v1/auth/demo-accounts").permitAll()
             .requestMatchers(HttpMethod.POST, "/api/v1/auth/password").authenticated()
             .requestMatchers(HttpMethod.GET, "/api/v1/students/*/initial-password").hasRole("REGISTRAR")
+            .requestMatchers(HttpMethod.POST, "/api/v1/staff-accounts/**").hasRole("SYSTEM_ADMINISTRATOR")
+            .requestMatchers(HttpMethod.PATCH, "/api/v1/staff-accounts/**").hasRole("SYSTEM_ADMINISTRATOR")
             .requestMatchers(HttpMethod.POST, "/api/v1/students/**").hasRole("REGISTRAR")
             .requestMatchers(HttpMethod.PUT, "/api/v1/students/**").hasRole("REGISTRAR")
             .requestMatchers(HttpMethod.DELETE, "/api/v1/students/**").hasRole("REGISTRAR")
@@ -1042,6 +1077,9 @@ public SecurityFilterChain filterChain(HttpSecurity http, AuthenticationManager 
             .requestMatchers(HttpMethod.POST, "/api/v1/books/**").hasRole("LIBRARIAN")
             .requestMatchers(HttpMethod.PUT, "/api/v1/books/**").hasRole("LIBRARIAN")
             .requestMatchers(HttpMethod.DELETE, "/api/v1/books/**").hasRole("LIBRARIAN")
+            .requestMatchers(HttpMethod.GET, "/api/v1/students/**", "/api/v1/books/**",
+                    "/api/v1/courses/**", "/api/v1/enrollments/**", "/api/v1/me/**")
+                .hasAnyRole("REGISTRAR", "LIBRARIAN", "COURSE_ADMINISTRATOR", "STUDENT")
             .anyRequest().authenticated())
         .addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(mustChangePasswordFilter, AuthorizationFilter.class);
@@ -1061,9 +1099,12 @@ public PasswordEncoder passwordEncoder() {
     <tr><td><code>POST/DELETE /api/v1/enrollments/**</code></td><td><code>REGISTRAR</code> (no <code>PUT</code> — Enrollment has no update, §7)</td></tr>
     <tr><td><code>POST/PUT/DELETE /api/v1/courses/**</code></td><td><code>COURSE_ADMINISTRATOR</code></td></tr>
     <tr><td><code>POST/PUT/DELETE /api/v1/books/**</code></td><td><code>LIBRARIAN</code></td></tr>
-    <tr><td>every <code>GET /api/v1/**</code> (except the initial-password route above)</td><td>any authenticated role — scoping for <code>STUDENT</code> happens in the Application Service</td></tr>
+    <tr><td><code>POST/PATCH /api/v1/staff-accounts/**</code></td><td><code>SYSTEM_ADMINISTRATOR</code></td></tr>
+    <tr><td><code>GET /api/v1/auth/demo-accounts</code></td><td>none (public) — only reachable at all when <code>app.demo-accounts.enabled=true</code>, §11.4</td></tr>
+    <tr><td><code>GET /api/v1/students/**</code>, <code>/books/**</code>, <code>/courses/**</code>, <code>/enrollments/**</code>, <code>/me/**</code></td><td><code>REGISTRAR</code>, <code>LIBRARIAN</code>, <code>COURSE_ADMINISTRATOR</code>, or <code>STUDENT</code> — scoping for <code>STUDENT</code> happens in the Application Service</td></tr>
   </tbody>
 </table>
+<p><strong>Why <code>SYSTEM_ADMINISTRATOR</code> needs an explicit exclusion, not just an absent grant:</strong> every other role rule above is additive (<code>hasRole(...)</code> on specific paths), with <code>.anyRequest().authenticated()</code> as a permissive catch-all for reads. Adding <code>SYSTEM_ADMINISTRATOR</code> as a 5th authenticated role without also touching that catch-all would let it fall through to <code>.anyRequest().authenticated()</code> on every domain <code>GET</code> — passing the filter chain even though <code>02-component-diagram.md</code> §4 grants it zero domain read access. The <code>hasAnyRole(...)</code> matcher above is what actually enforces "no domain access at all" for this role at the filter-chain level, exercised by <a href="../Testing/03-test-cases/cross-cutting.md">cross-cutting.md</a> TC-XC-040; <code>.anyRequest().authenticated()</code> remains only as a fallback for paths not explicitly listed.</p>
 <p><strong>CSRF — a decision <code>04-authentication-authorization.md</code> doesn't make, called out explicitly:</strong> disabled. Auth here is session-based, which is normally exactly the case CSRF protection exists for, but this API has no HTML form surface — every write is a JSON body from a programmatic client, not a browser <code>&lt;form&gt;</code> submission a forged cross-site request could imitate — so the standard justification for enabling it doesn't apply. If a browser SPA client is added later that also carries other same-site cookies, this is the decision to revisit.</p>
 <h3>11.2 JSON login filter</h3>
 <p><code>POST /api/v1/auth/login</code> takes a JSON body (<code>{username, password}</code>, UC-21), but Spring Security's default <code>UsernamePasswordAuthenticationFilter</code> reads form-urlencoded parameters — so <code>shared.security</code> adds a small subclass that parses the body itself and otherwise behaves identically:</p>
@@ -1116,6 +1157,9 @@ public class AppUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String username) {
         User user = repository.findByUsername(new Username(username))
             .orElseThrow(() -&gt; new UsernameNotFoundException(username));
+        if (!user.enabled()) {
+            throw new DisabledException("Account is disabled");
+        }
         return new AuthenticatedPrincipal(user);
     }
 }
@@ -1149,6 +1193,25 @@ public class MustChangePasswordFilter extends OncePerRequestFilter {
     }
 }</code></pre>
 <p>This is the exact <code>alt</code> gate <code>04-authentication-authorization.md</code> §4.2 already specifies (<code>principal.mustChangePassword &amp;&amp; path != "/api/v1/auth/password" → 403</code>) — the filter adds no new rule, only the Java for the one already fixed.</p>
+<h3>11.4 Demo-accounts controller — conditional registration</h3>
+<p><code>04-authentication-authorization.md</code> §8's production-safety requirement — the route must not exist at all when disabled, not merely reject with 403 — is implemented by making the bean itself conditional, not by adding a security rule that could be misconfigured or bypassed:</p>
+<pre class="tree-block"><code>@RestController
+@ConditionalOnProperty(name = "app.demo-accounts.enabled", havingValue = "true")
+public class DemoAccountsController {
+
+    private static final List&lt;DemoAccountResponse&gt; DEMO_ACCOUNTS = List.of(
+        new DemoAccountResponse("SYSTEM_ADMINISTRATOR", "demo.sysadmin", "Demo#12345"),
+        new DemoAccountResponse("REGISTRAR", "demo.registrar", "Demo#12345"),
+        new DemoAccountResponse("LIBRARIAN", "demo.librarian", "Demo#12345"),
+        new DemoAccountResponse("COURSE_ADMINISTRATOR", "demo.courseadmin", "Demo#12345"),
+        new DemoAccountResponse("STUDENT", "demo.student", "Demo#12345"));
+
+    @GetMapping("/api/v1/auth/demo-accounts")
+    public List&lt;DemoAccountResponse&gt; listDemoAccounts() {
+        return DEMO_ACCOUNTS;
+    }
+}</code></pre>
+<p><code>application-prod.properties</code> fixes <code>app.demo-accounts.enabled=false</code>, overriding whatever the base <code>application.properties</code> default is — a <code>prod</code>-profile value that can't be forgotten by omission, since Spring Boot profile-specific properties always win over the base file. When the property is <code>false</code>, <code>@ConditionalOnProperty</code> skips registering <code>DemoAccountsController</code> entirely: no bean, no route, no <code>.permitAll()</code> matcher in §11.1 that could ever be exercised — a request to <code>GET /api/v1/auth/demo-accounts</code> in <code>prod</code> gets Spring MVC's ordinary <code>404</code> for an unmapped path, indistinguishable from any other nonexistent endpoint.</p>
 <h2 id="mapstruct-mapper-method-bodies">12. MapStruct Mapper Method Bodies</h2>
 <p>Every <code>*Mapper</code> interface (<code>@Mapper(componentModel = "spring")</code>) mixes two kinds of method, per §2.2's Command/DTO conventions:</p>
 <ul>
@@ -1214,12 +1277,12 @@ public interface StudentMapper {
   </tbody>
 </table>
 <h2 id="traceability">14. Traceability</h2>
-<p><code>tactical-ddd-design.md</code> §12 already maps every <code>req.md</code> rule to a tactical construct and an existing (module-level) class/method name; every entry in that table resolves, unchanged, to a concrete method in §§4–8 and §13 above — this document adds no new mapping, only the parameter/return types and the exception types each method throws. The deltas this document introduces <em>beyond</em> what <code>tactical-ddd-design.md</code> names are called out individually rather than in a separate table: <code>UserRepository.deleteByStudentId</code> (§8.3), the <code>PasswordHasher</code>/<code>PasswordCipher</code>/<code>InitialPasswordGenerator</code> ports (§8.1), the full <code>shared</code> exception hierarchy including <code>StaleWriteException</code> (§3), the <code>AuthController</code>-not-<code>StudentController</code> routing note for UC-23 (§4.6), the <code>createdAt</code>/<code>updatedAt</code>/<code>enrolledAt</code> fields closing the aggregate↔DTO gap found while writing this revision (§4.4, §7), the <code>version</code>-column optimistic-locking decision (§10), and the <code>EnrollmentRow.courseId ⇄ Enrollment.courseCode</code> translation the repository adapter performs (§9.1).</p>
+<p><code>tactical-ddd-design.md</code> §12 already maps every <code>req.md</code> rule to a tactical construct and an existing (module-level) class/method name; every entry in that table resolves, unchanged, to a concrete method in §§4–8 and §13 above — this document adds no new mapping, only the parameter/return types and the exception types each method throws. The deltas this document introduces <em>beyond</em> what <code>tactical-ddd-design.md</code> names are called out individually rather than in a separate table: <code>UserRepository.deleteByStudentId</code> (§8.3), the <code>PasswordHasher</code>/<code>PasswordCipher</code>/<code>InitialPasswordGenerator</code> ports (§8.1), the full <code>shared</code> exception hierarchy including <code>StaleWriteException</code> (§3), the <code>AuthController</code>-not-<code>StudentController</code> routing note for UC-23 (§4.6), the <code>createdAt</code>/<code>updatedAt</code>/<code>enrolledAt</code> fields closing the aggregate↔DTO gap found while writing this revision (§4.4, §7), the <code>version</code>-column optimistic-locking decision (§10), the <code>EnrollmentRow.courseId ⇄ Enrollment.courseCode</code> translation the repository adapter performs (§9.1), and — new in this revision — the <code>SYSTEM_ADMINISTRATOR</code> role and <code>User.enabled</code> field, <code>IdentityService.provisionStaff</code>/<code>setAccountEnabled</code>/<code>listDemoAccounts</code>, <code>StaffAccountController</code> (§8.7), <code>DemoAccountsController</code> (§11.4), and the <code>DuplicateUsernameException</code>/<code>UserNotFoundException</code> exception types (§3), all implementing UC-24/UC-25 and the demo-accounts convenience per <code>04-authentication-authorization.md</code> §3a/§3b/§8.</p>
 <h2 id="out-of-scope">15. Out of Scope</h2>
 <ul>
   <li><strong>DTO field lists</strong> — every <code>web/dto</code> class named above is fully specified already in <code>openapi/components/schemas/*.yaml</code>; this document does not repeat those field lists (<code>02-component-diagram.md</code> §5's existing rule, extended to this document).</li>
   <li><strong>Unit-test design</strong> — test doubles for <code>port/</code> interfaces, <code>@ApplicationModuleTest</code> setup, and <code>ApplicationModules.verify()</code> wiring are build-phase work.</li>
-  <li><strong>AES key management/rotation, session-store horizontal scaling (Spring Session JDBC/Redis), MFA, password expiry/rotation/history</strong> — all already ruled out of scope by <code>04-authentication-authorization.md</code> §7; this document's §11 implements what that document decided, not what it deferred.</li>
+  <li><strong>AES key management/rotation, session-store horizontal scaling (Spring Session JDBC/Redis), MFA, password expiry/rotation/history</strong> — all already ruled out of scope by <code>04-authentication-authorization.md</code> §9; this document's §11 implements what that document decided, not what it deferred.</li>
   <li><strong>Composite/covering indexes beyond what §9.2's <code>UNIQUE</code>/FK constraints already create</strong> — <code>05-database-schema.md</code> §7 defers this without a known query pattern to design against; nothing in this revision changes that.</li>
 </ul>
 

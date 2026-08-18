@@ -1,7 +1,8 @@
 Role:
   type: string
-  description: The four fixed roles in the system. Staff roles (Registrar, Librarian, Course Administrator) are pre-seeded out-of-band; Student accounts are auto-provisioned on student registration.
+  description: The five fixed roles in the system. Staff roles (Registrar, Librarian, Course Administrator) are created by a System Administrator (`POST /staff-accounts`); Student accounts are auto-provisioned on student registration; the System Administrator role itself is pre-seeded out-of-band and never created through this API.
   enum:
+    - SYSTEM_ADMINISTRATOR
     - REGISTRAR
     - LIBRARIAN
     - COURSE_ADMINISTRATOR

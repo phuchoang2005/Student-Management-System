@@ -1,0 +1,35 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|System Administrator|
+start
+:Enter username and role\n(Registrar, Librarian, or Course Administrator);
+
+|System|
+if (Username already in use?) then (yes)
+  :Reject — validation error;
+  |System Administrator|
+  stop
+endif
+if (Role is one of the 3 staff roles?) then (no)
+  :Reject — validation error\n(System Administrator role cannot be created this way);
+  |System Administrator|
+  stop
+endif
+:Generate initial password;
+:Create account\n(must change password = true, enabled = true);
+
+|System Administrator|
+:View initial password (shown once);
+stop
+@enduml

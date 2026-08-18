@@ -48,7 +48,7 @@ password:
       Validation order: retype must match newPassword (400) → currentPassword must match (401)
       → newPassword must differ from currentPassword (400). On success, `initialPasswordEncrypted`
       is cleared and `mustChangePassword` is set to false.
-    x-roles: [REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
+    x-roles: [SYSTEM_ADMINISTRATOR, REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
     requestBody:
       required: true
       content:
@@ -72,3 +72,38 @@ password:
               error: Unauthorized
               message: currentPassword did not match.
               path: /api/v1/auth/password
+
+demoAccounts:
+  get:
+    operationId: listDemoAccounts
+    tags: [Auth]
+    summary: List demo accounts (development/testing only)
+    description: |
+      **Roles:** No authentication required — this is a pre-login convenience.
+
+      Returns the 5 fixed demo identities, one per actor (System Administrator, Registrar,
+      Librarian, Course Administrator, Student), so a developer or QA tester can log in as any
+      role with one click instead of knowing real credentials. Not a business use case — see
+      `04-authentication-authorization.md` §8.
+
+      **This operation does not exist in production.** The route is registered only when
+      `app.demo-accounts.enabled=true` (dev/test/local profiles); the `prod` profile hard-sets
+      it `false`, so this path returns an ordinary `404` there — not a `403`, since the
+      controller bean itself is never created (`06-low-level-design.md` §11.4).
+    x-roles: []
+    security: []
+    responses:
+      '200':
+        description: The 5 fixed demo identities.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '../components/schemas/staff-account.yaml#/DemoAccountResponse'
+      '404':
+        description: Not registered in this environment (e.g. production).
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/Error'

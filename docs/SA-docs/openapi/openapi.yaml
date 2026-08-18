@@ -17,9 +17,10 @@ info:
     session and sets the `JSESSIONID` cookie (see the `cookieAuth` security scheme below);
     there is no bearer/JWT token anywhere in this API.
 
-    **Roles:** REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT. Every operation states
-    its allowed roles in its description and in the machine-readable `x-roles` extension.
-    Student principals are further scoped to their own records where noted.
+    **Roles:** SYSTEM_ADMINISTRATOR, REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT. Every
+    operation states its allowed roles in its description and in the machine-readable `x-roles`
+    extension. Student principals are further scoped to their own records where noted. System
+    Administrator is scoped solely to `/staff-accounts` — it has no access to any domain data.
 
     **must-change-password gate:** while `principal.mustChangePassword = true`, every
     endpoint except `POST /auth/password` responds 403 Forbidden.
@@ -36,7 +37,9 @@ security:
   - cookieAuth: []
 tags:
   - name: Auth
-    description: Login, password management, and session lifecycle.
+    description: Login, password management, session lifecycle, and (dev/test only) demo accounts.
+  - name: Staff Accounts
+    description: Creating and deactivating Registrar/Librarian/Course Administrator accounts — owned by the System Administrator role.
   - name: Students
     description: Student records — owned by the Registrar role.
   - name: Books
@@ -52,6 +55,12 @@ paths:
     $ref: './paths/auth.yaml#/login'
   /auth/password:
     $ref: './paths/auth.yaml#/password'
+  /auth/demo-accounts:
+    $ref: './paths/auth.yaml#/demoAccounts'
+  /staff-accounts:
+    $ref: './paths/staff-accounts.yaml#/collection'
+  '/staff-accounts/{id}/status':
+    $ref: './paths/staff-accounts.yaml#/status'
   /students:
     $ref: './paths/students.yaml#/collection'
   '/students/{code}':
@@ -98,6 +107,16 @@ components:
       $ref: './components/schemas/auth.yaml#/LoginResponse'
     ChangePasswordRequest:
       $ref: './components/schemas/auth.yaml#/ChangePasswordRequest'
+    StaffRole:
+      $ref: './components/schemas/staff-account.yaml#/StaffRole'
+    CreateStaffAccountRequest:
+      $ref: './components/schemas/staff-account.yaml#/CreateStaffAccountRequest'
+    StaffAccountResponse:
+      $ref: './components/schemas/staff-account.yaml#/StaffAccountResponse'
+    SetStaffAccountStatusRequest:
+      $ref: './components/schemas/staff-account.yaml#/SetStaffAccountStatusRequest'
+    DemoAccountResponse:
+      $ref: './components/schemas/staff-account.yaml#/DemoAccountResponse'
     StudentCreateRequest:
       $ref: './components/schemas/student.yaml#/StudentCreateRequest'
     StudentUpdateRequest:

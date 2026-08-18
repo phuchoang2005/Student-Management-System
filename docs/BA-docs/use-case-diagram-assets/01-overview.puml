@@ -20,6 +20,7 @@ actor Registrar
 actor "Course Administrator" as CourseAdmin
 actor Student
 actor Librarian
+actor "System Administrator" as SysAdmin
 
 rectangle "Student Management System" {
   usecase "Student Management" as G1
@@ -46,4 +47,6 @@ Student ..> G3 : views own\n(via UC-16)
 
 Librarian --> G2
 Librarian --> G5
+
+SysAdmin --> G5
 @enduml

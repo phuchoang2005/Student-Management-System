@@ -13,13 +13,16 @@ Source of truth: `06-low-level-design.md` §11.1.
 | Verb + path | Required role | Notes |
 | --- | --- | --- |
 | `POST /api/v1/auth/login` | None (public) | — |
+| `GET /api/v1/auth/demo-accounts` | None (public) | Only reachable when `app.demo-accounts.enabled=true` (dev/test); registered at all in `prod` — see §9 below |
 | `POST /api/v1/auth/password` | Any authenticated role | Only endpoint reachable while `mustChangePassword = true` |
 | `GET /api/v1/students/*/initial-password` | REGISTRAR | — |
 | `POST/PUT/DELETE /api/v1/students/**` | REGISTRAR | — |
 | `POST/DELETE /api/v1/enrollments/**` | REGISTRAR | No `PUT` — `Enrollment` has no update use case |
 | `POST/PUT/DELETE /api/v1/courses/**` | COURSE_ADMINISTRATOR | — |
 | `POST/PUT/DELETE /api/v1/books/**` | LIBRARIAN | — |
-| `GET /api/v1/**` (all list/search/detail endpoints, except initial-password above) | Any authenticated role | STUDENT's "own records only" scoping is applied inside the Application Service, not the filter chain — see §1.3 below |
+| `POST /api/v1/staff-accounts` | SYSTEM_ADMINISTRATOR | UC-24 |
+| `PATCH /api/v1/staff-accounts/*/status` | SYSTEM_ADMINISTRATOR | UC-25 |
+| `GET /api/v1/**` (all list/search/detail endpoints, except initial-password above) | Any authenticated role | STUDENT's "own records only" scoping is applied inside the Application Service, not the filter chain — see §1.3 below. SYSTEM_ADMINISTRATOR has no domain-module `GET` access — see §9 |
 | `GET /api/v1/me/books-and-courses` | STUDENT only | See [identity-auth.md](./identity-auth.md) TC-IDN-021 |
 
 ### 1.1 Write-endpoint authorization — negative cases (one per non-owning role, per resource)
@@ -313,6 +316,36 @@ Source of truth: `api-specification.md` §3 (scheme) and §5 item 8 (defaults/ca
 
 ---
 
+## 9. Staff Account Provisioning & Demo Accounts (RBAC)
+
+Negative-case coverage for the two endpoints added by UC-24/UC-25 and the demo-accounts convenience, mirroring §1.1's per-resource pattern. Positive/functional coverage for both lives in [identity-auth.md](./identity-auth.md) TC-IDN-024–032.
+
+### TC-XC-039 — Non-System-Administrator roles cannot write `staff-accounts` resources
+- **Related UC / Rule:** `06-low-level-design.md` §11.1
+- **Priority:** P0 · **Type:** Security-RBAC
+- **Steps:** As REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, and STUDENT: attempt `POST /api/v1/staff-accounts` and `PATCH /api/v1/staff-accounts/{id}/status`.
+- **Expected Result:** `403 Forbidden` for all 8 combinations (4 roles × 2 verbs).
+
+### TC-XC-040 — System Administrator has no read or write access to any domain module
+- **Related UC / Rule:** `02-component-diagram.md` §4 (System Administrator row: no domain access)
+- **Priority:** P0 · **Type:** Security-RBAC
+- **Steps:** As SYSTEM_ADMINISTRATOR, attempt `GET /api/v1/students`, `GET /api/v1/books`, `GET /api/v1/courses`, and one write endpoint from each.
+- **Expected Result:** every request is rejected — reads are `403 Forbidden` just like an out-of-role write, since `identity`'s System Administrator scoping (§1 RBAC Matrix above) grants no `GET /api/v1/**` fallthrough the way the 4 domain-facing roles get.
+
+### TC-XC-041 — An unauthenticated caller cannot reach either `staff-accounts` endpoint
+- **Related UC / Rule:** `06-low-level-design.md` §11.1
+- **Priority:** P0 · **Type:** Security
+- **Steps:** With no session cookie, call `POST /api/v1/staff-accounts` and `PATCH /api/v1/staff-accounts/{id}/status`.
+- **Expected Result:** `401 Unauthorized` for both.
+
+### TC-XC-042 — `GET /api/v1/auth/demo-accounts` requires no authentication when enabled
+- **Related UC / Rule:** `04-authentication-authorization.md` §8
+- **Priority:** P1 · **Type:** Security-RBAC
+- **Steps:** With no session cookie and `app.demo-accounts.enabled=true` (test profile), call `GET /api/v1/auth/demo-accounts`.
+- **Expected Result:** `200 OK` — this is the one endpoint besides login itself that must work before any session exists. See [identity-auth.md](./identity-auth.md) TC-IDN-031/032 for the enabled-vs-disabled functional cases.
+
+---
+
 ## Traceability Summary
 
 | Concern | Test Case IDs |
@@ -327,3 +360,4 @@ Source of truth: `api-specification.md` §3 (scheme) and §5 item 8 (defaults/ca
 | §5 ambiguity resolutions | Table in §6 (cross-references) |
 | Architecture conformance (ArchUnit) | TC-XC-028–035 |
 | Pagination conventions | TC-XC-036–038 |
+| Staff account provisioning & demo accounts (RBAC) | TC-XC-039–042 |

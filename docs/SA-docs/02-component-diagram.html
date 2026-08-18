@@ -442,13 +442,14 @@ flowchart LR
 <table>
   <thead><tr><th>Role (principal)</th><th>Write access</th><th>Read access</th></tr></thead>
   <tbody>
+    <tr><td>System Administrator</td><td><code>identity</code> (staff accounts only, via UC-24/25)</td><td>none — no <code>student</code>/<code>book</code>/<code>course</code>/<code>enrollment</code> access</td></tr>
     <tr><td>Registrar</td><td><code>student</code>, <code>enrollment</code></td><td>all</td></tr>
     <tr><td>Librarian</td><td><code>book</code></td><td>all</td></tr>
     <tr><td>Course Administrator</td><td><code>course</code></td><td>all</td></tr>
     <tr><td>Student</td><td>none</td><td>own records only (<code>student</code>, <code>book</code>, <code>enrollment</code> scoped to <code>principal.studentId</code>)</td></tr>
   </tbody>
 </table>
-<p>The exact scoping check ("own records only") is implemented as a method-level authorization check in each module's <code>application/</code> service — it needs the authenticated principal's student identity compared against the aggregate being read, which is domain-specific logic, not something the filter chain alone can express. <code>identity</code> doesn't fit this table's per-domain-module shape and isn't added as a row: every role may write to <code>identity</code>, but only ever their own credentials (UC-22) — no role may change another principal's password. The one asymmetric exception is UC-23: the Registrar additionally gets read access to a student's <em>initial</em> password, and only for as long as that student hasn't changed it yet — see <a href="./04-authentication-authorization.html">Authentication &amp; Authorization</a> §5.</p>
+<p>The exact scoping check ("own records only") is implemented as a method-level authorization check in each module's <code>application/</code> service — it needs the authenticated principal's student identity compared against the aggregate being read, which is domain-specific logic, not something the filter chain alone can express. <code>identity</code>'s <em>own-credential</em> surface (login, change password) doesn't fit this table's per-domain-module shape and isn't added as a row: every role may write to <code>identity</code>, but only ever their own credentials (UC-22) — no role may change another principal's password. The one asymmetric exception is UC-23: the Registrar additionally gets read access to a student's <em>initial</em> password, and only for as long as that student hasn't changed it yet. <code>identity</code>'s <em>staff-account-management</em> surface (UC-24/25) is asymmetric the other way — it's the System Administrator row above, and no other role may reach it. See <a href="./04-authentication-authorization.html">Authentication &amp; Authorization</a> §5–§6 for both.</p>
 
 <h2 id="out-of-scope">5. Out of Scope (this document)</h2>
 <ul>

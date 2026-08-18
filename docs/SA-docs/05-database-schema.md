@@ -2,7 +2,7 @@
 
 Solution Architecture Document — Part 5 of 6 ([System Overview](./01-system-overview.md) → [Component Diagram](./02-component-diagram.md) → [Sequence Diagram](./03-sequence-diagrams.md) → [Authentication & Authorization](./04-authentication-authorization.md) → Database Schema → [Low-Level Design](./06-low-level-design.md)).
 
-Derived from [req.md](../BA-docs/req.md) (business entities, invariants, and lifecycle rules) and [04-authentication-authorization.md](./04-authentication-authorization.md) §2.2 (the `users` table). Both of those documents deliberately left column-level design out of scope (`02-component-diagram.md` §5: "Database schema / column-level design — tracked separately, not duplicated here"; `04-authentication-authorization.md` §7: "Flyway migration DDL... future build-phase work"). This document is that separate design: a concrete MySQL 8 table-by-table schema, still **conceptual** — no Flyway migration file is written here, since no entity/repository code exists yet in `management/` to run against it (see §7).
+Derived from [req.md](../BA-docs/req.md) (business entities, invariants, and lifecycle rules) and [04-authentication-authorization.md](./04-authentication-authorization.md) §2.2 (the `users` table). Both of those documents deliberately left column-level design out of scope (`02-component-diagram.md` §5: "Database schema / column-level design — tracked separately, not duplicated here"; `04-authentication-authorization.md` §9: "Flyway migration DDL... future build-phase work"). This document is that separate design: a concrete MySQL 8 table-by-table schema, still **conceptual** — no Flyway migration file is written here, since no entity/repository code exists yet in `management/` to run against it (see §7).
 
 ---
 
@@ -58,6 +58,7 @@ erDiagram
         ENUM role
         BIGINT student_id FK "nullable, UK"
         BOOLEAN must_change_password
+        BOOLEAN enabled
     }
 ```
 
@@ -123,9 +124,10 @@ Translates `04-authentication-authorization.md` §2.2's conceptual column list i
 | `username` | `VARCHAR(255)` | `UNIQUE NOT NULL` | Identity.2. For a Student account, equals `students.email` at provisioning time; not itself FK-linked to `students.email` (see §6). |
 | `password_hash` | `CHAR(60)` | `NOT NULL` | Fixed-length BCrypt hash. |
 | `initial_password_encrypted` | `VARCHAR(255)` | `NULL` | AES ciphertext (base64), cleared to `NULL` on first password change (Identity.4). |
-| `role` | `ENUM('REGISTRAR','LIBRARIAN','COURSE_ADMINISTRATOR','STUDENT')` | `NOT NULL` | Fixed set of 4 roles per `01-system-overview.md` §2 — no dynamic role management is in scope, so `ENUM` is used instead of a lookup table. |
-| `student_id` | `BIGINT` | `NULL`, `UNIQUE`, FK → `students.id`, `ON DELETE CASCADE` | Nullable for the 3 staff roles, required for `STUDENT` (see the `CHECK` below). `UNIQUE` enforces the 1:1 Student↔User relationship (req.md §3). |
-| `must_change_password` | `BOOLEAN` | `NOT NULL DEFAULT FALSE` | Identity.3. |
+| `role` | `ENUM('SYSTEM_ADMINISTRATOR','REGISTRAR','LIBRARIAN','COURSE_ADMINISTRATOR','STUDENT')` | `NOT NULL` | Fixed set of 5 roles per `01-system-overview.md` §2 — no dynamic role management is in scope, so `ENUM` is used instead of a lookup table. |
+| `student_id` | `BIGINT` | `NULL`, `UNIQUE`, FK → `students.id`, `ON DELETE CASCADE` | Nullable for the 4 non-Student roles, required for `STUDENT` (see the `CHECK` below). `UNIQUE` enforces the 1:1 Student↔User relationship (req.md §3). |
+| `must_change_password` | `BOOLEAN` | `NOT NULL DEFAULT FALSE` | Identity.3, Identity.6. |
+| `enabled` | `BOOLEAN` | `NOT NULL DEFAULT TRUE` | Identity.7. Toggled by UC-25 for staff accounts; never toggled for `STUDENT` or `SYSTEM_ADMINISTRATOR` rows (no use case does so). |
 | `created_at` | `DATETIME` | `NOT NULL DEFAULT CURRENT_TIMESTAMP` | Audit. |
 | `updated_at` | `DATETIME` | `NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP` | Audit. |
 | — | — | `CHECK ((role = 'STUDENT' AND student_id IS NOT NULL) OR (role <> 'STUDENT' AND student_id IS NULL))` | The role/`student_id` co-invariant described in `04-authentication-authorization.md` §2.2. |
@@ -151,6 +153,8 @@ Every `req.md` §4 rule that constrains stored data maps to a schema-level const
 | Enrollment.3 (student must exist) | `enrollments.student_id` FK → `students.id` |
 | Identity.2 (unique username) | `users.username UNIQUE` |
 | Identity.3 (must-change-password state) | `users.must_change_password NOT NULL DEFAULT FALSE`, set `TRUE` at provisioning |
+| Identity.6 (staff accounts created only by System Administrator; no in-app System Administrator creation) | `users.role` `ENUM` includes `SYSTEM_ADMINISTRATOR`, but application-level only — no schema constraint can express "only UC-24 may insert this row," see `04-authentication-authorization.md` §3a |
+| Identity.7 (disabled account cannot log in) | `users.enabled NOT NULL DEFAULT TRUE`, checked at login (`04-authentication-authorization.md` §4.1) |
 | Student↔User 1:1 (req.md §3) | `users.student_id UNIQUE` |
 | role/`student_id` co-invariant (auth doc §2.2) | `users` `CHECK` constraint |
 
@@ -178,7 +182,7 @@ Every `req.md` §4 rule that constrains stored data maps to a schema-level const
 
 ## 7. Out of Scope
 
-- **Flyway migration SQL** (`V1__*.sql` or similar) — this document is the design; the runnable migration is future build-phase work, tracked the same way `04-authentication-authorization.md` §7 already tracks the `identity` module's DDL.
+- **Flyway migration SQL** (`V1__*.sql` or similar) — this document is the design; the runnable migration is future build-phase work, tracked the same way `04-authentication-authorization.md` §9 already tracks the `identity` module's DDL.
 - **JDBC entity/`@Table` class definitions** (`StudentRow`, `UserRow`, etc.) — Java implementation detail, not a schema concern (`02-component-diagram.md` §3).
 - **Indexing beyond what `UNIQUE`/`FOREIGN KEY` constraints already create** — InnoDB auto-indexes PKs, unique constraints, and FK columns; no additional composite/covering indexes are specified without a known query pattern to justify them.
 - **Read replicas, partitioning, sharding** — ruled out by the single-schema, single-process deployment already fixed in `01-system-overview.md` §5.
