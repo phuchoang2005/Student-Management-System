@@ -6,6 +6,7 @@ import org.phuchoang.management.course.web.dto.CourseCreateRequest;
 import org.phuchoang.management.course.web.dto.CourseResponse;
 import org.phuchoang.management.course.web.dto.CourseUpdateRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -38,5 +39,11 @@ public class CourseController {
       @PathVariable String code, @Valid @RequestBody CourseUpdateRequest request) {
     CourseService.UpdatedCourse updated = courseService.update(code, mapper.toCommand(request));
     return mapper.toResponse(updated);
+  }
+
+  @DeleteMapping("/{code}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void removeCourse(@PathVariable String code) {
+    courseService.remove(code);
   }
 }

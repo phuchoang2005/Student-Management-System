@@ -3,6 +3,9 @@ package org.phuchoang.management.course.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -11,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.phuchoang.management.course.CourseDeleted;
 import org.phuchoang.management.course.CourseId;
 import org.phuchoang.management.course.application.command.CreateCourseCommand;
 import org.phuchoang.management.course.application.command.UpdateCourseCommand;
@@ -21,11 +25,13 @@ import org.phuchoang.management.course.port.CourseRepository;
 import org.phuchoang.management.shared.exception.DomainValidationException;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.NotFoundException;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class CourseServiceTest {
 
   @Mock private CourseRepository repository;
+  @Mock private ApplicationEventPublisher events;
 
   private CourseService service;
 
@@ -44,7 +50,7 @@ class CourseServiceTest {
 
   @Test
   void createRejectsDuplicateCode() {
-    service = new CourseService(repository);
+    service = new CourseService(repository, events);
     when(repository.existsByCode(new CourseCode("CS101"))).thenReturn(true);
 
     assertThatThrownBy(() -> service.create(command)).isInstanceOf(DuplicateCodeException.class);
@@ -52,7 +58,7 @@ class CourseServiceTest {
 
   @Test
   void createRejectsNonPositiveCredits() {
-    service = new CourseService(repository);
+    service = new CourseService(repository, events);
     when(repository.existsByCode(any())).thenReturn(false);
     CreateCourseCommand invalid = new CreateCourseCommand("CS101", "Intro to CS", "Basics", 0);
 
@@ -61,7 +67,7 @@ class CourseServiceTest {
 
   @Test
   void createRejectsBlankName() {
-    service = new CourseService(repository);
+    service = new CourseService(repository, events);
     when(repository.existsByCode(any())).thenReturn(false);
     CreateCourseCommand invalid = new CreateCourseCommand("CS101", " ", "Basics", 3);
 
@@ -70,7 +76,7 @@ class CourseServiceTest {
 
   @Test
   void createSavesCourseAndReturnsView() {
-    service = new CourseService(repository);
+    service = new CourseService(repository, events);
     when(repository.existsByCode(any())).thenReturn(false);
     when(repository.save(any(Course.class)))
         .thenAnswer(
@@ -98,7 +104,7 @@ class CourseServiceTest {
 
   @Test
   void updateThrowsNotFoundWhenCourseDoesNotExist() {
-    service = new CourseService(repository);
+    service = new CourseService(repository, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.empty());
     UpdateCourseCommand update = new UpdateCourseCommand("Advanced CS", "Deeper dive", 4);
 
@@ -107,7 +113,7 @@ class CourseServiceTest {
 
   @Test
   void updateRejectsBlankName() {
-    service = new CourseService(repository);
+    service = new CourseService(repository, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingCourse));
     UpdateCourseCommand update = new UpdateCourseCommand(" ", "Deeper dive", 4);
 
@@ -116,7 +122,7 @@ class CourseServiceTest {
 
   @Test
   void updateRejectsNonPositiveCredits() {
-    service = new CourseService(repository);
+    service = new CourseService(repository, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingCourse));
     UpdateCourseCommand update = new UpdateCourseCommand("Advanced CS", "Deeper dive", 0);
 
@@ -125,7 +131,7 @@ class CourseServiceTest {
 
   @Test
   void updateAppliesChangesAndReturnsView() {
-    service = new CourseService(repository);
+    service = new CourseService(repository, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingCourse));
     when(repository.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
     UpdateCourseCommand update = new UpdateCourseCommand("Advanced CS", "Deeper dive", 4);
@@ -136,5 +142,27 @@ class CourseServiceTest {
     assertThat(result.name()).isEqualTo("Advanced CS");
     assertThat(result.description()).isEqualTo("Deeper dive");
     assertThat(result.credits()).isEqualTo(4);
+  }
+
+  @Test
+  void removeThrowsNotFoundWhenCourseDoesNotExist() {
+    service = new CourseService(repository, events);
+    when(repository.findByCode(existingCode)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.remove("CS101")).isInstanceOf(NotFoundException.class);
+
+    verify(repository, never()).deleteByCode(any());
+    verifyNoInteractions(events);
+  }
+
+  @Test
+  void removeDeletesTheCourseAndPublishesCourseDeleted() {
+    service = new CourseService(repository, events);
+    when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingCourse));
+
+    service.remove("CS101");
+
+    verify(repository).deleteByCode(existingCode);
+    verify(events).publishEvent(new CourseDeleted(existingCode));
   }
 }

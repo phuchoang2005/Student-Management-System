@@ -1,6 +1,7 @@
 package org.phuchoang.management.course.application;
 
 import java.time.Instant;
+import org.phuchoang.management.course.CourseDeleted;
 import org.phuchoang.management.course.application.command.CreateCourseCommand;
 import org.phuchoang.management.course.application.command.UpdateCourseCommand;
 import org.phuchoang.management.course.domain.Course;
@@ -9,6 +10,7 @@ import org.phuchoang.management.course.domain.Credits;
 import org.phuchoang.management.course.port.CourseRepository;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.NotFoundException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,9 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class CourseService {
 
   private final CourseRepository repository;
+  private final ApplicationEventPublisher events;
 
-  public CourseService(CourseRepository repository) {
+  public CourseService(CourseRepository repository, ApplicationEventPublisher events) {
     this.repository = repository;
+    this.events = events;
   }
 
   /**
@@ -77,6 +81,27 @@ public class CourseService {
         course.credits().value(),
         course.createdAt(),
         course.updatedAt());
+  }
+
+  /**
+   * findByCode (404 if absent) → {@code repository.deleteByCode} → publish {@code CourseDeleted}
+   * (06-low-level-design.md §2.3, §13), mirroring {@code StudentService.remove}. The {@code
+   * enrollment} module's cascade listener doesn't exist until it ships in Sprint 3
+   * (04-sprint-backlog.md §3) — for now, the DB-level {@code ON DELETE CASCADE} on {@code
+   * enrollments.course_id} (05-database-schema.md §5) is the only cascade actually in effect;
+   * publishing here just makes sure the event is on the classpath and fires so that listener can
+   * be wired in without touching this method again.
+   */
+  @Transactional
+  public void remove(String code) {
+    CourseCode courseCode = new CourseCode(code);
+    Course course =
+        repository
+            .findByCode(courseCode)
+            .orElseThrow(() -> new NotFoundException("Course '" + code + "' does not exist."));
+
+    repository.deleteByCode(courseCode);
+    events.publishEvent(new CourseDeleted(course.code()));
   }
 
   /**

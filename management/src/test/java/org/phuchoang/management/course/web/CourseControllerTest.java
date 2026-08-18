@@ -2,7 +2,11 @@ package org.phuchoang.management.course.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -147,5 +151,23 @@ class CourseControllerTest {
     mockMvc
         .perform(put("/api/v1/courses/CS101").contentType(MediaType.APPLICATION_JSON).content(body))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void removeCourseReturns204() throws Exception {
+    doNothing().when(courseService).remove("CS101");
+
+    mockMvc.perform(delete("/api/v1/courses/CS101")).andExpect(status().isNoContent());
+
+    verify(courseService).remove("CS101");
+  }
+
+  @Test
+  void removeCoursePropagatesNotFoundAs404() throws Exception {
+    doThrow(new NotFoundException("Course 'CS101' does not exist."))
+        .when(courseService)
+        .remove("CS101");
+
+    mockMvc.perform(delete("/api/v1/courses/CS101")).andExpect(status().isNotFound());
   }
 }

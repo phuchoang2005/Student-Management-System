@@ -8,4 +8,6 @@ interface SpringDataCourseRepository extends CrudRepository<CourseRow, Long> {
   Optional<CourseRow> findByCourseCode(String courseCode);
 
   boolean existsByCourseCode(String courseCode);
+
+  void deleteByCourseCode(String courseCode);
 }

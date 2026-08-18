@@ -38,6 +38,11 @@ class JdbcCourseRepository implements CourseRepository {
     }
   }
 
+  @Override
+  public void deleteByCode(CourseCode code) {
+    springRepo.deleteByCourseCode(code.value());
+  }
+
   private CourseRow toRow(Course course) {
     CourseId id = course.id();
     return new CourseRow(
