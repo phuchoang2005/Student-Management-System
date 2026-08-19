@@ -30,4 +30,7 @@ public interface BookRepository {
   Book save(Book book);
 
   void deleteByIsbn(Isbn isbn);
+
+  /** {@code BookService.onStudentDeleted} (06-low-level-design.md §13) — clears ownership on every book the deleted student owned. */
+  void clearOwnerByStudentId(StudentId studentId);
 }

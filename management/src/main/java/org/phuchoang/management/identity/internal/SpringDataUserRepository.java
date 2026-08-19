@@ -10,4 +10,6 @@ interface SpringDataUserRepository extends CrudRepository<UserRow, Long> {
   Optional<UserRow> findByStudentId(Long studentId);
 
   boolean existsByUsername(String username);
+
+  void deleteByStudentId(Long studentId);
 }

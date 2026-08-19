@@ -1,6 +1,7 @@
 package org.phuchoang.management.enrollment;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -8,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,10 +33,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * rather than {@code GET /enrollments/{studentId}/{courseCode}} (added by US-5.5, see {@code
  * EnrollmentLookupIntegrationTest}) since this test predates that endpoint, mirroring {@code
  * BookRemovalIntegrationTest}/{@code CourseRemovalIntegrationTest}. {@code
- * @ApplicationModuleListener} is {@code @Async} by declaration, but this project registers no
- * {@code @EnableAsync}, so Spring never proxies the listener for async dispatch -- it runs
- * synchronously, in the same transaction-commit callback, before the triggering HTTP call
- * returns, so no polling/await is needed here.
+ * @ApplicationModuleListener} dispatches on a separate thread ({@code shared.async.AsyncConfig}),
+ * decoupled from the publishing transaction's commit and from the triggering HTTP call returning
+ * -- the two cascade tests below poll for the listener's effect with Awaitility rather than
+ * asserting immediately after the {@code delete} call.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -182,7 +184,9 @@ class EnrollmentEndIntegrationTest {
 
     mockMvc.perform(delete("/api/v1/students/" + student.code())).andExpect(status().isNoContent());
 
-    assertThat(enrollmentCount(student.id(), "CS505")).isZero();
+    await()
+        .atMost(Duration.ofSeconds(5))
+        .untilAsserted(() -> assertThat(enrollmentCount(student.id(), "CS505")).isZero());
   }
 
   @Test
@@ -196,10 +200,17 @@ class EnrollmentEndIntegrationTest {
         .perform(delete("/api/v1/courses/CS506").with(user("admin").roles("COURSE_ADMINISTRATOR")))
         .andExpect(status().isNoContent());
 
-    Integer remaining =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM enrollments WHERE student_id = ?", Integer.class, student.id());
-    assertThat(remaining).isZero();
+    await()
+        .atMost(Duration.ofSeconds(5))
+        .untilAsserted(
+            () -> {
+              Integer remaining =
+                  jdbcTemplate.queryForObject(
+                      "SELECT COUNT(*) FROM enrollments WHERE student_id = ?",
+                      Integer.class,
+                      student.id());
+              assertThat(remaining).isZero();
+            });
   }
 
   @Test

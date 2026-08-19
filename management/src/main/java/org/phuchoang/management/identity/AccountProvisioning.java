@@ -23,4 +23,18 @@ public interface AccountProvisioning {
    * actually changes, in the same transaction as the {@code Student} save (TC-STU-018).
    */
   void renameUsernameForStudent(Long studentId, String newEmail);
+
+  /**
+   * PM-018 — {@code student.StudentService.remove} calls this synchronously, in the same
+   * transaction as the {@code Student} delete, rather than {@code identity} listening for {@code
+   * StudentDeleted} the way {@code book}/{@code enrollment} do: {@code identity} already depends
+   * on {@code student} in the other direction (this very interface), so an {@code
+   * @ApplicationModuleListener} on {@code student.StudentDeleted} here would make the {@code
+   * student}/{@code identity} package pair cyclic — {@code ApplicationModules.verify()} confirmed
+   * this at build time (fails with "Cycle detected: Slice identity -> Slice student -> Slice
+   * identity"), the same one-directional constraint this interface's class Javadoc already
+   * documents for {@link #provisionForStudent}. `06-low-level-design.md` §13's literal listener
+   * signature for `identity` doesn't hold; this method is the corrected mechanism.
+   */
+  void deprovisionForStudent(Long studentId);
 }

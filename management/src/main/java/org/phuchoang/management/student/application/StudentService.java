@@ -131,13 +131,10 @@ public class StudentService implements StudentLookup {
   }
 
   /**
-   * findByCode (404 if absent) → {@code repository.deleteByCode} → publish {@code StudentDeleted}
-   * (06-low-level-design.md §2.3, §13). The `book`/`enrollment`/`identity` cascade listeners that
-   * consume this event don't exist until those modules ship in later sprints (04-sprint-backlog.md
-   * §3) — for now, the DB-level {@code ON DELETE CASCADE}/{@code SET NULL} constraints
-   * (05-database-schema.md §5) are the only cascade actually in effect; publishing here just makes
-   * sure the event is on the classpath and fires so those listeners can be wired in without
-   * touching this method again.
+   * findByCode (404 if absent) → {@code repository.deleteByCode} → {@code
+   * AccountProvisioning.deprovisionForStudent} (synchronous — see its Javadoc for why this one
+   * cascade can't be an event listener like `book`/`enrollment`'s) → publish {@code StudentDeleted}
+   * for the `book`/`enrollment` listeners (06-low-level-design.md §2.3, §13; PM-018).
    */
   @Transactional
   public void remove(String code) {
@@ -148,6 +145,7 @@ public class StudentService implements StudentLookup {
             .orElseThrow(() -> new NotFoundException("Student '" + code + "' does not exist."));
 
     repository.deleteByCode(studentCode);
+    accountProvisioning.deprovisionForStudent(student.id().value());
     events.publishEvent(new StudentDeleted(student.id()));
   }
 

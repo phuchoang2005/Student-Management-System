@@ -49,6 +49,11 @@ class JdbcUserRepository implements UserRepository {
     }
   }
 
+  @Override
+  public void deleteByStudentId(Long studentId) {
+    springRepo.deleteByStudentId(studentId);
+  }
+
   private UserRow toRow(User user) {
     UserId id = user.id();
     EncryptedInitialPassword initialPassword = user.initialPasswordEncrypted();

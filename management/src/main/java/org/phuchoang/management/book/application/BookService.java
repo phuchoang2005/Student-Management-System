@@ -13,11 +13,13 @@ import org.phuchoang.management.book.port.BookRepository;
 import org.phuchoang.management.shared.exception.DuplicateIsbnException;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.exception.UnknownStudentException;
+import org.phuchoang.management.student.StudentDeleted;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
 import org.phuchoang.management.student.StudentSummary;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.modulith.ApplicationModuleListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -136,6 +138,16 @@ public class BookService implements BookLookup {
     }
 
     repository.deleteByIsbn(bookIsbn);
+  }
+
+  /**
+   * Closes the {@code StudentService.remove} stub (06-low-level-design.md §13, US-1.3/PM-018) —
+   * clears ownership on every book the deleted student owned, mirroring {@code
+   * EnrollmentService.onStudentDeleted}'s shape.
+   */
+  @ApplicationModuleListener
+  void onStudentDeleted(StudentDeleted event) {
+    repository.clearOwnerByStudentId(event.studentId());
   }
 
   /** UC-14 — matches isbn/title/author, optionally filtered by owner, paged. {@code query} may be blank/{@code null}. */

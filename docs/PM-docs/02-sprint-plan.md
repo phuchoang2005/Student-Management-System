@@ -103,7 +103,9 @@ gantt
 **Dates:** 2026-10-12 → 2026-10-25
 **Goal:** Everything the individual modules couldn't prove on their own — role × endpoint authorization, optimistic locking, cross-module cascades under load, and the 7 explicit ambiguity resolutions — is implemented and tested, closing the release.
 
-**Scope:** PM-010, PM-011, PM-012, PM-013, PM-014, PM-015 — **31h / 40h capacity (78%)**.
+**Scope:** PM-010, PM-011, PM-012, PM-018, PM-013, PM-014, PM-015 — **34h / 40h capacity (85%)**.
+
+> **Second sudden mid-plan addition — capacity note.** `06-low-level-design.md` §13 always specified three `StudentDeleted` listeners (`book`, `enrollment`, `identity`), but the original backlog decomposition only turned `enrollment`'s into a task (US-4.2, Sprint 3). PM-018 (3h) closes that gap — implementing `book`'s exactly as specified, but correcting `identity`'s: an `@ApplicationModuleListener` on `student.StudentDeleted` inside `identity` would cycle back against `identity`'s existing dependency direction (`student` already depends on `identity` via `AccountProvisioning`), which `ApplicationModules.verify()` confirmed by failing the build. `identity` is deprovisioned synchronously instead, via a new `AccountProvisioning.deprovisionForStudent` method called from `StudentService.remove`, mirroring how `provisionForStudent` already works one-directionally. It's placed immediately before PM-013 because PM-013's cascade tests ("books unassigned... account removed") assume both mechanisms already exist. Sprint 4 still has 6h of slack (85% of capacity) to absorb it.
 
 **Sprint Definition of Done (= Release Definition of Done):**
 - All of `Testing/03-test-cases/cross-cutting.md` (TC-XC-001–035) automated and green — RBAC matrix, must-change-password gate, optimistic locking, cascade/lifecycle scenarios, error envelope, all 7 `api-specification.md` §5 ambiguity resolutions, architecture conformance.
@@ -115,4 +117,4 @@ gantt
 
 ## Backlog coverage check
 
-Every item in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears in exactly one sprint above; no item is dropped or duplicated. Total scoped: 160h across 5 sprints (10 weeks) against a 200h capacity budget (5 × 40h), leaving ~20% aggregate slack for the estimation risk inherent in sizing 37 items against a spec that has never been implemented before — down from the original plan's ~26%, entirely because Sprint 3 absorbed the 13h staff-account/demo-account addition with no other sprint's scope changing.
+Every item in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears in exactly one sprint above; no item is dropped or duplicated. Total scoped: 163h across 5 sprints (10 weeks) against a 200h capacity budget (5 × 40h), leaving ~18.5% aggregate slack for the estimation risk inherent in sizing 38 items against a spec that has never been implemented before — down from the original plan's ~26%, first because Sprint 3 absorbed the 13h staff-account/demo-account addition with no other sprint's scope changing, then because Sprint 4 absorbed PM-018's 3h the same way.

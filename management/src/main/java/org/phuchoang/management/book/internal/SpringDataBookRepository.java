@@ -2,6 +2,7 @@ package org.phuchoang.management.book.internal;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jdbc.repository.query.Modifying;
 import org.springframework.data.jdbc.repository.query.Query;
 import org.springframework.data.repository.CrudRepository;
 
@@ -50,4 +51,8 @@ interface SpringDataBookRepository extends CrudRepository<BookRow, Long> {
   long countBySearch(String query, Long ownerId);
 
   void deleteByIsbn(String isbn);
+
+  @Modifying
+  @Query("UPDATE books SET owner_id = NULL WHERE owner_id = :studentId")
+  void clearOwnerByStudentId(Long studentId);
 }

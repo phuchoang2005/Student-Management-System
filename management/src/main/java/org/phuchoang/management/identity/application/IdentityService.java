@@ -91,6 +91,22 @@ public class IdentityService implements AccountProvisioning, InitialPasswordLook
   }
 
   /**
+   * Closes the {@code StudentService.remove} stub (06-low-level-design.md §13, US-1.3/PM-018) —
+   * removes the deleted student's account. Called synchronously from {@code
+   * StudentService.remove}, not via {@code @ApplicationModuleListener} on {@code StudentDeleted}
+   * the way {@code book}/{@code enrollment} react: see {@link AccountProvisioning#deprovisionForStudent}'s
+   * Javadoc for why an event listener here would create a {@code student}/{@code identity} module
+   * cycle. The DB-level {@code fk_users_student ... ON DELETE CASCADE} already removes this row in
+   * the same statement that deletes the {@code Student}, so this call is idempotent in practice;
+   * it's what makes the removal an explicit, testable part of the cascade (`02-component-diagram.md`
+   * §2.3) rather than an incidental FK side effect.
+   */
+  @Override
+  public void deprovisionForStudent(Long studentId) {
+    repository.deleteByStudentId(studentId);
+  }
+
+  /**
    * 04-authentication-authorization.md §3a, UC-24: validate role → {@code existsByUsername} →
    * generate/hash/encrypt exactly as {@link #provisionForStudent} → save. Called only from {@code
    * StaffAccountController} — never from another module, unlike {@link #provisionForStudent}.

@@ -1,10 +1,12 @@
 package org.phuchoang.management.course;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -117,10 +119,17 @@ class CourseRemovalIntegrationTest {
 
     mockMvc.perform(delete("/api/v1/courses/CS202")).andExpect(status().isNoContent());
 
-    Integer remainingEnrollments =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM enrollments WHERE course_id = ?", Integer.class, courseId);
-    assertThat(remainingEnrollments).isZero();
+    // EnrollmentService.onCourseDeleted runs on a separate thread (shared.async.AsyncConfig), so
+    // it may not have completed yet when the HTTP response returns.
+    await()
+        .atMost(Duration.ofSeconds(5))
+        .untilAsserted(
+            () -> {
+              Integer remainingEnrollments =
+                  jdbcTemplate.queryForObject(
+                      "SELECT COUNT(*) FROM enrollments WHERE course_id = ?", Integer.class, courseId);
+              assertThat(remainingEnrollments).isZero();
+            });
 
     Integer remainingStudents =
         jdbcTemplate.queryForObject(
