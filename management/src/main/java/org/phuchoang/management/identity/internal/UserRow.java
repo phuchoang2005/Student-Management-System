@@ -10,6 +10,8 @@ record UserRow(
     @Id Long id,
     String username,
     String passwordHash,
+    // Nullable: cleared the instant the account holder changes their password (Identity.4).
+    String initialPasswordEncrypted,
     Role role,
     Long studentId,
     boolean mustChangePassword,

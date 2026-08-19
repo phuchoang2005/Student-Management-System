@@ -1,6 +1,7 @@
 package org.phuchoang.management.identity.internal;
 
 import java.util.Optional;
+import org.phuchoang.management.identity.domain.EncryptedInitialPassword;
 import org.phuchoang.management.identity.domain.PasswordHash;
 import org.phuchoang.management.identity.domain.User;
 import org.phuchoang.management.identity.domain.UserId;
@@ -20,6 +21,11 @@ class JdbcUserRepository implements UserRepository {
   }
 
   @Override
+  public Optional<User> findByUsername(Username username) {
+    return springRepo.findByUsername(username.value()).map(this::toDomain);
+  }
+
+  @Override
   public Optional<User> findByStudentId(Long studentId) {
     return springRepo.findByStudentId(studentId).map(this::toDomain);
   }
@@ -29,16 +35,18 @@ class JdbcUserRepository implements UserRepository {
     try {
       return toDomain(springRepo.save(toRow(user)));
     } catch (OptimisticLockingFailureException e) {
-      throw new StaleWriteException("User account for student " + user.studentId() + " was modified concurrently");
+      throw new StaleWriteException("Account '" + user.username().value() + "' was modified concurrently");
     }
   }
 
   private UserRow toRow(User user) {
     UserId id = user.id();
+    EncryptedInitialPassword initialPassword = user.initialPasswordEncrypted();
     return new UserRow(
         id == null ? null : id.value(),
         user.username().value(),
         user.passwordHash().value(),
+        initialPassword == null ? null : initialPassword.cipherText(),
         user.role(),
         user.studentId(),
         user.mustChangePassword(),
@@ -50,6 +58,9 @@ class JdbcUserRepository implements UserRepository {
         new UserId(row.id()),
         new Username(row.username()),
         new PasswordHash(row.passwordHash()),
+        row.initialPasswordEncrypted() == null
+            ? null
+            : new EncryptedInitialPassword(row.initialPasswordEncrypted()),
         row.role(),
         row.studentId(),
         row.mustChangePassword(),

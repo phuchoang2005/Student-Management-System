@@ -5,23 +5,40 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Chain-position stub for PM-006 (04-sprint-backlog.md): reserves the {@code addFilterAfter}
- * slot right after authorization so the real gate can drop in without reshuffling the chain. The
- * actual rule — 403 unless {@code principal.mustChangePassword} is false or the path is {@code
- * /api/v1/auth/password} (04-authentication-authorization.md §4.2) — needs the {@code
- * AuthenticatedPrincipal} type the {@code identity} module doesn't ship until PM-011 (Sprint 4),
- * which replaces this class body in place.
+ * The gate 04-authentication-authorization.md §4.2 specifies: 403 while {@code
+ * principal.mustChangePassword} is true, unless the request is the Change Password endpoint itself
+ * (06-low-level-design.md §11.3). Sits after authorization in the chain, so a request has already
+ * been authenticated before this runs.
+ *
+ * <p>PM-006 shipped this as a pass-through stub because the {@link AuthenticatedPrincipal} type it
+ * needs didn't exist yet; US-6.1 ships that type, which is what unblocks the real body here —
+ * ahead of PM-011 (Sprint 4), whose remaining scope is the cross-cutting gate tests in
+ * {@code Testing/03-test-cases/cross-cutting.md} §2, not this rule. Without it US-6.1's third
+ * acceptance criterion ("I can take no other action until I change it") would have no
+ * implementation.
  */
 @Component
 public class MustChangePasswordFilter extends OncePerRequestFilter {
 
+  private static final String CHANGE_PASSWORD_PATH = "/api/v1/auth/password";
+
   @Override
   protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth != null
+        && auth.getPrincipal() instanceof AuthenticatedPrincipal principal
+        && principal.mustChangePassword()
+        && !CHANGE_PASSWORD_PATH.equals(request.getRequestURI())) {
+      response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+      return;
+    }
     chain.doFilter(request, response);
   }
 }

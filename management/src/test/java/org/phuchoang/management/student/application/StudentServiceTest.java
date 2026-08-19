@@ -16,6 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.phuchoang.management.identity.AccountProvisioning;
+import org.phuchoang.management.identity.InitialPasswordLookup;
 import org.phuchoang.management.identity.ProvisionedAccount;
 import org.phuchoang.management.shared.exception.DomainValidationException;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
@@ -42,6 +43,7 @@ class StudentServiceTest {
 
   @Mock private StudentRepository repository;
   @Mock private AccountProvisioning accountProvisioning;
+  @Mock private InitialPasswordLookup initialPasswordLookup;
   @Mock private ApplicationEventPublisher events;
 
   private StudentService service;
@@ -51,7 +53,7 @@ class StudentServiceTest {
 
   @Test
   void registerRejectsDuplicateCodeBeforeCheckingEmailOrProvisioning() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.existsByCode(new StudentCode("S00123"))).thenReturn(true);
 
     assertThatThrownBy(() -> service.register(command)).isInstanceOf(DuplicateCodeException.class);
@@ -61,7 +63,7 @@ class StudentServiceTest {
 
   @Test
   void registerRejectsDuplicateEmail() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.existsByCode(any())).thenReturn(false);
     when(repository.existsByEmail(any())).thenReturn(true);
 
@@ -72,7 +74,7 @@ class StudentServiceTest {
 
   @Test
   void registerSavesStudentAndProvisionsAccountInOrder() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.existsByCode(any())).thenReturn(false);
     when(repository.existsByEmail(any())).thenReturn(false);
     when(repository.save(any(Student.class)))
@@ -115,7 +117,7 @@ class StudentServiceTest {
 
   @Test
   void updateThrowsNotFoundWhenStudentDoesNotExist() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.empty());
     UpdateStudentCommand update =
         new UpdateStudentCommand("Jane", "Doe", "jane.doe@example.edu", LocalDate.of(2000, 1, 1));
@@ -127,7 +129,7 @@ class StudentServiceTest {
 
   @Test
   void updateRejectsEmailThatCollidesWithAnotherStudent() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
     when(repository.existsByEmailExcludingCode(new Email("taken@example.edu"), existingCode)).thenReturn(true);
     UpdateStudentCommand update =
@@ -140,7 +142,7 @@ class StudentServiceTest {
 
   @Test
   void updateRejectsBlankLastName() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
     UpdateStudentCommand update =
         new UpdateStudentCommand("Jane", "", "jane.doe@example.edu", LocalDate.of(2000, 1, 1));
@@ -152,7 +154,7 @@ class StudentServiceTest {
 
   @Test
   void updateAppliesChangesAndSkipsUsernameRenameWhenEmailUnchanged() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
     when(repository.save(any(Student.class))).thenAnswer(invocation -> invocation.getArgument(0));
     UpdateStudentCommand update =
@@ -169,7 +171,7 @@ class StudentServiceTest {
 
   @Test
   void updateAppliesChangesAndRenamesLinkedAccountUsernameWhenEmailChanged() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
     when(repository.existsByEmailExcludingCode(new Email("jane.new@example.edu"), existingCode))
         .thenReturn(false);
@@ -185,7 +187,7 @@ class StudentServiceTest {
 
   @Test
   void removeThrowsNotFoundWhenStudentDoesNotExist() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.remove("S00123")).isInstanceOf(NotFoundException.class);
@@ -196,7 +198,7 @@ class StudentServiceTest {
 
   @Test
   void removeDeletesTheStudentAndPublishesStudentDeleted() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
 
     service.remove("S00123");
@@ -207,7 +209,7 @@ class StudentServiceTest {
 
   @Test
   void searchReturnsMappedSummariesFromRepositoryPage() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     Pageable pageable = PageRequest.of(0, 20);
     Page<Student> repoPage = new PageImpl<>(java.util.List.of(existingStudent), pageable, 1);
     when(repository.search("jane", pageable)).thenReturn(repoPage);
@@ -223,7 +225,7 @@ class StudentServiceTest {
 
   @Test
   void searchReturnsEmptyPageWhenNothingMatches() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     Pageable pageable = PageRequest.of(0, 20);
     when(repository.search("nobody", pageable)).thenReturn(Page.empty(pageable));
 
@@ -234,7 +236,7 @@ class StudentServiceTest {
 
   @Test
   void getDetailThrowsNotFoundWhenStudentDoesNotExist() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.getDetail("S00123")).isInstanceOf(NotFoundException.class);
@@ -242,7 +244,7 @@ class StudentServiceTest {
 
   @Test
   void getDetailReturnsStudentFieldsWithEmptyBooksAndCoursesStub() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
 
     StudentService.StudentDetailView detail = service.getDetail("S00123");
@@ -255,7 +257,7 @@ class StudentServiceTest {
 
   @Test
   void summaryOfThrowsNotFoundWhenStudentDoesNotExist() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.findById(new StudentId(99L))).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.summaryOf(new StudentId(99L))).isInstanceOf(NotFoundException.class);
@@ -263,7 +265,7 @@ class StudentServiceTest {
 
   @Test
   void summaryOfReturnsStudentSummaryFields() {
-    service = new StudentService(repository, accountProvisioning, events);
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.findById(new StudentId(1L))).thenReturn(Optional.of(existingStudent));
 
     StudentSummary summary = service.summaryOf(new StudentId(1L));

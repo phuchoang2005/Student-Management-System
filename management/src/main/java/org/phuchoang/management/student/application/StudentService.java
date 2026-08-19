@@ -4,10 +4,13 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import org.phuchoang.management.identity.AccountProvisioning;
+import org.phuchoang.management.identity.InitialPasswordLookup;
+import org.phuchoang.management.identity.InitialPasswordView;
 import org.phuchoang.management.identity.ProvisionedAccount;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.DuplicateEmailException;
 import org.phuchoang.management.shared.exception.NotFoundException;
+import org.phuchoang.management.shared.exception.PasswordNoLongerAvailableException;
 import org.phuchoang.management.student.StudentDeleted;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
@@ -30,14 +33,17 @@ public class StudentService implements StudentLookup {
 
   private final StudentRepository repository;
   private final AccountProvisioning accountProvisioning;
+  private final InitialPasswordLookup initialPasswordLookup;
   private final ApplicationEventPublisher events;
 
   public StudentService(
       StudentRepository repository,
       AccountProvisioning accountProvisioning,
+      InitialPasswordLookup initialPasswordLookup,
       ApplicationEventPublisher events) {
     this.repository = repository;
     this.accountProvisioning = accountProvisioning;
+    this.initialPasswordLookup = initialPasswordLookup;
     this.events = events;
   }
 
@@ -176,6 +182,29 @@ public class StudentService implements StudentLookup {
         List.of());
   }
 
+  /**
+   * US-6.3 / UC-23 — findByCode → {@code InitialPasswordLookup.viewInitialPassword}, read-only.
+   * "No such student", "no account", and "password already changed" all raise the same {@link
+   * PasswordNoLongerAvailableException} with the same message: api-specification.md §5.5 requires
+   * the two 404s to be indistinguishable, which is deliberate information-hiding, not an
+   * oversight (TC-IDN-018).
+   */
+  public InitialPassword viewInitialPassword(String code) {
+    String message = "No unchanged initial password found for student '" + code + "'.";
+    Long studentId =
+        repository
+            .findByCode(new StudentCode(code))
+            .map(student -> student.id().value())
+            .orElseThrow(() -> new PasswordNoLongerAvailableException(message));
+
+    InitialPasswordView view =
+        initialPasswordLookup
+            .viewInitialPassword(studentId)
+            .orElseThrow(() -> new PasswordNoLongerAvailableException(message));
+
+    return new InitialPassword(view.username(), view.initialPassword());
+  }
+
   @Override
   public boolean existsById(StudentId id) {
     return repository.existsById(id);
@@ -236,6 +265,9 @@ public class StudentService implements StudentLookup {
       LocalDate dateOfBirth,
       Instant createdAt,
       Instant updatedAt) {}
+
+  /** Same VO-unwrapping rationale as {@link ProvisionedStudent}, for {@link #viewInitialPassword}. */
+  public record InitialPassword(String username, String initialPassword) {}
 
   /** Same VO-unwrapping rationale as {@link ProvisionedStudent}, for one {@link #search} result. */
   public record StudentSummaryView(

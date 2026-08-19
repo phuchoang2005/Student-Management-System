@@ -24,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.DuplicateEmailException;
 import org.phuchoang.management.shared.exception.NotFoundException;
+import org.phuchoang.management.shared.exception.PasswordNoLongerAvailableException;
 import org.phuchoang.management.shared.web.GlobalExceptionHandler;
 import org.phuchoang.management.student.application.StudentService;
 import org.springframework.data.domain.Page;
@@ -255,5 +256,32 @@ class StudentControllerTest {
         .thenThrow(new NotFoundException("Student 'S00123' does not exist."));
 
     mockMvc.perform(get("/api/v1/students/S00123")).andExpect(status().isNotFound());
+  }
+
+  @Test
+  void getInitialPasswordReturnsTheUsernameAndStillUnchangedPassword() throws Exception {
+    // US-6.3 / TC-IDN-016
+    when(studentService.viewInitialPassword("S00123"))
+        .thenReturn(new StudentService.InitialPassword("jane.doe@example.edu", "aB3xY9zQ"));
+
+    mockMvc
+        .perform(get("/api/v1/students/S00123/initial-password"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.username").value("jane.doe@example.edu"))
+        .andExpect(jsonPath("$.initialPassword").value("aB3xY9zQ"));
+  }
+
+  @Test
+  void getInitialPasswordPropagatesUnavailabilityAs404() throws Exception {
+    // US-6.3 / TC-IDN-017, TC-IDN-018 -- no password field in the body either way
+    when(studentService.viewInitialPassword("S00123"))
+        .thenThrow(
+            new PasswordNoLongerAvailableException(
+                "No unchanged initial password found for student 'S00123'."));
+
+    mockMvc
+        .perform(get("/api/v1/students/S00123/initial-password"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.initialPassword").doesNotExist());
   }
 }
