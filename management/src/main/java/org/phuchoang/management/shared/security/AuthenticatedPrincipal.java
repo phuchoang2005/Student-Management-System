@@ -25,7 +25,12 @@ import org.springframework.security.core.userdetails.UserDetails;
  * role co-invariant (05-database-schema.md §3.5).
  */
 public record AuthenticatedPrincipal(
-    String username, String passwordHash, String role, Long studentId, boolean mustChangePassword)
+    String username,
+    String passwordHash,
+    String role,
+    Long studentId,
+    boolean mustChangePassword,
+    boolean enabled)
     implements UserDetails {
 
   @Override
@@ -43,12 +48,18 @@ public record AuthenticatedPrincipal(
     return username;
   }
 
+  /** Identity.7 — a disabled account's {@code UserDetails} reports itself disabled to Spring Security. */
+  @Override
+  public boolean isEnabled() {
+    return enabled;
+  }
+
   /**
    * The refreshed principal a successful Change Password installs into the live session
    * (04-authentication-authorization.md §5.1), so the {@link MustChangePasswordFilter} gate clears
    * without forcing a re-login (TC-IDN-015).
    */
   public AuthenticatedPrincipal withPasswordChanged() {
-    return new AuthenticatedPrincipal(username, passwordHash, role, studentId, false);
+    return new AuthenticatedPrincipal(username, passwordHash, role, studentId, false, enabled);
   }
 }

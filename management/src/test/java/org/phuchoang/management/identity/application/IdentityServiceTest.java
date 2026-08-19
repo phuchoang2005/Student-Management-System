@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.phuchoang.management.identity.InitialPasswordView;
 import org.phuchoang.management.identity.ProvisionedAccount;
 import org.phuchoang.management.identity.application.command.ChangePasswordCommand;
+import org.phuchoang.management.identity.application.command.ProvisionStaffCommand;
 import org.phuchoang.management.identity.domain.EncryptedInitialPassword;
 import org.phuchoang.management.identity.domain.PasswordHash;
 import org.phuchoang.management.identity.domain.Role;
@@ -28,7 +29,9 @@ import org.phuchoang.management.identity.port.PasswordCipher;
 import org.phuchoang.management.identity.port.PasswordHasher;
 import org.phuchoang.management.identity.port.UserRepository;
 import org.phuchoang.management.shared.exception.DomainValidationException;
+import org.phuchoang.management.shared.exception.DuplicateUsernameException;
 import org.phuchoang.management.shared.exception.InvalidCredentialsException;
+import org.phuchoang.management.shared.exception.UserNotFoundException;
 import org.phuchoang.management.shared.security.AuthenticatedPrincipal;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,6 +57,7 @@ class IdentityServiceTest {
         new EncryptedInitialPassword("base64ciphertext"),
         Role.STUDENT,
         1L,
+        true,
         true,
         0L);
   }
@@ -244,6 +248,7 @@ class IdentityServiceTest {
     assertThat(principal.role()).isEqualTo("STUDENT");
     assertThat(principal.studentId()).isEqualTo(1L);
     assertThat(principal.mustChangePassword()).isTrue();
+    assertThat(principal.isEnabled()).isTrue();
     assertThat(principal.getAuthorities()).singleElement().hasToString("ROLE_STUDENT");
   }
 
@@ -252,5 +257,109 @@ class IdentityServiceTest {
     when(repository.findByUsername(new Username("nobody@example.edu"))).thenReturn(Optional.empty());
 
     assertThat(service.loadPrincipal("nobody@example.edu")).isEmpty();
+  }
+
+  @Test
+  void loadPrincipalReportsADisabledAccountAsDisabled() {
+    // Identity.7 -- feeds Spring Security's DaoAuthenticationProvider pre-auth check.
+    User user = anAccountOnItsInitialPassword();
+    user.setEnabled(false);
+    when(repository.findByUsername(new Username("jane.doe@example.edu"))).thenReturn(Optional.of(user));
+
+    assertThat(service.loadPrincipal("jane.doe@example.edu").orElseThrow().isEnabled()).isFalse();
+  }
+
+  @Test
+  void provisionStaffCreatesAnEnabledAccountOnItsInitialPassword() {
+    // TC-IDN-024
+    when(passwordGenerator.generate()).thenReturn("aB3xY9zQ");
+    when(hasher.hash("aB3xY9zQ")).thenReturn(new PasswordHash("$2a$10$hashedvalue"));
+    when(cipher.encrypt("aB3xY9zQ")).thenReturn(new EncryptedInitialPassword("base64ciphertext"));
+    when(repository.existsByUsername(new Username("new.librarian"))).thenReturn(false);
+    when(repository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    IdentityService.ProvisionedStaffAccount account =
+        service.provisionStaff(new ProvisionStaffCommand("new.librarian", "LIBRARIAN"));
+
+    assertThat(account.username()).isEqualTo("new.librarian");
+    assertThat(account.role()).isEqualTo("LIBRARIAN");
+    assertThat(account.plaintextPassword()).isEqualTo("aB3xY9zQ");
+
+    ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+    verify(repository).save(captor.capture());
+    User saved = captor.getValue();
+    assertThat(saved.role()).isEqualTo(Role.LIBRARIAN);
+    assertThat(saved.studentId()).isNull();
+    assertThat(saved.mustChangePassword()).isTrue();
+    assertThat(saved.enabled()).isTrue();
+  }
+
+  @Test
+  void provisionStaffRejectsTheSystemAdministratorRoleBeforeTouchingTheRepository() {
+    // TC-IDN-026 — a System Administrator account is never created through the application.
+    assertThatThrownBy(
+            () -> service.provisionStaff(new ProvisionStaffCommand("new.sysadmin", "SYSTEM_ADMINISTRATOR")))
+        .isInstanceOf(DomainValidationException.class);
+
+    verify(repository, never()).existsByUsername(any());
+    verify(repository, never()).save(any(User.class));
+  }
+
+  @Test
+  void provisionStaffRejectsAnUnrecognizedRole() {
+    assertThatThrownBy(() -> service.provisionStaff(new ProvisionStaffCommand("new.staff", "NOT_A_ROLE")))
+        .isInstanceOf(DomainValidationException.class);
+  }
+
+  @Test
+  void provisionStaffRejectsAUsernameAlreadyInUse() {
+    // TC-IDN-027
+    when(repository.existsByUsername(new Username("taken.username"))).thenReturn(true);
+
+    assertThatThrownBy(
+            () -> service.provisionStaff(new ProvisionStaffCommand("taken.username", "REGISTRAR")))
+        .isInstanceOf(DuplicateUsernameException.class);
+
+    verify(repository, never()).save(any(User.class));
+  }
+
+  @Test
+  void setAccountEnabledDisablesAnActiveAccount() {
+    // TC-IDN-028
+    User user = anAccountOnItsInitialPassword();
+    when(repository.findById(new UserId(1L))).thenReturn(Optional.of(user));
+    when(repository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    IdentityService.StaffAccountStatus status = service.setAccountEnabled(1L, false);
+
+    assertThat(status.username()).isEqualTo("jane.doe@example.edu");
+    assertThat(status.enabled()).isFalse();
+
+    ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+    verify(repository).save(captor.capture());
+    assertThat(captor.getValue().enabled()).isFalse();
+  }
+
+  @Test
+  void setAccountEnabledReenablesADisabledAccount() {
+    // TC-IDN-029
+    User user = anAccountOnItsInitialPassword();
+    user.setEnabled(false);
+    when(repository.findById(new UserId(1L))).thenReturn(Optional.of(user));
+    when(repository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    IdentityService.StaffAccountStatus status = service.setAccountEnabled(1L, true);
+
+    assertThat(status.enabled()).isTrue();
+  }
+
+  @Test
+  void setAccountEnabledFailsFastWhenTheAccountDoesNotExist() {
+    when(repository.findById(new UserId(99L))).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.setAccountEnabled(99L, false))
+        .isInstanceOf(UserNotFoundException.class);
+
+    verify(repository, never()).save(any(User.class));
   }
 }

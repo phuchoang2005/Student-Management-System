@@ -76,15 +76,19 @@ class SecurityConfigTest {
   @Test
   @WithMockUser(roles = "SYSTEM_ADMINISTRATOR")
   void staffAccountWritesAreReachableForSystemAdministrator() throws Exception {
-    // No StaffAccountController exists yet (US-7.1/US-7.2) -- 404 proves the filter chain let the
-    // request past authorization and it fell through to Spring MVC's "no handler" response,
-    // rather than being rejected at the security layer with 403.
+    // StaffAccountController exists as of US-7.1/US-7.2 -- a validation-shaped 400 proves the
+    // filter chain let the request past authorization and it reached the controller, rather than
+    // being rejected at the security layer with 403.
     mockMvc
         .perform(post("/api/v1/staff-accounts")
             .contentType(MediaType.APPLICATION_JSON)
             .content("{}"))
-        .andExpect(status().isNotFound());
-    mockMvc.perform(patch("/api/v1/staff-accounts/1")).andExpect(status().isNotFound());
+        .andExpect(status().isBadRequest());
+    mockMvc
+        .perform(patch("/api/v1/staff-accounts/1/status")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{}"))
+        .andExpect(status().isBadRequest());
   }
 
   /** US-5.4: /me/** is STUDENT-only -- every other role, including SYSTEM_ADMINISTRATOR, gets 403. */

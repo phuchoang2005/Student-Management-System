@@ -7,17 +7,22 @@ import org.phuchoang.management.identity.InitialPasswordLookup;
 import org.phuchoang.management.identity.InitialPasswordView;
 import org.phuchoang.management.identity.ProvisionedAccount;
 import org.phuchoang.management.identity.application.command.ChangePasswordCommand;
+import org.phuchoang.management.identity.application.command.ProvisionStaffCommand;
 import org.phuchoang.management.identity.domain.EncryptedInitialPassword;
 import org.phuchoang.management.identity.domain.PasswordHash;
+import org.phuchoang.management.identity.domain.Role;
 import org.phuchoang.management.identity.domain.User;
+import org.phuchoang.management.identity.domain.UserId;
 import org.phuchoang.management.identity.domain.Username;
 import org.phuchoang.management.identity.port.InitialPasswordGenerator;
 import org.phuchoang.management.identity.port.PasswordCipher;
 import org.phuchoang.management.identity.port.PasswordHasher;
 import org.phuchoang.management.identity.port.UserRepository;
 import org.phuchoang.management.shared.exception.DomainValidationException;
+import org.phuchoang.management.shared.exception.DuplicateUsernameException;
 import org.phuchoang.management.shared.exception.FieldError;
 import org.phuchoang.management.shared.exception.InvalidCredentialsException;
+import org.phuchoang.management.shared.exception.UserNotFoundException;
 import org.phuchoang.management.shared.security.AuthenticatedPrincipal;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,6 +72,44 @@ public class IdentityService implements AccountProvisioning, InitialPasswordLook
             .orElseThrow(() -> new IllegalStateException("No account found for student " + studentId));
     user.renameUsername(new Username(newEmail));
     repository.save(user);
+  }
+
+  /**
+   * 04-authentication-authorization.md §3a, UC-24: validate role → {@code existsByUsername} →
+   * generate/hash/encrypt exactly as {@link #provisionForStudent} → save. Called only from {@code
+   * StaffAccountController} — never from another module, unlike {@link #provisionForStudent}.
+   */
+  @Transactional
+  public ProvisionedStaffAccount provisionStaff(ProvisionStaffCommand command) {
+    Role role = validateStaffRole(command.role());
+
+    Username username = new Username(command.username());
+    if (repository.existsByUsername(username)) {
+      throw new DuplicateUsernameException("Username '" + username.value() + "' is already in use.");
+    }
+
+    String plaintextPassword = passwordGenerator.generate();
+    PasswordHash passwordHash = hasher.hash(plaintextPassword);
+    EncryptedInitialPassword initialPassword = cipher.encrypt(plaintextPassword);
+
+    User user = User.provisionStaff(username, role, passwordHash, initialPassword);
+    repository.save(user);
+
+    return new ProvisionedStaffAccount(username.value(), role.name(), plaintextPassword);
+  }
+
+  /** 04-authentication-authorization.md §3b, UC-25: {@code findById} → {@code User.setEnabled} → save. */
+  @Transactional
+  public StaffAccountStatus setAccountEnabled(Long userId, boolean enabled) {
+    User user =
+        repository
+            .findById(new UserId(userId))
+            .orElseThrow(() -> new UserNotFoundException("Account '" + userId + "' does not exist."));
+
+    user.setEnabled(enabled);
+    repository.save(user);
+
+    return new StaffAccountStatus(user.username().value(), user.enabled());
   }
 
   /**
@@ -127,8 +170,10 @@ public class IdentityService implements AccountProvisioning, InitialPasswordLook
    * unwrapped into the framework principal here — the same VO-unwrapping split {@code
    * StudentService} applies to its own view records.
    *
-   * <p>No {@code enabled} check yet: the column and Identity.7's deactivation rule ship with
-   * US-7.2 (04-authentication-authorization.md §4.1's {@code DisabledException} branch).
+   * <p>{@code enabled} carries through onto the principal itself (Identity.7): {@link
+   * AuthenticatedPrincipal#isEnabled()} reports it, so Spring Security's {@code
+   * DaoAuthenticationProvider} rejects a disabled account with {@code DisabledException} before
+   * password comparison even runs (04-authentication-authorization.md §4.1).
    */
   public Optional<AuthenticatedPrincipal> loadPrincipal(String username) {
     return repository
@@ -140,7 +185,26 @@ public class IdentityService implements AccountProvisioning, InitialPasswordLook
                     user.passwordHash().value(),
                     user.role().name(),
                     user.studentId(),
-                    user.mustChangePassword()));
+                    user.mustChangePassword(),
+                    user.enabled()));
+  }
+
+  /** UC-24 flow 3a — role must be one of {@link Role#STAFF_ROLES}; blank/unknown values fail the same way. */
+  private Role validateStaffRole(String role) {
+    Role parsed;
+    try {
+      parsed = Role.valueOf(role);
+    } catch (IllegalArgumentException | NullPointerException e) {
+      throw new DomainValidationException(
+          "Validation failed",
+          List.of(new FieldError("role", "must be one of " + Role.STAFF_ROLES)));
+    }
+    if (!Role.STAFF_ROLES.contains(parsed)) {
+      throw new DomainValidationException(
+          "Validation failed",
+          List.of(new FieldError("role", "must be one of " + Role.STAFF_ROLES)));
+    }
+    return parsed;
   }
 
   private void validatePolicy(String newPassword, String currentPassword) {
@@ -162,4 +226,10 @@ public class IdentityService implements AccountProvisioning, InitialPasswordLook
           List.of(new FieldError("newPassword", "must differ from the current password")));
     }
   }
+
+  /** Result of {@link #provisionStaff}: the one-time plaintext password, mirroring {@link ProvisionedAccount}. */
+  public record ProvisionedStaffAccount(String username, String role, String plaintextPassword) {}
+
+  /** Result of {@link #setAccountEnabled}. */
+  public record StaffAccountStatus(String username, boolean enabled) {}
 }

@@ -15,5 +15,6 @@ record UserRow(
     Role role,
     Long studentId,
     boolean mustChangePassword,
+    boolean enabled,
     // Primitive long, not boxed -- see StudentRow's @Version comment.
     @Version long version) {}

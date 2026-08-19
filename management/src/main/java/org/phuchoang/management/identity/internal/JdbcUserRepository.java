@@ -31,6 +31,16 @@ class JdbcUserRepository implements UserRepository {
   }
 
   @Override
+  public Optional<User> findById(UserId userId) {
+    return springRepo.findById(userId.value()).map(this::toDomain);
+  }
+
+  @Override
+  public boolean existsByUsername(Username username) {
+    return springRepo.existsByUsername(username.value());
+  }
+
+  @Override
   public User save(User user) {
     try {
       return toDomain(springRepo.save(toRow(user)));
@@ -50,6 +60,7 @@ class JdbcUserRepository implements UserRepository {
         user.role(),
         user.studentId(),
         user.mustChangePassword(),
+        user.enabled(),
         user.version());
   }
 
@@ -64,6 +75,7 @@ class JdbcUserRepository implements UserRepository {
         row.role(),
         row.studentId(),
         row.mustChangePassword(),
+        row.enabled(),
         row.version());
   }
 }

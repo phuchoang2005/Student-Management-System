@@ -50,4 +50,44 @@ class UserTest {
     assertThat(user.mustChangePassword()).isTrue();
     assertThat(user.initialPasswordEncrypted()).isNotNull();
   }
+
+  @Test
+  void provisionForStudentStartsEnabled() {
+    // Identity.7 — deactivation is staff-only, but a Student account still starts enabled.
+    assertThat(aFreshlyProvisionedAccount().enabled()).isTrue();
+  }
+
+  @Test
+  void provisionStaffStartsInTheMustChangePasswordStateWithNoStudentId() {
+    // Identity.3, Identity.6, UC-24
+    User user =
+        User.provisionStaff(
+            new Username("new.librarian"),
+            Role.LIBRARIAN,
+            new PasswordHash("$2a$10$initialhash"),
+            new EncryptedInitialPassword("base64ciphertext"));
+
+    assertThat(user.role()).isEqualTo(Role.LIBRARIAN);
+    assertThat(user.studentId()).isNull();
+    assertThat(user.mustChangePassword()).isTrue();
+    assertThat(user.enabled()).isTrue();
+    assertThat(user.initialPasswordEncrypted().cipherText()).isEqualTo("base64ciphertext");
+    assertThat(user.version()).isZero();
+  }
+
+  @Test
+  void setEnabledTogglesLoginAccessWithoutTouchingAnyOtherField() {
+    // Identity.7, UC-25 — deactivation is not a soft-delete of any other state.
+    User user = aFreshlyProvisionedAccount();
+
+    user.setEnabled(false);
+
+    assertThat(user.enabled()).isFalse();
+    assertThat(user.mustChangePassword()).isTrue();
+    assertThat(user.passwordHash().value()).isEqualTo("$2a$10$initialhash");
+
+    user.setEnabled(true);
+
+    assertThat(user.enabled()).isTrue();
+  }
 }

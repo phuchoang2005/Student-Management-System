@@ -23,6 +23,7 @@ public class User {
   private final Role role;
   private final Long studentId;
   private boolean mustChangePassword;
+  private boolean enabled;
   private final long version;
 
   private User(
@@ -33,6 +34,7 @@ public class User {
       Role role,
       Long studentId,
       boolean mustChangePassword,
+      boolean enabled,
       long version) {
     this.id = id;
     this.username = username;
@@ -41,6 +43,7 @@ public class User {
     this.role = role;
     this.studentId = studentId;
     this.mustChangePassword = mustChangePassword;
+    this.enabled = enabled;
     this.version = version;
   }
 
@@ -51,7 +54,29 @@ public class User {
       PasswordHash passwordHash,
       EncryptedInitialPassword initialPasswordEncrypted) {
     return new User(
-        null, username, passwordHash, initialPasswordEncrypted, Role.STUDENT, studentId, true, 0L);
+        null,
+        username,
+        passwordHash,
+        initialPasswordEncrypted,
+        Role.STUDENT,
+        studentId,
+        true,
+        true,
+        0L);
+  }
+
+  /**
+   * Identity.3/6, UC-24 — {@code role} must already be one of {@link Role#STAFF_ROLES}; the
+   * caller ({@code IdentityService.provisionStaff}) validates that before calling. {@code
+   * studentId} stays {@code null} (05-database-schema.md §3.5's role co-invariant), and hashing/
+   * encryption/must-change-password/enabled mirror {@link #provisionForStudent} exactly.
+   */
+  public static User provisionStaff(
+      Username username,
+      Role role,
+      PasswordHash passwordHash,
+      EncryptedInitialPassword initialPasswordEncrypted) {
+    return new User(null, username, passwordHash, initialPasswordEncrypted, role, null, true, true, 0L);
   }
 
   /** Rehydrates a {@code User} from data already validated at write time (a DB row). */
@@ -63,6 +88,7 @@ public class User {
       Role role,
       Long studentId,
       boolean mustChangePassword,
+      boolean enabled,
       long version) {
     return new User(
         id,
@@ -72,6 +98,7 @@ public class User {
         role,
         studentId,
         mustChangePassword,
+        enabled,
         version);
   }
 
@@ -90,6 +117,14 @@ public class User {
     this.passwordHash = newPasswordHash;
     this.initialPasswordEncrypted = null;
     this.mustChangePassword = false;
+  }
+
+  /**
+   * Identity.7, UC-25 — toggles login access in either direction; no other field changes, so
+   * deactivation is not a soft-delete of any state the account holder previously created.
+   */
+  public void setEnabled(boolean enabled) {
+    this.enabled = enabled;
   }
 
   public UserId id() {
@@ -119,6 +154,10 @@ public class User {
 
   public boolean mustChangePassword() {
     return mustChangePassword;
+  }
+
+  public boolean enabled() {
+    return enabled;
   }
 
   public long version() {
