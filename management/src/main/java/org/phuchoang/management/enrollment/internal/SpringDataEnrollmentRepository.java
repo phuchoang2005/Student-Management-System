@@ -1,5 +1,6 @@
 package org.phuchoang.management.enrollment.internal;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jdbc.repository.query.Modifying;
 import org.springframework.data.jdbc.repository.query.Query;
@@ -35,6 +36,24 @@ interface SpringDataEnrollmentRepository extends CrudRepository<EnrollmentRow, L
   // result here would only mean a genuine data race, same as StudentLookup.summaryOf's findById.
   @Query("SELECT id FROM courses WHERE course_code = :courseCode")
   Long findCourseIdByCode(String courseCode);
+
+  // Selects c.course_code alongside the enrollment's own columns -- EnrollmentRow only carries
+  // the surrogate course_id, but EnrollmentLookup.findByStudent's callers (EnrollmentService)
+  // need CourseCode to resolve each row's CourseSummary via CourseLookup.summaryOf, so the join
+  // result needs its own Row type (EnrollmentCourseRow) rather than EnrollmentRow itself.
+  @Query("""
+      SELECT e.id AS id, e.student_id AS student_id, e.course_id AS course_id,
+             e.enrolled_at AS enrolled_at, c.course_code AS course_code
+      FROM enrollments e
+      JOIN courses c ON c.id = e.course_id
+      WHERE e.student_id = :studentId
+      ORDER BY e.enrolled_at
+      LIMIT :limit OFFSET :offset
+      """)
+  List<EnrollmentCourseRow> findByStudentId(Long studentId, int limit, long offset);
+
+  @Query("SELECT COUNT(*) FROM enrollments WHERE student_id = :studentId")
+  long countByStudentId(Long studentId);
 
   @Modifying
   @Query("""

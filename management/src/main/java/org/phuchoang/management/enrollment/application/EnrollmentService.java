@@ -5,6 +5,7 @@ import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.course.CourseDeleted;
 import org.phuchoang.management.course.CourseLookup;
 import org.phuchoang.management.course.CourseSummary;
+import org.phuchoang.management.enrollment.EnrollmentLookup;
 import org.phuchoang.management.enrollment.application.command.EnrollStudentCommand;
 import org.phuchoang.management.enrollment.domain.Enrollment;
 import org.phuchoang.management.enrollment.port.EnrollmentRepository;
@@ -16,12 +17,14 @@ import org.phuchoang.management.student.StudentDeleted;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
 import org.phuchoang.management.student.StudentSummary;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.modulith.ApplicationModuleListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class EnrollmentService {
+public class EnrollmentService implements EnrollmentLookup {
 
   private final EnrollmentRepository repository;
   private final StudentLookup studentLookup;
@@ -121,6 +124,18 @@ public class EnrollmentService {
     CourseSummary course = courseLookup.summaryOf(enrollment.courseCode());
 
     return new EnrollmentDetailView(student, course, enrollment.enrolledAt());
+  }
+
+  /**
+   * findByStudentId → resolve each row's course side via {@code CourseLookup.summaryOf}, same
+   * composition as {@link #getDetail} but for a page of a student's own enrollments rather than
+   * one student/course pair. Backs {@code EnrollmentLookup.findByStudent} (US-5.4, {@code GET
+   * /api/v1/me/books-and-courses}).
+   */
+  @Override
+  @Transactional(readOnly = true)
+  public Page<CourseSummary> findByStudent(StudentId studentId, Pageable pageable) {
+    return repository.findByStudentId(studentId, pageable).map(e -> courseLookup.summaryOf(e.courseCode()));
   }
 
   /**

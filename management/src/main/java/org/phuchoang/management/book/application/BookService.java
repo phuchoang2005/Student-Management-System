@@ -3,6 +3,8 @@ package org.phuchoang.management.book.application;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import org.phuchoang.management.book.BookLookup;
+import org.phuchoang.management.book.BookSummary;
 import org.phuchoang.management.book.application.command.AddBookCommand;
 import org.phuchoang.management.book.application.command.AssignBookOwnerCommand;
 import org.phuchoang.management.book.domain.Book;
@@ -20,7 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class BookService {
+public class BookService implements BookLookup {
 
   private final BookRepository repository;
   private final StudentLookup studentLookup;
@@ -173,6 +175,13 @@ public class BookService {
     return repository.findByOwnerId(ownerId);
   }
 
+  /** Backs {@code BookLookup.findByOwner} (US-5.4, {@code GET /api/v1/me/books-and-courses}). */
+  @Override
+  @Transactional(readOnly = true)
+  public Page<BookSummary> findByOwner(StudentId ownerId, Pageable pageable) {
+    return repository.findByOwnerId(ownerId, pageable).map(this::toSummary);
+  }
+
   private BookSummaryView toSummaryView(Book book) {
     return new BookSummaryView(
         book.id().value(),
@@ -180,6 +189,11 @@ public class BookService {
         book.title(),
         book.author(),
         book.ownerId() == null ? null : book.ownerId().value());
+  }
+
+  private BookSummary toSummary(Book book) {
+    return new BookSummary(
+        book.id().value(), book.isbn().value(), book.title(), book.author(), book.ownerId().value());
   }
 
   /**

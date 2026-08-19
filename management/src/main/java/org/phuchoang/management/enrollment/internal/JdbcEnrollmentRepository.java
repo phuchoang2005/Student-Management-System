@@ -1,11 +1,15 @@
 package org.phuchoang.management.enrollment.internal;
 
+import java.util.List;
 import java.util.Optional;
 import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.enrollment.domain.Enrollment;
 import org.phuchoang.management.enrollment.domain.EnrollmentId;
 import org.phuchoang.management.enrollment.port.EnrollmentRepository;
 import org.phuchoang.management.student.StudentId;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -34,6 +38,16 @@ class JdbcEnrollmentRepository implements EnrollmentRepository {
     Long courseId = springRepo.findCourseIdByCode(enrollment.courseCode().value());
     EnrollmentRow saved = springRepo.save(toRow(enrollment, courseId));
     return toDomain(saved, enrollment.courseCode());
+  }
+
+  @Override
+  public Page<Enrollment> findByStudentId(StudentId studentId, Pageable pageable) {
+    List<Enrollment> content =
+        springRepo.findByStudentId(studentId.value(), pageable.getPageSize(), pageable.getOffset()).stream()
+            .map(this::toDomain)
+            .toList();
+    long total = springRepo.countByStudentId(studentId.value());
+    return new PageImpl<>(content, pageable, total);
   }
 
   @Override
@@ -66,5 +80,13 @@ class JdbcEnrollmentRepository implements EnrollmentRepository {
   private Enrollment toDomain(EnrollmentRow row, CourseCode courseCode) {
     return Enrollment.reconstitute(
         new EnrollmentId(row.id()), new StudentId(row.studentId()), courseCode, row.enrolledAt());
+  }
+
+  private Enrollment toDomain(EnrollmentCourseRow row) {
+    return Enrollment.reconstitute(
+        new EnrollmentId(row.id()),
+        new StudentId(row.studentId()),
+        new CourseCode(row.courseCode()),
+        row.enrolledAt());
   }
 }

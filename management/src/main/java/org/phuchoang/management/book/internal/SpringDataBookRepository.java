@@ -13,6 +13,17 @@ interface SpringDataBookRepository extends CrudRepository<BookRow, Long> {
 
   List<BookRow> findByOwnerId(Long ownerId);
 
+  @Query("""
+      SELECT * FROM books
+      WHERE owner_id = :ownerId
+      ORDER BY isbn
+      LIMIT :limit OFFSET :offset
+      """)
+  List<BookRow> findByOwnerId(Long ownerId, int limit, long offset);
+
+  @Query("SELECT COUNT(*) FROM books WHERE owner_id = :ownerId")
+  long countByOwnerId(Long ownerId);
+
   // Same LIMIT/OFFSET + separate count-query idiom as SpringDataCourseRepository.search /
   // SpringDataStudentRepository.search -- Spring Data JDBC's string-based @Query methods can't
   // derive a Page-returning method or auto-apply Pageable's LIMIT/OFFSET.

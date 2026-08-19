@@ -78,6 +78,16 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.PUT, "/api/v1/books/**").hasRole("LIBRARIAN")
             .requestMatchers(HttpMethod.PATCH, "/api/v1/books/**").hasRole("LIBRARIAN")
             .requestMatchers(HttpMethod.DELETE, "/api/v1/books/**").hasRole("LIBRARIAN")
+            .requestMatchers(HttpMethod.POST, "/api/v1/staff-accounts/**").hasRole("SYSTEM_ADMINISTRATOR")
+            .requestMatchers(HttpMethod.PATCH, "/api/v1/staff-accounts/**").hasRole("SYSTEM_ADMINISTRATOR")
+            .requestMatchers(HttpMethod.GET, "/api/v1/me/**").hasRole("STUDENT")
+            // Explicit allow-list, not just an absent grant: without this, adding
+            // SYSTEM_ADMINISTRATOR as a 5th authenticated role would let it fall through to
+            // .anyRequest().authenticated() below on every domain GET, even though it's granted
+            // zero domain read access (06-low-level-design.md §11.1, TC-XC-040).
+            .requestMatchers(HttpMethod.GET, "/api/v1/students/**", "/api/v1/books/**", "/api/v1/courses/**",
+                    "/api/v1/enrollments/**")
+                .hasAnyRole("REGISTRAR", "LIBRARIAN", "COURSE_ADMINISTRATOR", "STUDENT")
             .anyRequest().authenticated())
         .addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(mustChangePasswordFilter, AuthorizationFilter.class);
