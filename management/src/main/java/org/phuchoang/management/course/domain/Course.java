@@ -1,6 +1,7 @@
 package org.phuchoang.management.course.domain;
 
 import java.time.Instant;
+import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.course.CourseId;
 import org.phuchoang.management.shared.exception.DomainValidationException;
 

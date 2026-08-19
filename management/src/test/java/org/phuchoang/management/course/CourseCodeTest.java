@@ -1,4 +1,4 @@
-package org.phuchoang.management.course.domain;
+package org.phuchoang.management.course;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

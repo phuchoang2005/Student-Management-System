@@ -19,7 +19,7 @@ import org.phuchoang.management.course.CourseId;
 import org.phuchoang.management.course.application.command.CreateCourseCommand;
 import org.phuchoang.management.course.application.command.UpdateCourseCommand;
 import org.phuchoang.management.course.domain.Course;
-import org.phuchoang.management.course.domain.CourseCode;
+import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.course.domain.Credits;
 import org.phuchoang.management.course.port.CourseRepository;
 import org.phuchoang.management.shared.exception.DomainValidationException;

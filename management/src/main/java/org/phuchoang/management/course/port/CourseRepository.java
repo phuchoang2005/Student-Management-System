@@ -2,7 +2,7 @@ package org.phuchoang.management.course.port;
 
 import java.util.Optional;
 import org.phuchoang.management.course.domain.Course;
-import org.phuchoang.management.course.domain.CourseCode;
+import org.phuchoang.management.course.CourseCode;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 

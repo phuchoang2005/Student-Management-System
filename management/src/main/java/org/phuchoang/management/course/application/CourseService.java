@@ -2,11 +2,12 @@ package org.phuchoang.management.course.application;
 
 import java.time.Instant;
 import java.util.List;
+import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.course.CourseDeleted;
+import org.phuchoang.management.course.CourseLookup;
 import org.phuchoang.management.course.application.command.CreateCourseCommand;
 import org.phuchoang.management.course.application.command.UpdateCourseCommand;
 import org.phuchoang.management.course.domain.Course;
-import org.phuchoang.management.course.domain.CourseCode;
 import org.phuchoang.management.course.domain.Credits;
 import org.phuchoang.management.course.port.CourseRepository;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
@@ -18,7 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class CourseService {
+public class CourseService implements CourseLookup {
 
   private final CourseRepository repository;
   private final ApplicationEventPublisher events;
@@ -135,6 +136,12 @@ public class CourseService {
         course.createdAt(),
         course.updatedAt(),
         List.of());
+  }
+
+  /** Backs {@code CourseLookup.existsByCode} (Enrollment.2). */
+  @Override
+  public boolean existsByCode(CourseCode code) {
+    return repository.existsByCode(code);
   }
 
   private CourseSummaryView toSummaryView(Course course) {
