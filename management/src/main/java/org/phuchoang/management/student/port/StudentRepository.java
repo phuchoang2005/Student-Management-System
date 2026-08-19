@@ -1,6 +1,7 @@
 package org.phuchoang.management.student.port;
 
 import java.util.Optional;
+import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.domain.Email;
 import org.phuchoang.management.student.domain.Student;
 import org.phuchoang.management.student.domain.StudentCode;
@@ -11,7 +12,13 @@ public interface StudentRepository {
 
   Optional<Student> findByCode(StudentCode code);
 
+  /** Backs {@code StudentLookup.summaryOf} (06-low-level-design.md §4.8). */
+  Optional<Student> findById(StudentId id);
+
   boolean existsByCode(StudentCode code);
+
+  /** Backs {@code StudentLookup.existsById} (Book.4, Enrollment.3). */
+  boolean existsById(StudentId id);
 
   boolean existsByEmail(Email email);
 

@@ -30,8 +30,18 @@ class JdbcStudentRepository implements StudentRepository {
   }
 
   @Override
+  public Optional<Student> findById(StudentId id) {
+    return springRepo.findById(id.value()).map(this::toDomain);
+  }
+
+  @Override
   public boolean existsByCode(StudentCode code) {
     return springRepo.existsByStudentCode(code.value());
+  }
+
+  @Override
+  public boolean existsById(StudentId id) {
+    return springRepo.existsById(id.value());
   }
 
   @Override

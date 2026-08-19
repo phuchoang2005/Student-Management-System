@@ -1,0 +1,38 @@
+package org.phuchoang.management.course.internal;
+
+import java.util.List;
+import java.util.Optional;
+import org.springframework.data.jdbc.repository.query.Query;
+import org.springframework.data.repository.CrudRepository;
+
+interface SpringDataCourseRepository extends CrudRepository<CourseRow, Long> {
+
+  Optional<CourseRow> findByCourseCode(String courseCode);
+
+  boolean existsByCourseCode(String courseCode);
+
+  // Spring Data JDBC's string-based @Query methods (a) can't return Page (no auto count-query
+  // derivation for string queries, unlike derived queries) and (b) don't auto-apply LIMIT/OFFSET
+  // from a Pageable parameter the way derived queries do -- both are done explicitly instead:
+  // JdbcCourseRepository pairs this with countBySearch and binds limit/offset itself, mirroring
+  // SpringDataStudentRepository.
+  @Query("""
+      SELECT * FROM courses
+      WHERE :query IS NULL OR :query = ''
+         OR course_code LIKE CONCAT('%', :query, '%')
+         OR name LIKE CONCAT('%', :query, '%')
+      ORDER BY course_code
+      LIMIT :limit OFFSET :offset
+      """)
+  List<CourseRow> search(String query, int limit, long offset);
+
+  @Query("""
+      SELECT COUNT(*) FROM courses
+      WHERE :query IS NULL OR :query = ''
+         OR course_code LIKE CONCAT('%', :query, '%')
+         OR name LIKE CONCAT('%', :query, '%')
+      """)
+  long countBySearch(String query);
+
+  void deleteByCourseCode(String courseCode);
+}
