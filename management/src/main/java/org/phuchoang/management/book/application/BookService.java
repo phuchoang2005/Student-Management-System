@@ -35,8 +35,10 @@ public class BookService implements BookLookup {
   }
 
   /**
-   * existsByIsbn → (if an owner was given) {@code StudentLookup.existsById} (Book.4) → {@code
-   * Book.create} → save, mirroring the uniqueness-then-validate-then-persist order of {@code
+   * existsByIsbn → (if an owner was given) {@code StudentLookup.existsById}
+   * (Book.4) → {@code
+   * Book.create} → save, mirroring the uniqueness-then-validate-then-persist
+   * order of {@code
    * CourseService.create}/{@code StudentService.register}.
    */
   @Transactional
@@ -66,17 +68,18 @@ public class BookService implements BookLookup {
   }
 
   /**
-   * findByIsbn (404 if absent) → {@code StudentLookup.existsById} (Book.4) → {@code
-   * Book.assignOwner} (Book.2 — replaces any prior owner) → save, mirroring {@code
+   * findByIsbn (404 if absent) → {@code StudentLookup.existsById} (Book.4) →
+   * {@code
+   * Book.assignOwner} (Book.2 — replaces any prior owner) → save, mirroring
+   * {@code
    * CourseService.update}'s findByCode-then-mutate-then-save shape.
    */
   @Transactional
   public AssignedBook assignOwner(String isbn, AssignBookOwnerCommand command) {
     Isbn bookIsbn = new Isbn(isbn);
-    Book book =
-        repository
-            .findByIsbn(bookIsbn)
-            .orElseThrow(() -> new NotFoundException("Book '" + isbn + "' does not exist."));
+    Book book = repository
+        .findByIsbn(bookIsbn)
+        .orElseThrow(() -> new NotFoundException("Book '" + isbn + "' does not exist."));
 
     StudentId ownerId = new StudentId(command.studentId());
     if (!studentLookup.existsById(ownerId)) {
@@ -98,18 +101,20 @@ public class BookService implements BookLookup {
   }
 
   /**
-   * findByIsbn (404 if absent) → {@code Book.clearOwner} (Book.5) → save. Deliberately idempotent
-   * on an already-unowned book — clearing a null owner is still a {@code 200} with {@code owner:
-   * null}, not an error (api-specification.md §5.7), mirroring {@link #assignOwner}'s
+   * findByIsbn (404 if absent) → {@code Book.clearOwner} (Book.5) → save.
+   * Deliberately idempotent
+   * on an already-unowned book — clearing a null owner is still a {@code 200}
+   * with {@code owner:
+   * null}, not an error (api-specification.md §5.7), mirroring
+   * {@link #assignOwner}'s
    * findByIsbn-then-mutate-then-save shape.
    */
   @Transactional
   public UnassignedBook unassignOwner(String isbn) {
     Isbn bookIsbn = new Isbn(isbn);
-    Book book =
-        repository
-            .findByIsbn(bookIsbn)
-            .orElseThrow(() -> new NotFoundException("Book '" + isbn + "' does not exist."));
+    Book book = repository
+        .findByIsbn(bookIsbn)
+        .orElseThrow(() -> new NotFoundException("Book '" + isbn + "' does not exist."));
 
     book.clearOwner();
     book = repository.save(book);
@@ -125,9 +130,12 @@ public class BookService implements BookLookup {
   }
 
   /**
-   * existsByIsbn (404 if absent) → {@code repository.deleteByIsbn}. No event is published —
-   * unlike {@code CourseService.remove}, book removal never cascades to anything (req.md §5 "When
-   * a book is removed": the owning student, if any, is left untouched), so there's nothing for a
+   * existsByIsbn (404 if absent) → {@code repository.deleteByIsbn}. No event is
+   * published —
+   * unlike {@code CourseService.remove}, book removal never cascades to anything
+   * (req.md §5 "When
+   * a book is removed": the owning student, if any, is left untouched), so
+   * there's nothing for a
    * listener to react to.
    */
   @Transactional
@@ -141,7 +149,8 @@ public class BookService implements BookLookup {
   }
 
   /**
-   * Closes the {@code StudentService.remove} stub (06-low-level-design.md §13, US-1.3/PM-018) —
+   * Closes the {@code StudentService.remove} stub (06-low-level-design.md §13,
+   * US-1.3/PM-018) —
    * clears ownership on every book the deleted student owned, mirroring {@code
    * EnrollmentService.onStudentDeleted}'s shape.
    */
@@ -150,23 +159,27 @@ public class BookService implements BookLookup {
     repository.clearOwnerByStudentId(event.studentId());
   }
 
-  /** UC-14 — matches isbn/title/author, optionally filtered by owner, paged. {@code query} may be blank/{@code null}. */
+  /**
+   * UC-14 — matches isbn/title/author, optionally filtered by owner, paged.
+   * {@code query} may be blank/{@code null}.
+   */
   public Page<BookSummaryView> search(String query, Long ownerFilter, Pageable pageable) {
     StudentId ownerId = ownerFilter == null ? null : new StudentId(ownerFilter);
     return repository.search(query, ownerId, pageable).map(this::toSummaryView);
   }
 
   /**
-   * findByIsbn (404 if absent), then (if owned) {@code StudentLookup.summaryOf} to embed the
-   * current owner's summary, mirroring {@code CourseService.getDetail}'s findByCode-then-compose
+   * findByIsbn (404 if absent), then (if owned) {@code StudentLookup.summaryOf}
+   * to embed the
+   * current owner's summary, mirroring {@code CourseService.getDetail}'s
+   * findByCode-then-compose
    * shape.
    */
   public BookDetailView getDetail(String isbn) {
     Isbn bookIsbn = new Isbn(isbn);
-    Book book =
-        repository
-            .findByIsbn(bookIsbn)
-            .orElseThrow(() -> new NotFoundException("Book '" + isbn + "' does not exist."));
+    Book book = repository
+        .findByIsbn(bookIsbn)
+        .orElseThrow(() -> new NotFoundException("Book '" + isbn + "' does not exist."));
 
     StudentSummary owner = book.ownerId() == null ? null : studentLookup.summaryOf(book.ownerId());
 
@@ -182,12 +195,18 @@ public class BookService implements BookLookup {
         owner);
   }
 
-  /** Unpaginated — backs {@code StudentService.getDetail}'s embedded "owned books" list (US-5.1, US-5.5). */
+  /**
+   * Unpaginated — backs {@code StudentService.getDetail}'s embedded "owned books"
+   * list (US-5.1, US-5.5).
+   */
   public List<Book> findByOwner(StudentId ownerId) {
     return repository.findByOwnerId(ownerId);
   }
 
-  /** Backs {@code BookLookup.findByOwner} (US-5.4, {@code GET /api/v1/me/books-and-courses}). */
+  /**
+   * Backs {@code BookLookup.findByOwner} (US-5.4,
+   * {@code GET /api/v1/me/books-and-courses}).
+   */
   @Override
   @Transactional(readOnly = true)
   public Page<BookSummary> findByOwner(StudentId ownerId, Pageable pageable) {
@@ -209,8 +228,10 @@ public class BookService implements BookLookup {
   }
 
   /**
-   * Unwraps {@code Book}'s Value Objects here rather than in {@code BookMapper} — the web layer
-   * may never call a method on a Domain-layer object directly (LayeringRulesTest).
+   * Unwraps {@code Book}'s Value Objects here rather than in {@code BookMapper} —
+   * the web layer
+   * may never call a method on a Domain-layer object directly
+   * (LayeringRulesTest).
    */
   public record AddedBook(
       Long id,
@@ -220,9 +241,13 @@ public class BookService implements BookLookup {
       LocalDate publishedDate,
       Long ownerId,
       Instant createdAt,
-      Instant updatedAt) {}
+      Instant updatedAt) {
+  }
 
-  /** Same VO-unwrapping rationale as {@link AddedBook}, for {@link #assignOwner}'s result. */
+  /**
+   * Same VO-unwrapping rationale as {@link AddedBook}, for {@link #assignOwner}'s
+   * result.
+   */
   public record AssignedBook(
       Long id,
       String isbn,
@@ -231,10 +256,12 @@ public class BookService implements BookLookup {
       LocalDate publishedDate,
       Long ownerId,
       Instant createdAt,
-      Instant updatedAt) {}
+      Instant updatedAt) {
+  }
 
   /**
-   * Same VO-unwrapping rationale as {@link AddedBook}, for {@link #unassignOwner}'s result. No
+   * Same VO-unwrapping rationale as {@link AddedBook}, for
+   * {@link #unassignOwner}'s result. No
    * {@code ownerId} field — it's always {@code null} after unassignment.
    */
   public record UnassignedBook(
@@ -244,12 +271,20 @@ public class BookService implements BookLookup {
       String author,
       LocalDate publishedDate,
       Instant createdAt,
-      Instant updatedAt) {}
+      Instant updatedAt) {
+  }
 
-  /** Same VO-unwrapping rationale as {@link AddedBook}, for one {@link #search} result. */
-  public record BookSummaryView(Long id, String isbn, String title, String author, Long ownerId) {}
+  /**
+   * Same VO-unwrapping rationale as {@link AddedBook}, for one {@link #search}
+   * result.
+   */
+  public record BookSummaryView(Long id, String isbn, String title, String author, Long ownerId) {
+  }
 
-  /** Same VO-unwrapping rationale as {@link AddedBook}, for {@link #getDetail}'s result. {@code owner} is {@code null} when the book is unowned. */
+  /**
+   * Same VO-unwrapping rationale as {@link AddedBook}, for {@link #getDetail}'s
+   * result. {@code owner} is {@code null} when the book is unowned.
+   */
   public record BookDetailView(
       Long id,
       String isbn,
@@ -259,5 +294,6 @@ public class BookService implements BookLookup {
       Long ownerId,
       Instant createdAt,
       Instant updatedAt,
-      StudentSummary owner) {}
+      StudentSummary owner) {
+  }
 }
