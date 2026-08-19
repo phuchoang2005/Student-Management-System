@@ -35,6 +35,22 @@ public class IdentityService implements AccountProvisioning, InitialPasswordLook
 
   private static final int MAX_PASSWORD_LENGTH = 72;
 
+  /** PM-017, 04-authentication-authorization.md §8 — the one fixed password shared by all 5 demo identities. */
+  private static final String DEMO_PASSWORD = "Demo#12345";
+
+  /**
+   * The 5 fixed demo identities, one per actor. Hardcoded rather than sourced from {@link
+   * #repository}: the plaintext password has to be returned on every call, which a persisted
+   * {@link User}/{@link PasswordHash} can never do (06-low-level-design.md §8.4).
+   */
+  private static final List<DemoAccount> DEMO_ACCOUNTS =
+      List.of(
+          new DemoAccount(Role.SYSTEM_ADMINISTRATOR.name(), "demo.sysadmin", DEMO_PASSWORD),
+          new DemoAccount(Role.REGISTRAR.name(), "demo.registrar", DEMO_PASSWORD),
+          new DemoAccount(Role.LIBRARIAN.name(), "demo.librarian", DEMO_PASSWORD),
+          new DemoAccount(Role.COURSE_ADMINISTRATOR.name(), "demo.courseadmin", DEMO_PASSWORD),
+          new DemoAccount(Role.STUDENT.name(), "demo.student", DEMO_PASSWORD));
+
   private final UserRepository repository;
   private final PasswordHasher hasher;
   private final PasswordCipher cipher;
@@ -189,6 +205,40 @@ public class IdentityService implements AccountProvisioning, InitialPasswordLook
                     user.enabled()));
   }
 
+  /** PM-017 — the fixed list {@code DemoAccountsController} exposes at {@code GET /api/v1/auth/demo-accounts}. */
+  public List<DemoAccount> listDemoAccounts() {
+    return DEMO_ACCOUNTS;
+  }
+
+  /**
+   * PM-017 — called once at startup by {@code DemoAccountsSeeder} (identity.web), gated behind the
+   * same {@code app.demo-accounts.enabled} flag as the endpoint and controller bean itself. Only
+   * the 4 non-{@code STUDENT} demo identities are seeded here: a {@code STUDENT}-role account needs
+   * a real {@code students} row ({@code chk_users_student_role}'s FK co-invariant), which {@code
+   * identity} cannot create without depending on the {@code student} module — a cycle, since {@code
+   * student} already depends on {@code identity} via {@link org.phuchoang.management.identity.AccountProvisioning}.
+   * {@code demo.student} is therefore still listed by {@link #listDemoAccounts()} but never
+   * auto-seeded; logging in as it requires a matching student to be registered by hand first.
+   *
+   * <p>Idempotent — an already-seeded username is left untouched, so an app restart never resets a
+   * password an operator or test run may since have changed.
+   */
+  @Transactional
+  public void seedDemoAccounts() {
+    DEMO_ACCOUNTS.stream()
+        .filter(account -> !account.role().equals(Role.STUDENT.name()))
+        .forEach(this::seedDemoAccountIfAbsent);
+  }
+
+  private void seedDemoAccountIfAbsent(DemoAccount account) {
+    Username username = new Username(account.username());
+    if (repository.existsByUsername(username)) {
+      return;
+    }
+    User user = User.provisionDemo(username, Role.valueOf(account.role()), hasher.hash(account.password()));
+    repository.save(user);
+  }
+
   /** UC-24 flow 3a — role must be one of {@link Role#STAFF_ROLES}; blank/unknown values fail the same way. */
   private Role validateStaffRole(String role) {
     Role parsed;
@@ -232,4 +282,7 @@ public class IdentityService implements AccountProvisioning, InitialPasswordLook
 
   /** Result of {@link #setAccountEnabled}. */
   public record StaffAccountStatus(String username, boolean enabled) {}
+
+  /** One entry of {@link #listDemoAccounts}. {@code role} stays {@code String} — not the domain {@link Role} — so the Web layer can consume it without a Domain-layer dependency (LayeringRulesTest). */
+  public record DemoAccount(String role, String username, String password) {}
 }

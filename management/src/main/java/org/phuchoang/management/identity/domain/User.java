@@ -79,6 +79,19 @@ public class User {
     return new User(null, username, passwordHash, initialPasswordEncrypted, role, null, true, true, 0L);
   }
 
+  /**
+   * PM-017 — a fixed demo/dev identity (04-authentication-authorization.md §8), distinct from
+   * {@link #provisionStaff}: {@code mustChangePassword} starts {@code false} so the one-click demo
+   * login isn't immediately interrupted by a forced password change, and {@code role} isn't
+   * restricted to {@link Role#STAFF_ROLES} since a demo {@code SYSTEM_ADMINISTRATOR} identity is
+   * seeded the same way. {@code studentId} stays {@code null} — a demo {@code STUDENT} account
+   * isn't seeded through this path (identity has no way to create the {@code students} row its FK
+   * would require without depending on the {@code student} module).
+   */
+  public static User provisionDemo(Username username, Role role, PasswordHash passwordHash) {
+    return new User(null, username, passwordHash, null, role, null, false, true, 0L);
+  }
+
   /** Rehydrates a {@code User} from data already validated at write time (a DB row). */
   public static User reconstitute(
       UserId id,

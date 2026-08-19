@@ -64,6 +64,9 @@ public class SecurityConfig {
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+            // PM-017 — public so it's callable before login; only reachable at all when
+            // app.demo-accounts.enabled=true registers DemoAccountsController's bean (§11.4).
+            .requestMatchers(HttpMethod.GET, "/api/v1/auth/demo-accounts").permitAll()
             .requestMatchers(HttpMethod.POST, "/api/v1/auth/password").authenticated()
             .requestMatchers(HttpMethod.GET, "/api/v1/students/*/initial-password").hasRole("REGISTRAR")
             .requestMatchers(HttpMethod.POST, "/api/v1/students/**").hasRole("REGISTRAR")

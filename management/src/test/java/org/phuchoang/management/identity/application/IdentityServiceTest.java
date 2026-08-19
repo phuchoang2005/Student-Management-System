@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -359,6 +360,51 @@ class IdentityServiceTest {
 
     assertThatThrownBy(() -> service.setAccountEnabled(99L, false))
         .isInstanceOf(UserNotFoundException.class);
+
+    verify(repository, never()).save(any(User.class));
+  }
+
+  @Test
+  void listDemoAccountsReturnsTheFiveFixedIdentitiesWithPlaintextPasswords() {
+    // TC-IDN-031 — hardcoded, no repository interaction at all.
+    var accounts = service.listDemoAccounts();
+
+    assertThat(accounts).hasSize(5);
+    assertThat(accounts)
+        .extracting(IdentityService.DemoAccount::role)
+        .containsExactlyInAnyOrder(
+            "SYSTEM_ADMINISTRATOR", "REGISTRAR", "LIBRARIAN", "COURSE_ADMINISTRATOR", "STUDENT");
+    assertThat(accounts).allSatisfy(account -> assertThat(account.password()).isEqualTo("Demo#12345"));
+    verify(repository, never()).findByUsername(any());
+  }
+
+  @Test
+  void seedDemoAccountsCreatesTheFourNonStudentIdentitiesOnly() {
+    when(hasher.hash("Demo#12345")).thenReturn(new PasswordHash("$2a$10$demohash"));
+    when(repository.existsByUsername(any())).thenReturn(false);
+    when(repository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    service.seedDemoAccounts();
+
+    ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+    verify(repository, times(4)).save(captor.capture());
+    assertThat(captor.getAllValues())
+        .extracting(User::role)
+        .containsExactlyInAnyOrder(Role.SYSTEM_ADMINISTRATOR, Role.REGISTRAR, Role.LIBRARIAN, Role.COURSE_ADMINISTRATOR);
+    assertThat(captor.getAllValues()).allSatisfy(user -> {
+      assertThat(user.mustChangePassword()).isFalse();
+      assertThat(user.enabled()).isTrue();
+      assertThat(user.studentId()).isNull();
+    });
+    verify(repository, never()).existsByUsername(new Username("demo.student"));
+  }
+
+  @Test
+  void seedDemoAccountsIsIdempotent() {
+    // TC-IDN-032 — a re-seed never overwrites an account that's already there.
+    when(repository.existsByUsername(any())).thenReturn(true);
+
+    service.seedDemoAccounts();
 
     verify(repository, never()).save(any(User.class));
   }
