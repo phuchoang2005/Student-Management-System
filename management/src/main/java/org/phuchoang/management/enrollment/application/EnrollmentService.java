@@ -20,6 +20,7 @@ import org.phuchoang.management.student.StudentSummary;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.modulith.ApplicationModuleListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -100,6 +101,7 @@ public class EnrollmentService implements EnrollmentLookup {
    * in effect until this listener existed.
    */
   @ApplicationModuleListener
+  @Async
   void onStudentDeleted(StudentDeleted event) {
     repository.deleteByStudentId(event.studentId());
   }
@@ -109,6 +111,7 @@ public class EnrollmentService implements EnrollmentLookup {
    * US-3.3/US-4.2).
    */
   @ApplicationModuleListener
+  @Async
   void onCourseDeleted(CourseDeleted event) {
     repository.deleteByCourseCode(event.courseCode());
   }
