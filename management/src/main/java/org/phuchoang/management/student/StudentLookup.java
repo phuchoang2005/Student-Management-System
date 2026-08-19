@@ -9,4 +9,7 @@ package org.phuchoang.management.student;
 public interface StudentLookup {
 
   boolean existsById(StudentId id);
+
+  /** Consumed by {@code BookService.getDetail} (06-low-level-design.md §4.8) to embed the current owner's summary. */
+  StudentSummary summaryOf(StudentId id);
 }

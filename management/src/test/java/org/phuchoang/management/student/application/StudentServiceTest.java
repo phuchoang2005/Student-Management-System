@@ -23,6 +23,7 @@ import org.phuchoang.management.shared.exception.DuplicateEmailException;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.student.StudentDeleted;
 import org.phuchoang.management.student.StudentId;
+import org.phuchoang.management.student.StudentSummary;
 import org.phuchoang.management.student.application.command.RegisterStudentCommand;
 import org.phuchoang.management.student.application.command.UpdateStudentCommand;
 import org.phuchoang.management.student.domain.DateOfBirth;
@@ -250,5 +251,24 @@ class StudentServiceTest {
     assertThat(detail.firstName()).isEqualTo("Jane");
     assertThat(detail.ownedBooks()).isEmpty();
     assertThat(detail.activeCourses()).isEmpty();
+  }
+
+  @Test
+  void summaryOfThrowsNotFoundWhenStudentDoesNotExist() {
+    service = new StudentService(repository, accountProvisioning, events);
+    when(repository.findById(new StudentId(99L))).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.summaryOf(new StudentId(99L))).isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void summaryOfReturnsStudentSummaryFields() {
+    service = new StudentService(repository, accountProvisioning, events);
+    when(repository.findById(new StudentId(1L))).thenReturn(Optional.of(existingStudent));
+
+    StudentSummary summary = service.summaryOf(new StudentId(1L));
+
+    assertThat(summary)
+        .isEqualTo(new StudentSummary(1L, "S00123", "Jane", "Doe", "jane.doe@example.edu"));
   }
 }

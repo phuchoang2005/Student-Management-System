@@ -2,6 +2,7 @@ package org.phuchoang.management.book.application;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import org.phuchoang.management.book.application.command.AddBookCommand;
 import org.phuchoang.management.book.application.command.AssignBookOwnerCommand;
 import org.phuchoang.management.book.domain.Book;
@@ -12,6 +13,9 @@ import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.exception.UnknownStudentException;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
+import org.phuchoang.management.student.StudentSummary;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -132,6 +136,52 @@ public class BookService {
     repository.deleteByIsbn(bookIsbn);
   }
 
+  /** UC-14 — matches isbn/title/author, optionally filtered by owner, paged. {@code query} may be blank/{@code null}. */
+  public Page<BookSummaryView> search(String query, Long ownerFilter, Pageable pageable) {
+    StudentId ownerId = ownerFilter == null ? null : new StudentId(ownerFilter);
+    return repository.search(query, ownerId, pageable).map(this::toSummaryView);
+  }
+
+  /**
+   * findByIsbn (404 if absent), then (if owned) {@code StudentLookup.summaryOf} to embed the
+   * current owner's summary, mirroring {@code CourseService.getDetail}'s findByCode-then-compose
+   * shape.
+   */
+  public BookDetailView getDetail(String isbn) {
+    Isbn bookIsbn = new Isbn(isbn);
+    Book book =
+        repository
+            .findByIsbn(bookIsbn)
+            .orElseThrow(() -> new NotFoundException("Book '" + isbn + "' does not exist."));
+
+    StudentSummary owner = book.ownerId() == null ? null : studentLookup.summaryOf(book.ownerId());
+
+    return new BookDetailView(
+        book.id().value(),
+        book.isbn().value(),
+        book.title(),
+        book.author(),
+        book.publishedDate(),
+        book.ownerId() == null ? null : book.ownerId().value(),
+        book.createdAt(),
+        book.updatedAt(),
+        owner);
+  }
+
+  /** Unpaginated — backs {@code StudentService.getDetail}'s embedded "owned books" list (US-5.1, US-5.5). */
+  public List<Book> findByOwner(StudentId ownerId) {
+    return repository.findByOwnerId(ownerId);
+  }
+
+  private BookSummaryView toSummaryView(Book book) {
+    return new BookSummaryView(
+        book.id().value(),
+        book.isbn().value(),
+        book.title(),
+        book.author(),
+        book.ownerId() == null ? null : book.ownerId().value());
+  }
+
   /**
    * Unwraps {@code Book}'s Value Objects here rather than in {@code BookMapper} — the web layer
    * may never call a method on a Domain-layer object directly (LayeringRulesTest).
@@ -169,4 +219,19 @@ public class BookService {
       LocalDate publishedDate,
       Instant createdAt,
       Instant updatedAt) {}
+
+  /** Same VO-unwrapping rationale as {@link AddedBook}, for one {@link #search} result. */
+  public record BookSummaryView(Long id, String isbn, String title, String author, Long ownerId) {}
+
+  /** Same VO-unwrapping rationale as {@link AddedBook}, for {@link #getDetail}'s result. {@code owner} is {@code null} when the book is unowned. */
+  public record BookDetailView(
+      Long id,
+      String isbn,
+      String title,
+      String author,
+      LocalDate publishedDate,
+      Long ownerId,
+      Instant createdAt,
+      Instant updatedAt,
+      StudentSummary owner) {}
 }

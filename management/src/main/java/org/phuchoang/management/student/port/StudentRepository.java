@@ -12,6 +12,9 @@ public interface StudentRepository {
 
   Optional<Student> findByCode(StudentCode code);
 
+  /** Backs {@code StudentLookup.summaryOf} (06-low-level-design.md §4.8). */
+  Optional<Student> findById(StudentId id);
+
   boolean existsByCode(StudentCode code);
 
   /** Backs {@code StudentLookup.existsById} (Book.4, Enrollment.3). */

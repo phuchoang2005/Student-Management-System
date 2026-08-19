@@ -1,5 +1,6 @@
 package org.phuchoang.management.book.internal;
 
+import java.util.List;
 import java.util.Optional;
 import org.phuchoang.management.book.BookId;
 import org.phuchoang.management.book.domain.Book;
@@ -8,6 +9,9 @@ import org.phuchoang.management.book.port.BookRepository;
 import org.phuchoang.management.shared.exception.StaleWriteException;
 import org.phuchoang.management.student.StudentId;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -27,6 +31,22 @@ class JdbcBookRepository implements BookRepository {
   @Override
   public Optional<Book> findByIsbn(Isbn isbn) {
     return springRepo.findByIsbn(isbn.value()).map(this::toDomain);
+  }
+
+  @Override
+  public Page<Book> search(String query, StudentId ownerFilter, Pageable pageable) {
+    Long ownerId = ownerFilter == null ? null : ownerFilter.value();
+    List<Book> content =
+        springRepo.search(query, ownerId, pageable.getPageSize(), pageable.getOffset()).stream()
+            .map(this::toDomain)
+            .toList();
+    long total = springRepo.countBySearch(query, ownerId);
+    return new PageImpl<>(content, pageable, total);
+  }
+
+  @Override
+  public List<Book> findByOwnerId(StudentId ownerId) {
+    return springRepo.findByOwnerId(ownerId.value()).stream().map(this::toDomain).toList();
   }
 
   @Override
