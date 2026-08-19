@@ -1,5 +1,6 @@
 package org.phuchoang.management.book.internal;
 
+import java.util.Optional;
 import org.phuchoang.management.book.BookId;
 import org.phuchoang.management.book.domain.Book;
 import org.phuchoang.management.book.domain.Isbn;
@@ -21,6 +22,11 @@ class JdbcBookRepository implements BookRepository {
   @Override
   public boolean existsByIsbn(Isbn isbn) {
     return springRepo.existsByIsbn(isbn.value());
+  }
+
+  @Override
+  public Optional<Book> findByIsbn(Isbn isbn) {
+    return springRepo.findByIsbn(isbn.value()).map(this::toDomain);
   }
 
   @Override

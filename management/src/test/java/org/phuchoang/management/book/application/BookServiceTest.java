@@ -5,17 +5,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.phuchoang.management.book.BookId;
 import org.phuchoang.management.book.application.command.AddBookCommand;
+import org.phuchoang.management.book.application.command.AssignBookOwnerCommand;
 import org.phuchoang.management.book.domain.Book;
 import org.phuchoang.management.book.domain.Isbn;
 import org.phuchoang.management.book.port.BookRepository;
 import org.phuchoang.management.shared.exception.DuplicateIsbnException;
+import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.exception.UnknownStudentException;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
@@ -107,6 +111,53 @@ class BookServiceTest {
             LocalDate.of(2017, 9, 20), 1L);
 
     BookService.AddedBook result = service.addBook(command);
+
+    assertThat(result.ownerId()).isEqualTo(1L);
+  }
+
+  private static Book anUnownedBook() {
+    return Book.reconstitute(
+        new BookId(1L),
+        new Isbn("978-0-13-468599-1"),
+        "Clean Architecture",
+        "Robert C. Martin",
+        LocalDate.of(2017, 9, 20),
+        null,
+        Instant.now(),
+        Instant.now(),
+        0L);
+  }
+
+  @Test
+  void assignOwnerRejectsUnknownBook() {
+    service = new BookService(repository, studentLookup);
+    when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () -> service.assignOwner("978-0-13-468599-1", new AssignBookOwnerCommand(1L)))
+        .isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void assignOwnerRejectsUnknownStudent() {
+    service = new BookService(repository, studentLookup);
+    when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.of(anUnownedBook()));
+    when(studentLookup.existsById(new StudentId(99L))).thenReturn(false);
+
+    assertThatThrownBy(
+            () -> service.assignOwner("978-0-13-468599-1", new AssignBookOwnerCommand(99L)))
+        .isInstanceOf(UnknownStudentException.class);
+  }
+
+  @Test
+  void assignOwnerSetsOwnerAndReplacesAnyPriorOwner() {
+    service = new BookService(repository, studentLookup);
+    when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.of(anUnownedBook()));
+    when(studentLookup.existsById(new StudentId(1L))).thenReturn(true);
+    when(repository.save(any(Book.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    BookService.AssignedBook result =
+        service.assignOwner("978-0-13-468599-1", new AssignBookOwnerCommand(1L));
 
     assertThat(result.ownerId()).isEqualTo(1L);
   }

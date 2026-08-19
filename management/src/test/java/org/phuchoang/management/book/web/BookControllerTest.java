@@ -2,6 +2,7 @@ package org.phuchoang.management.book.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -16,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.phuchoang.management.book.application.BookService;
 import org.phuchoang.management.shared.exception.DuplicateIsbnException;
+import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.exception.UnknownStudentException;
 import org.phuchoang.management.shared.web.GlobalExceptionHandler;
 import org.springframework.http.MediaType;
@@ -106,6 +108,68 @@ class BookControllerTest {
 
     mockMvc
         .perform(post("/api/v1/books").contentType(MediaType.APPLICATION_JSON).content(body))
+        .andExpect(status().isBadRequest());
+  }
+
+  private static BookService.AssignedBook anAssignedBook() {
+    Instant now = Instant.now();
+    return new BookService.AssignedBook(
+        1L, "978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
+        LocalDate.of(2017, 9, 20), 1L, now, now);
+  }
+
+  @Test
+  void assignBookOwnerReturns200WithNewOwner() throws Exception {
+    when(bookService.assignOwner(any(), any())).thenReturn(anAssignedBook());
+
+    mockMvc
+        .perform(
+            patch("/api/v1/books/978-0-13-468599-1/owner")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"studentId":1}
+                    """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.ownerId").value(1));
+  }
+
+  @Test
+  void assignBookOwnerPropagatesUnknownBookAs404() throws Exception {
+    when(bookService.assignOwner(any(), any()))
+        .thenThrow(new NotFoundException("Book '978-0-13-468599-1' does not exist."));
+
+    mockMvc
+        .perform(
+            patch("/api/v1/books/978-0-13-468599-1/owner")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"studentId":1}
+                    """))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void assignBookOwnerPropagatesUnknownStudentAs400() throws Exception {
+    when(bookService.assignOwner(any(), any()))
+        .thenThrow(new UnknownStudentException("Student '99' does not exist."));
+
+    mockMvc
+        .perform(
+            patch("/api/v1/books/978-0-13-468599-1/owner")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"studentId":99}
+                    """))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void assignBookOwnerRejectsMissingStudentIdBeforeReachingService() throws Exception {
+    mockMvc
+        .perform(
+            patch("/api/v1/books/978-0-13-468599-1/owner")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
         .andExpect(status().isBadRequest());
   }
 }

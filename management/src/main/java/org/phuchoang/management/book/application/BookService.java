@@ -3,10 +3,12 @@ package org.phuchoang.management.book.application;
 import java.time.Instant;
 import java.time.LocalDate;
 import org.phuchoang.management.book.application.command.AddBookCommand;
+import org.phuchoang.management.book.application.command.AssignBookOwnerCommand;
 import org.phuchoang.management.book.domain.Book;
 import org.phuchoang.management.book.domain.Isbn;
 import org.phuchoang.management.book.port.BookRepository;
 import org.phuchoang.management.shared.exception.DuplicateIsbnException;
+import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.exception.UnknownStudentException;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
@@ -56,10 +58,53 @@ public class BookService {
   }
 
   /**
+   * findByIsbn (404 if absent) → {@code StudentLookup.existsById} (Book.4) → {@code
+   * Book.assignOwner} (Book.2 — replaces any prior owner) → save, mirroring {@code
+   * CourseService.update}'s findByCode-then-mutate-then-save shape.
+   */
+  @Transactional
+  public AssignedBook assignOwner(String isbn, AssignBookOwnerCommand command) {
+    Isbn bookIsbn = new Isbn(isbn);
+    Book book =
+        repository
+            .findByIsbn(bookIsbn)
+            .orElseThrow(() -> new NotFoundException("Book '" + isbn + "' does not exist."));
+
+    StudentId ownerId = new StudentId(command.studentId());
+    if (!studentLookup.existsById(ownerId)) {
+      throw new UnknownStudentException("Student '" + ownerId.value() + "' does not exist.");
+    }
+
+    book.assignOwner(ownerId);
+    book = repository.save(book);
+
+    return new AssignedBook(
+        book.id().value(),
+        book.isbn().value(),
+        book.title(),
+        book.author(),
+        book.publishedDate(),
+        book.ownerId().value(),
+        book.createdAt(),
+        book.updatedAt());
+  }
+
+  /**
    * Unwraps {@code Book}'s Value Objects here rather than in {@code BookMapper} — the web layer
    * may never call a method on a Domain-layer object directly (LayeringRulesTest).
    */
   public record AddedBook(
+      Long id,
+      String isbn,
+      String title,
+      String author,
+      LocalDate publishedDate,
+      Long ownerId,
+      Instant createdAt,
+      Instant updatedAt) {}
+
+  /** Same VO-unwrapping rationale as {@link AddedBook}, for {@link #assignOwner}'s result. */
+  public record AssignedBook(
       Long id,
       String isbn,
       String title,

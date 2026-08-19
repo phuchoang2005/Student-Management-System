@@ -17,7 +17,7 @@ public class Book {
   private final String title;
   private final String author;
   private final LocalDate publishedDate;
-  private final StudentId ownerId;
+  private StudentId ownerId;
   private final Instant createdAt;
   private Instant updatedAt;
   private final long version;
@@ -65,6 +65,12 @@ public class Book {
       Instant updatedAt,
       long version) {
     return new Book(id, isbn, title, author, publishedDate, ownerId, createdAt, updatedAt, version);
+  }
+
+  /** Book.2 — {@code studentId} replaces any prior owner (a book has at most one owner). */
+  public void assignOwner(StudentId ownerId) {
+    this.ownerId = ownerId;
+    this.updatedAt = Instant.now();
   }
 
   public BookId id() {
