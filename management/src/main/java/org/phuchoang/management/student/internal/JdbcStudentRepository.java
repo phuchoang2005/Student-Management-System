@@ -35,6 +35,11 @@ class JdbcStudentRepository implements StudentRepository {
   }
 
   @Override
+  public boolean existsById(StudentId id) {
+    return springRepo.existsById(id.value());
+  }
+
+  @Override
   public boolean existsByEmail(Email email) {
     return springRepo.existsByEmail(email.value());
   }

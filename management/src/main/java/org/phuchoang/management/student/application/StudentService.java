@@ -9,6 +9,8 @@ import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.DuplicateEmailException;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.student.StudentDeleted;
+import org.phuchoang.management.student.StudentId;
+import org.phuchoang.management.student.StudentLookup;
 import org.phuchoang.management.student.application.command.RegisterStudentCommand;
 import org.phuchoang.management.student.application.command.UpdateStudentCommand;
 import org.phuchoang.management.student.domain.DateOfBirth;
@@ -23,7 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class StudentService {
+public class StudentService implements StudentLookup {
 
   private final StudentRepository repository;
   private final AccountProvisioning accountProvisioning;
@@ -171,6 +173,11 @@ public class StudentService {
         student.updatedAt(),
         List.of(),
         List.of());
+  }
+
+  @Override
+  public boolean existsById(StudentId id) {
+    return repository.existsById(id);
   }
 
   private StudentSummaryView toSummaryView(Student student) {
