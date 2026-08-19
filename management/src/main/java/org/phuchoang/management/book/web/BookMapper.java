@@ -3,6 +3,7 @@ package org.phuchoang.management.book.web;
 import org.mapstruct.Mapper;
 import org.phuchoang.management.book.application.BookService.AddedBook;
 import org.phuchoang.management.book.application.BookService.AssignedBook;
+import org.phuchoang.management.book.application.BookService.UnassignedBook;
 import org.phuchoang.management.book.application.command.AddBookCommand;
 import org.phuchoang.management.book.application.command.AssignBookOwnerCommand;
 import org.phuchoang.management.book.web.dto.BookCreateRequest;
@@ -19,4 +20,6 @@ public interface BookMapper {
   BookResponse toResponse(AddedBook added);
 
   BookResponse toResponse(AssignedBook assigned);
+
+  BookResponse toResponse(UnassignedBook unassigned);
 }

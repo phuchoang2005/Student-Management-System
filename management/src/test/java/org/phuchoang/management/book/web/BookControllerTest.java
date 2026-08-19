@@ -1,7 +1,10 @@
 package org.phuchoang.management.book.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -171,5 +174,48 @@ class BookControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
         .andExpect(status().isBadRequest());
+  }
+
+  private static BookService.UnassignedBook anUnassignedBook() {
+    Instant now = Instant.now();
+    return new BookService.UnassignedBook(
+        1L, "978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
+        LocalDate.of(2017, 9, 20), now, now);
+  }
+
+  @Test
+  void clearBookOwnerReturns200WithNoOwner() throws Exception {
+    when(bookService.unassignOwner("978-0-13-468599-1")).thenReturn(anUnassignedBook());
+
+    mockMvc
+        .perform(delete("/api/v1/books/978-0-13-468599-1/owner"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.ownerId").doesNotExist());
+  }
+
+  @Test
+  void clearBookOwnerPropagatesUnknownBookAs404() throws Exception {
+    when(bookService.unassignOwner("978-0-13-468599-1"))
+        .thenThrow(new NotFoundException("Book '978-0-13-468599-1' does not exist."));
+
+    mockMvc
+        .perform(delete("/api/v1/books/978-0-13-468599-1/owner"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void removeBookReturns204() throws Exception {
+    mockMvc.perform(delete("/api/v1/books/978-0-13-468599-1")).andExpect(status().isNoContent());
+
+    verify(bookService).remove("978-0-13-468599-1");
+  }
+
+  @Test
+  void removeBookPropagatesUnknownBookAs404() throws Exception {
+    doThrow(new NotFoundException("Book '978-0-13-468599-1' does not exist."))
+        .when(bookService)
+        .remove("978-0-13-468599-1");
+
+    mockMvc.perform(delete("/api/v1/books/978-0-13-468599-1")).andExpect(status().isNotFound());
   }
 }

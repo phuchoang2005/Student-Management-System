@@ -90,6 +90,49 @@ public class BookService {
   }
 
   /**
+   * findByIsbn (404 if absent) → {@code Book.clearOwner} (Book.5) → save. Deliberately idempotent
+   * on an already-unowned book — clearing a null owner is still a {@code 200} with {@code owner:
+   * null}, not an error (api-specification.md §5.7), mirroring {@link #assignOwner}'s
+   * findByIsbn-then-mutate-then-save shape.
+   */
+  @Transactional
+  public UnassignedBook unassignOwner(String isbn) {
+    Isbn bookIsbn = new Isbn(isbn);
+    Book book =
+        repository
+            .findByIsbn(bookIsbn)
+            .orElseThrow(() -> new NotFoundException("Book '" + isbn + "' does not exist."));
+
+    book.clearOwner();
+    book = repository.save(book);
+
+    return new UnassignedBook(
+        book.id().value(),
+        book.isbn().value(),
+        book.title(),
+        book.author(),
+        book.publishedDate(),
+        book.createdAt(),
+        book.updatedAt());
+  }
+
+  /**
+   * existsByIsbn (404 if absent) → {@code repository.deleteByIsbn}. No event is published —
+   * unlike {@code CourseService.remove}, book removal never cascades to anything (req.md §5 "When
+   * a book is removed": the owning student, if any, is left untouched), so there's nothing for a
+   * listener to react to.
+   */
+  @Transactional
+  public void remove(String isbn) {
+    Isbn bookIsbn = new Isbn(isbn);
+    if (!repository.existsByIsbn(bookIsbn)) {
+      throw new NotFoundException("Book '" + isbn + "' does not exist.");
+    }
+
+    repository.deleteByIsbn(bookIsbn);
+  }
+
+  /**
    * Unwraps {@code Book}'s Value Objects here rather than in {@code BookMapper} — the web layer
    * may never call a method on a Domain-layer object directly (LayeringRulesTest).
    */
@@ -111,6 +154,19 @@ public class BookService {
       String author,
       LocalDate publishedDate,
       Long ownerId,
+      Instant createdAt,
+      Instant updatedAt) {}
+
+  /**
+   * Same VO-unwrapping rationale as {@link AddedBook}, for {@link #unassignOwner}'s result. No
+   * {@code ownerId} field — it's always {@code null} after unassignment.
+   */
+  public record UnassignedBook(
+      Long id,
+      String isbn,
+      String title,
+      String author,
+      LocalDate publishedDate,
       Instant createdAt,
       Instant updatedAt) {}
 }

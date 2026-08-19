@@ -3,6 +3,7 @@ package org.phuchoang.management.book.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -128,6 +129,19 @@ class BookServiceTest {
         0L);
   }
 
+  private static Book anOwnedBook() {
+    return Book.reconstitute(
+        new BookId(1L),
+        new Isbn("978-0-13-468599-1"),
+        "Clean Architecture",
+        "Robert C. Martin",
+        LocalDate.of(2017, 9, 20),
+        new StudentId(1L),
+        Instant.now(),
+        Instant.now(),
+        0L);
+  }
+
   @Test
   void assignOwnerRejectsUnknownBook() {
     service = new BookService(repository, studentLookup);
@@ -160,5 +174,55 @@ class BookServiceTest {
         service.assignOwner("978-0-13-468599-1", new AssignBookOwnerCommand(1L));
 
     assertThat(result.ownerId()).isEqualTo(1L);
+  }
+
+  @Test
+  void unassignOwnerRejectsUnknownBook() {
+    service = new BookService(repository, studentLookup);
+    when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.unassignOwner("978-0-13-468599-1"))
+        .isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void unassignOwnerClearsOwner() {
+    service = new BookService(repository, studentLookup);
+    when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.of(anOwnedBook()));
+    when(repository.save(any(Book.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    BookService.UnassignedBook result = service.unassignOwner("978-0-13-468599-1");
+
+    assertThat(result.isbn()).isEqualTo("978-0-13-468599-1");
+  }
+
+  @Test
+  void unassignOwnerOnAnAlreadyUnownedBookIsIdempotent() {
+    service = new BookService(repository, studentLookup);
+    when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.of(anUnownedBook()));
+    when(repository.save(any(Book.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    BookService.UnassignedBook result = service.unassignOwner("978-0-13-468599-1");
+
+    assertThat(result.isbn()).isEqualTo("978-0-13-468599-1");
+  }
+
+  @Test
+  void removeRejectsUnknownBook() {
+    service = new BookService(repository, studentLookup);
+    when(repository.existsByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(false);
+
+    assertThatThrownBy(() -> service.remove("978-0-13-468599-1"))
+        .isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void removeDeletesAnExistingBook() {
+    service = new BookService(repository, studentLookup);
+    when(repository.existsByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(true);
+
+    service.remove("978-0-13-468599-1");
+
+    verify(repository).deleteByIsbn(new Isbn("978-0-13-468599-1"));
   }
 }

@@ -62,4 +62,25 @@ class BookTest {
 
     assertThat(book.ownerId()).isEqualTo(new StudentId(2L));
   }
+
+  @Test
+  void clearOwnerRemovesOwnerAndBumpsUpdatedAt() {
+    Book book =
+        Book.create(isbn, "Clean Architecture", "Robert C. Martin", publishedDate, new StudentId(1L));
+    Instant assignedAt = book.updatedAt();
+
+    book.clearOwner();
+
+    assertThat(book.ownerId()).isNull();
+    assertThat(book.updatedAt()).isAfterOrEqualTo(assignedAt);
+  }
+
+  @Test
+  void clearOwnerOnAnAlreadyUnownedBookIsANoOp() {
+    Book book = Book.create(isbn, "Clean Architecture", "Robert C. Martin", publishedDate, null);
+
+    book.clearOwner();
+
+    assertThat(book.ownerId()).isNull();
+  }
 }

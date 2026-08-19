@@ -6,6 +6,7 @@ import org.phuchoang.management.book.web.dto.BookCreateRequest;
 import org.phuchoang.management.book.web.dto.BookOwnerRequest;
 import org.phuchoang.management.book.web.dto.BookResponse;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,5 +39,17 @@ public class BookController {
       @PathVariable String isbn, @Valid @RequestBody BookOwnerRequest request) {
     BookService.AssignedBook assigned = bookService.assignOwner(isbn, mapper.toCommand(request));
     return mapper.toResponse(assigned);
+  }
+
+  @DeleteMapping("/{isbn}/owner")
+  public BookResponse clearBookOwner(@PathVariable String isbn) {
+    BookService.UnassignedBook unassigned = bookService.unassignOwner(isbn);
+    return mapper.toResponse(unassigned);
+  }
+
+  @DeleteMapping("/{isbn}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void removeBook(@PathVariable String isbn) {
+    bookService.remove(isbn);
   }
 }

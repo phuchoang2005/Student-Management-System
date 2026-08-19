@@ -38,6 +38,11 @@ class JdbcBookRepository implements BookRepository {
     }
   }
 
+  @Override
+  public void deleteByIsbn(Isbn isbn) {
+    springRepo.deleteByIsbn(isbn.value());
+  }
+
   private BookRow toRow(Book book) {
     BookId id = book.id();
     StudentId ownerId = book.ownerId();

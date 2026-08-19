@@ -73,6 +73,12 @@ public class Book {
     this.updatedAt = Instant.now();
   }
 
+  /** Book.5 — ends the ownership link; the book continues to exist with no owner. */
+  public void clearOwner() {
+    this.ownerId = null;
+    this.updatedAt = Instant.now();
+  }
+
   public BookId id() {
     return id;
   }
