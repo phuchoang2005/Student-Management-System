@@ -1,5 +1,6 @@
 package org.phuchoang.management.enrollment.internal;
 
+import java.util.Optional;
 import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.enrollment.domain.Enrollment;
 import org.phuchoang.management.enrollment.domain.EnrollmentId;
@@ -19,6 +20,13 @@ class JdbcEnrollmentRepository implements EnrollmentRepository {
   @Override
   public boolean existsByStudentAndCourse(StudentId studentId, CourseCode courseCode) {
     return springRepo.countByStudentIdAndCourseCode(studentId.value(), courseCode.value()) > 0;
+  }
+
+  @Override
+  public Optional<Enrollment> findByStudentAndCourse(StudentId studentId, CourseCode courseCode) {
+    return springRepo
+        .findByStudentIdAndCourseCode(studentId.value(), courseCode.value())
+        .map(row -> toDomain(row, courseCode));
   }
 
   @Override

@@ -4,6 +4,7 @@ import java.time.Instant;
 import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.course.CourseDeleted;
 import org.phuchoang.management.course.CourseLookup;
+import org.phuchoang.management.course.CourseSummary;
 import org.phuchoang.management.enrollment.application.command.EnrollStudentCommand;
 import org.phuchoang.management.enrollment.domain.Enrollment;
 import org.phuchoang.management.enrollment.port.EnrollmentRepository;
@@ -14,6 +15,7 @@ import org.phuchoang.management.shared.exception.UnknownStudentException;
 import org.phuchoang.management.student.StudentDeleted;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
+import org.phuchoang.management.student.StudentSummary;
 import org.springframework.modulith.ApplicationModuleListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -99,9 +101,35 @@ public class EnrollmentService {
   }
 
   /**
+   * findByStudentAndCourse (404 if the enrollment ended since it was listed — Enrollment.4) →
+   * resolve both sides' summaries via {@code StudentLookup}/{@code CourseLookup}, mirroring {@code
+   * BookService.getDetail}'s findByIsbn-then-compose shape (06-low-level-design.md §7, UC-20).
+   */
+  @Transactional(readOnly = true)
+  public EnrollmentDetailView getDetail(Long studentId, String courseCode) {
+    StudentId id = new StudentId(studentId);
+    CourseCode code = new CourseCode(courseCode);
+    Enrollment enrollment =
+        repository
+            .findByStudentAndCourse(id, code)
+            .orElseThrow(
+                () ->
+                    new NotFoundException(
+                        "No active enrollment for student " + studentId + " in course '" + courseCode + "'."));
+
+    StudentSummary student = studentLookup.summaryOf(enrollment.studentId());
+    CourseSummary course = courseLookup.summaryOf(enrollment.courseCode());
+
+    return new EnrollmentDetailView(student, course, enrollment.enrolledAt());
+  }
+
+  /**
    * Unwraps {@code Enrollment}'s Value Objects here rather than in {@code EnrollmentMapper} — the
    * web layer may never call a method on a Domain-layer object directly (LayeringRulesTest), only
    * the Application layer may, mirroring {@code BookService.AddedBook}.
    */
   public record CreatedEnrollment(Long id, Long studentId, String courseCode, Instant enrolledAt) {}
+
+  /** Same VO-unwrapping rationale as {@link CreatedEnrollment}, for {@link #getDetail}'s result. No {@code id} — the OpenAPI contract keys enrollment detail by the student/course pair, not the surrogate id. */
+  public record EnrollmentDetailView(StudentSummary student, CourseSummary course, Instant enrolledAt) {}
 }

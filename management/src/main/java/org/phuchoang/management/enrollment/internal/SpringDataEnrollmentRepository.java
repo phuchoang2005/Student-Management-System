@@ -1,5 +1,6 @@
 package org.phuchoang.management.enrollment.internal;
 
+import java.util.Optional;
 import org.springframework.data.jdbc.repository.query.Modifying;
 import org.springframework.data.jdbc.repository.query.Query;
 import org.springframework.data.repository.CrudRepository;
@@ -19,6 +20,15 @@ interface SpringDataEnrollmentRepository extends CrudRepository<EnrollmentRow, L
       WHERE e.student_id = :studentId AND c.course_code = :courseCode
       """)
   long countByStudentIdAndCourseCode(Long studentId, String courseCode);
+
+  // Backs EnrollmentRepository.findByStudentAndCourse (US-5.5) -- same join as
+  // countByStudentIdAndCourseCode, but returning the row itself rather than just its existence.
+  @Query("""
+      SELECT e.* FROM enrollments e
+      JOIN courses c ON c.id = e.course_id
+      WHERE e.student_id = :studentId AND c.course_code = :courseCode
+      """)
+  Optional<EnrollmentRow> findByStudentIdAndCourseCode(Long studentId, String courseCode);
 
   // Resolves courseCode -> courseId before an insert -- the caller (JdbcEnrollmentRepository)
   // only calls this once CourseLookup.existsByCode already guaranteed the row exists, so a null

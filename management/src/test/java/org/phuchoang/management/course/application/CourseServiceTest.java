@@ -16,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.phuchoang.management.course.CourseDeleted;
 import org.phuchoang.management.course.CourseId;
+import org.phuchoang.management.course.CourseSummary;
 import org.phuchoang.management.course.application.command.CreateCourseCommand;
 import org.phuchoang.management.course.application.command.UpdateCourseCommand;
 import org.phuchoang.management.course.domain.Course;
@@ -216,5 +217,24 @@ class CourseServiceTest {
     assertThat(detail.courseCode()).isEqualTo("CS101");
     assertThat(detail.name()).isEqualTo("Intro to CS");
     assertThat(detail.roster()).isEmpty();
+  }
+
+  @Test
+  void summaryOfThrowsNotFoundWhenCourseDoesNotExist() {
+    service = new CourseService(repository, events);
+    when(repository.findByCode(new CourseCode("does-not-exist"))).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.summaryOf(new CourseCode("does-not-exist")))
+        .isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void summaryOfReturnsCourseSummaryFields() {
+    service = new CourseService(repository, events);
+    when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingCourse));
+
+    CourseSummary summary = service.summaryOf(existingCode);
+
+    assertThat(summary).isEqualTo(new CourseSummary(1L, "CS101", "Intro to CS", 3));
   }
 }

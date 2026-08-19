@@ -12,4 +12,7 @@ package org.phuchoang.management.course;
 public interface CourseLookup {
 
   boolean existsByCode(CourseCode code);
+
+  /** Consumed by {@code EnrollmentService.getDetail} (06-low-level-design.md §7) to embed the linked course's summary. */
+  CourseSummary summaryOf(CourseCode code);
 }

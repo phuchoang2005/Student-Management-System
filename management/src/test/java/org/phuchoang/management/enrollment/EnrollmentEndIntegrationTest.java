@@ -27,13 +27,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * Full-stack coverage of US-4.2 (Sprint 3) against a real MySQL 8 instance (01-test-strategy.md
  * §2's "API / contract" level) — TC-ENR-007–010, plus the {@code onStudentDeleted}/{@code
  * onCourseDeleted} cascade listeners that close the US-1.3/US-3.3 stubs
- * (06-low-level-design.md §13). There's no {@code GET /enrollments/{studentId}/{courseCode}}
- * endpoint yet (that's US-5.5, not this sprint), so ending/cascading is verified via {@code
- * JdbcTemplate} directly, mirroring {@code BookRemovalIntegrationTest}/{@code
- * CourseRemovalIntegrationTest}. {@code @ApplicationModuleListener} is {@code @Async} by
- * declaration, but this project registers no {@code @EnableAsync}, so Spring never proxies the
- * listener for async dispatch -- it runs synchronously, in the same transaction-commit callback,
- * before the triggering HTTP call returns, so no polling/await is needed here.
+ * (06-low-level-design.md §13). Ending/cascading is verified via {@code JdbcTemplate} directly
+ * rather than {@code GET /enrollments/{studentId}/{courseCode}} (added by US-5.5, see {@code
+ * EnrollmentLookupIntegrationTest}) since this test predates that endpoint, mirroring {@code
+ * BookRemovalIntegrationTest}/{@code CourseRemovalIntegrationTest}. {@code
+ * @ApplicationModuleListener} is {@code @Async} by declaration, but this project registers no
+ * {@code @EnableAsync}, so Spring never proxies the listener for async dispatch -- it runs
+ * synchronously, in the same transaction-commit callback, before the triggering HTTP call
+ * returns, so no polling/await is needed here.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

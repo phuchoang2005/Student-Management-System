@@ -5,6 +5,7 @@ import java.util.List;
 import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.course.CourseDeleted;
 import org.phuchoang.management.course.CourseLookup;
+import org.phuchoang.management.course.CourseSummary;
 import org.phuchoang.management.course.application.command.CreateCourseCommand;
 import org.phuchoang.management.course.application.command.UpdateCourseCommand;
 import org.phuchoang.management.course.domain.Course;
@@ -142,6 +143,22 @@ public class CourseService implements CourseLookup {
   @Override
   public boolean existsByCode(CourseCode code) {
     return repository.existsByCode(code);
+  }
+
+  /**
+   * findByCode (404 if absent — callers only pass codes already known to reference an existing
+   * course, per Enrollment.2, so this only fires on a genuine data race), mirroring {@code
+   * StudentService.summaryOf}.
+   */
+  @Override
+  public CourseSummary summaryOf(CourseCode code) {
+    Course course =
+        repository
+            .findByCode(code)
+            .orElseThrow(() -> new NotFoundException("Course '" + code.value() + "' does not exist."));
+
+    return new CourseSummary(
+        course.id().value(), course.code().value(), course.name(), course.credits().value());
   }
 
   private CourseSummaryView toSummaryView(Course course) {

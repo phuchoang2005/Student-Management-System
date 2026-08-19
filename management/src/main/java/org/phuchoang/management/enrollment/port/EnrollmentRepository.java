@@ -1,13 +1,20 @@
 package org.phuchoang.management.enrollment.port;
 
+import java.util.Optional;
 import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.enrollment.domain.Enrollment;
 import org.phuchoang.management.student.StudentId;
 
-/** Scoped to what US-4.1 (enroll) and US-4.2 (end, incl. the cascade listeners) need. */
+/**
+ * Scoped to what US-4.1 (enroll), US-4.2 (end, incl. the cascade listeners), and US-5.5 (detail
+ * view) need.
+ */
 public interface EnrollmentRepository {
 
   boolean existsByStudentAndCourse(StudentId studentId, CourseCode courseCode);
+
+  /** Backs {@code EnrollmentService.getDetail} (06-low-level-design.md §7, UC-20). */
+  Optional<Enrollment> findByStudentAndCourse(StudentId studentId, CourseCode courseCode);
 
   Enrollment save(Enrollment enrollment);
 

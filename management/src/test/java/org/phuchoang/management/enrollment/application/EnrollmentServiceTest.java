@@ -6,8 +6,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
@@ -16,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.course.CourseDeleted;
 import org.phuchoang.management.course.CourseLookup;
+import org.phuchoang.management.course.CourseSummary;
 import org.phuchoang.management.enrollment.application.command.EnrollStudentCommand;
 import org.phuchoang.management.enrollment.domain.Enrollment;
 import org.phuchoang.management.enrollment.domain.EnrollmentId;
@@ -27,6 +31,7 @@ import org.phuchoang.management.shared.exception.UnknownStudentException;
 import org.phuchoang.management.student.StudentDeleted;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
+import org.phuchoang.management.student.StudentSummary;
 
 @ExtendWith(MockitoExtension.class)
 class EnrollmentServiceTest {
@@ -156,5 +161,37 @@ class EnrollmentServiceTest {
     service.onCourseDeleted(new CourseDeleted(new CourseCode("CS101")));
 
     verify(repository).deleteByCourseCode(new CourseCode("CS101"));
+  }
+
+  @Test
+  void getDetailThrowsNotFoundWhenEnrollmentDoesNotExist() {
+    service = new EnrollmentService(repository, studentLookup, courseLookup);
+    when(repository.findByStudentAndCourse(new StudentId(1L), new CourseCode("CS101")))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.getDetail(1L, "CS101")).isInstanceOf(NotFoundException.class);
+
+    verifyNoInteractions(studentLookup, courseLookup);
+  }
+
+  @Test
+  void getDetailReturnsStudentAndCourseSummaries() {
+    service = new EnrollmentService(repository, studentLookup, courseLookup);
+    Instant enrolledAt = Instant.parse("2024-01-01T00:00:00Z");
+    Enrollment enrollment =
+        Enrollment.reconstitute(
+            new EnrollmentId(1L), new StudentId(1L), new CourseCode("CS101"), enrolledAt);
+    when(repository.findByStudentAndCourse(new StudentId(1L), new CourseCode("CS101")))
+        .thenReturn(Optional.of(enrollment));
+    StudentSummary studentSummary = new StudentSummary(1L, "S00123", "Jane", "Doe", "jane.doe@example.edu");
+    CourseSummary courseSummary = new CourseSummary(1L, "CS101", "Intro to CS", 3);
+    when(studentLookup.summaryOf(new StudentId(1L))).thenReturn(studentSummary);
+    when(courseLookup.summaryOf(new CourseCode("CS101"))).thenReturn(courseSummary);
+
+    EnrollmentService.EnrollmentDetailView detail = service.getDetail(1L, "CS101");
+
+    assertThat(detail.student()).isEqualTo(studentSummary);
+    assertThat(detail.course()).isEqualTo(courseSummary);
+    assertThat(detail.enrolledAt()).isEqualTo(enrolledAt);
   }
 }

@@ -3,9 +3,11 @@ package org.phuchoang.management.enrollment.web;
 import jakarta.validation.Valid;
 import org.phuchoang.management.enrollment.application.EnrollmentService;
 import org.phuchoang.management.enrollment.web.dto.EnrollmentCreateRequest;
+import org.phuchoang.management.enrollment.web.dto.EnrollmentDetailDto;
 import org.phuchoang.management.enrollment.web.dto.EnrollmentResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -30,6 +32,11 @@ public class EnrollmentController {
   public EnrollmentResponse createEnrollment(@Valid @RequestBody EnrollmentCreateRequest request) {
     EnrollmentService.CreatedEnrollment created = enrollmentService.enroll(mapper.toCommand(request));
     return mapper.toResponse(created);
+  }
+
+  @GetMapping("/{studentId}/{courseCode}")
+  public EnrollmentDetailDto getEnrollment(@PathVariable Long studentId, @PathVariable String courseCode) {
+    return mapper.toDetailDto(enrollmentService.getDetail(studentId, courseCode));
   }
 
   @DeleteMapping("/{studentId}/{courseCode}")
