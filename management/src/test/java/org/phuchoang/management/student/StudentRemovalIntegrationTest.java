@@ -26,13 +26,15 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * Full-stack coverage of US-1.3 (Sprint 1) against a real MySQL 8 instance (01-test-strategy.md
  * §2's "API / contract" level) — TC-STU-021, TC-STU-026. {@code getStudent} (US-5.1) doesn't
  * exist yet this sprint, so "the student is gone" is asserted directly against the database, same
- * as {@link StudentUpdateIntegrationTest} already does. The full application/event cascade
- * (TC-STU-022–025, TC-XC-020) needs the {@code book}/{@code enrollment}/{@code identity} modules'
- * {@code onStudentDeleted} listeners, which don't ship until later sprints
- * (04-sprint-backlog.md §3) — this test only confirms {@code StudentDeleted} is actually published
- * (the "verify publishable/consumable" task) and that the DB-level {@code ON DELETE CASCADE} on
- * {@code users.student_id} (05-database-schema.md §5) already removes the linked account as a
- * safety net, independent of any application listener.
+ * as {@link StudentUpdateIntegrationTest} already does. {@code book}/{@code enrollment}'s cascade
+ * listeners (PM-018, Sprint 4) and their own removal-cascade coverage live in {@code
+ * BookRemovalIntegrationTest}/{@code EnrollmentEndIntegrationTest}, not here. {@code identity}'s
+ * deprovisioning (PM-018) is synchronous — {@code IdentityService.deprovisionForStudent}, called
+ * from {@code StudentService.remove} in the same transaction, not an event listener (see {@code
+ * AccountProvisioning#deprovisionForStudent}'s Javadoc) — so {@code
+ * removingAStudentAlsoRemovesTheLinkedUserAccount} below asserts immediately, no polling needed;
+ * it can't currently distinguish that call from the DB-level {@code ON DELETE CASCADE} on {@code
+ * users.student_id} (05-database-schema.md §5), which would remove the row either way.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

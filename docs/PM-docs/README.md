@@ -8,7 +8,7 @@ This is planning documentation only — no code is included here.
 
 ## Reading Order
 
-1. **[01-product-backlog.md](./01-product-backlog.md)** — the ranked, estimated backlog: 7 epics, 37 items (20 user stories reused verbatim from `BA-docs/user-stories.md`, plus 7 platform-setup, 2 staff-account/demo-account, and 6 hardening items sourced from `Testing/02-test-plan.md`).
+1. **[01-product-backlog.md](./01-product-backlog.md)** — the ranked, estimated backlog: 7 epics, 38 items (20 user stories reused verbatim from `BA-docs/user-stories.md`, plus 7 platform-setup, 2 staff-account/demo-account, and 7 hardening items sourced from `Testing/02-test-plan.md`).
 2. **[02-sprint-plan.md](./02-sprint-plan.md)** — 5 sprints (Sprint 0 setup + Sprints 1–4), following the exact module build order already fixed by `Testing/02-test-plan.md` §2, with per-sprint goals, scope, and Definition of Done.
 3. **[03-scrum-artifacts.md](./03-scrum-artifacts.md)** — roles (solo PO/SM/Dev), ceremonies, Definition of Ready/Done, risk register, and the v1.0 release plan.
 4. **[04-sprint-backlog.md](./04-sprint-backlog.md)** — every backlog item decomposed into concrete implementation sub-tasks (Domain/Port-Internal/Application/Web/Tests), sourced from `SA-docs/06-low-level-design.md`'s class/method definitions, across all 5 sprints.

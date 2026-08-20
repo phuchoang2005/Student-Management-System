@@ -24,7 +24,13 @@ public interface BookRepository {
   /** Unpaginated — backs {@code StudentService.getDetail}'s embedded "owned books" list (US-5.1). */
   List<Book> findByOwnerId(StudentId ownerId);
 
+  /** Paged — backs {@code BookLookup.findByOwner} (US-5.4, {@code GET /api/v1/me/books-and-courses}). */
+  Page<Book> findByOwnerId(StudentId ownerId, Pageable pageable);
+
   Book save(Book book);
 
   void deleteByIsbn(Isbn isbn);
+
+  /** {@code BookService.onStudentDeleted} (06-low-level-design.md §13) — clears ownership on every book the deleted student owned. */
+  void clearOwnerByStudentId(StudentId studentId);
 }

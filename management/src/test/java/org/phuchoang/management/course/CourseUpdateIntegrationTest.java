@@ -9,7 +9,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import org.junit.jupiter.api.Test;
 import org.phuchoang.management.course.domain.Course;
-import org.phuchoang.management.course.domain.CourseCode;
 import org.phuchoang.management.course.port.CourseRepository;
 import org.phuchoang.management.shared.exception.StaleWriteException;
 import org.springframework.beans.factory.annotation.Autowired;

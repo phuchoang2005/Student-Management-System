@@ -3,6 +3,7 @@ package org.phuchoang.management.student.web;
 import jakarta.validation.Valid;
 import org.phuchoang.management.shared.web.PageResponse;
 import org.phuchoang.management.student.application.StudentService;
+import org.phuchoang.management.student.web.dto.InitialPasswordResponse;
 import org.phuchoang.management.student.web.dto.RegisterStudentRequest;
 import org.phuchoang.management.student.web.dto.StudentDetailDto;
 import org.phuchoang.management.student.web.dto.StudentRegistrationResponse;
@@ -43,6 +44,12 @@ public class StudentController {
   @GetMapping("/{code}")
   public StudentDetailDto getStudent(@PathVariable String code) {
     return mapper.toDetailDto(studentService.getDetail(code));
+  }
+
+  /** US-6.3 — Registrar only, enforced by the filter chain (06-low-level-design.md §11.1). */
+  @GetMapping("/{code}/initial-password")
+  public InitialPasswordResponse getInitialPassword(@PathVariable String code) {
+    return mapper.toInitialPasswordResponse(studentService.viewInitialPassword(code));
   }
 
   @PostMapping

@@ -5,5 +5,11 @@ import org.springframework.data.repository.CrudRepository;
 
 interface SpringDataUserRepository extends CrudRepository<UserRow, Long> {
 
+  Optional<UserRow> findByUsername(String username);
+
   Optional<UserRow> findByStudentId(Long studentId);
+
+  boolean existsByUsername(String username);
+
+  void deleteByStudentId(Long studentId);
 }

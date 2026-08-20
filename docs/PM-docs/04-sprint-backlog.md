@@ -26,6 +26,7 @@ Three places where a later sprint's task explicitly closes a gap an earlier spri
 - US-5.1/US-5.3 (Sprint 1/2) stub the `getDetail` read-composition calls into `book`/`enrollment`; US-5.5 (Sprint 3) wires them for real once `enrollment` exists.
 - US-1.1 (Sprint 1) calls `AccountProvisioning.provisionForStudent`, but `identity`'s own provisioning pieces don't exist until Sprint 3; US-5.4 (Sprint 3) closes that loop.
 - Course removal's enrollment cascade (US-3.3, Sprint 2) ships as a no-op-safe stub; US-4.1/US-4.2 (Sprint 3) wire the real listener, and PM-013 (Sprint 4) is where it's fully tested under cascade scenarios.
+- `06-low-level-design.md` §13 specifies three `StudentDeleted` listeners (`book`, `enrollment`, `identity`), but only `enrollment`'s was decomposed into a task at first (US-4.2, Sprint 3) — the other two were left as an unscheduled gap (US-1.3's task table, Sprint 1, even flagged it: "full cascade listeners land with `book`/`enrollment`/`identity` in later sprints", but no later task ever materialized for `book`/`identity`). PM-018 (Sprint 4, added after a Sprint 3 docs/code audit) closes it, immediately ahead of PM-013 whose cascade tests assume both mechanisms exist — implementing `identity`'s literal listener signature turned out to be a genuine `ApplicationModules.verify()` cycle (see PM-018's own note), so `identity` ended up deprovisioned synchronously via `AccountProvisioning` instead, same pattern as `AccountProvisioning#provisionForStudent`.
 
 ---
 
@@ -385,6 +386,15 @@ Per `06-low-level-design.md` §11.4, `04-authentication-authorization.md` §8. *
 
 Per `06-low-level-design.md` §10.
 
+### PM-018 — Cross-module student-removal cascade: `book` + `identity` (3h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `BookRepository.clearOwnerByStudentId(StudentId)` port method + `JdbcBookRepository`/`SpringDataBookRepository` impl; `BookService.onStudentDeleted(StudentDeleted event)` `@ApplicationModuleListener` → `repository.clearOwnerByStudentId(event.studentId())` (closes the US-1.3 stub, §13) | Port/Internal, Application | 1.5h |
+| `AccountProvisioning.deprovisionForStudent(Long)` — new port method, called synchronously from `StudentService.remove` rather than an event listener (see below); `UserRepository.deleteByStudentId(Long)` port method (declared in the port's Javadoc since US-1.3 but never added) + `JdbcUserRepository`/`SpringDataUserRepository` impl; `IdentityService.deprovisionForStudent` implements the interface method → `repository.deleteByStudentId(studentId)` (closes the US-1.3 stub, §13) | Port/Internal, Application | 1.5h |
+
+Per `06-low-level-design.md` §13 (lines 1122/1124), with one correction found during implementation: the LLD's literal `IdentityService.onStudentDeleted(StudentDeleted event)` `@ApplicationModuleListener` signature is not buildable. `identity` already depends on `student` in the other direction (`AccountProvisioning`, called synchronously from `StudentService.register`/`update`); adding an event listener that imports `student.StudentDeleted` makes the `student`/`identity` package pair mutually dependent, and `ApplicationModules.verify()` fails the build with "Cycle detected: Slice identity -> Slice student -> Slice identity". `book` has no such reverse dependency from `student`, so its listener works exactly as specified. `identity`'s cascade is deprovisioned synchronously instead, in the same transaction as the `Student` delete — the same one-directional-dependency pattern `AccountProvisioning`'s own class Javadoc already establishes for provisioning, extended to deprovisioning. Both mechanisms have a DB-level `ON DELETE` fallback (`fk_books_owner ... SET NULL`, `fk_users_student ... CASCADE`) that keeps data consistent independently of them, but the application-level call is what makes the removal an explicit, testable part of the cascade rather than an incidental FK side effect — PM-013's cascade tests below should assert against that, not just that the row ended up correct.
+
 ### PM-013 — Cross-module cascade/lifecycle integration tests (6h)
 
 | Task | Layer | Est. |
@@ -410,7 +420,7 @@ Per `06-low-level-design.md` §10.
 | Run the full suite; capture coverage numbers | Verification | 0.5h |
 | Update `Testing/README.md`'s UC → File Index: mark UC-1–25 implemented + tested | Docs | 1.5h |
 
-**Sprint 4 subtotal: 8 + 4 + 5 + 6 + 5 + 3 = 31h** ✓ matches `02-sprint-plan.md`.
+**Sprint 4 subtotal: 8 + 4 + 5 + 3 + 6 + 5 + 3 = 34h** ✓ matches `02-sprint-plan.md`.
 
 ---
 
@@ -422,7 +432,7 @@ Per `06-low-level-design.md` §10.
 | Sprint 1 | 36h | 36h | ✓ |
 | Sprint 2 | 34h | 34h | ✓ |
 | Sprint 3 | 40h | 40h | ✓ |
-| Sprint 4 | 31h | 31h | ✓ |
-| **Total** | **160h** | **160h** | ✓ |
+| Sprint 4 | 34h | 34h | ✓ |
+| **Total** | **163h** | **163h** | ✓ |
 
-Every one of the 37 items in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears exactly once above, decomposed into 3–6 tasks apiece. If a source document changes (LLD, test cases, or the Product Backlog's estimates), review this set for drift the same way [README.md](./README.md) already flags for the other three PM docs.
+Every one of the 38 items in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears exactly once above, decomposed into 2–6 tasks apiece. If a source document changes (LLD, test cases, or the Product Backlog's estimates), review this set for drift the same way [README.md](./README.md) already flags for the other three PM docs.

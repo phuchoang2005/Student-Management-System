@@ -1,7 +1,5 @@
 package org.phuchoang.management.course;
 
-import org.phuchoang.management.course.domain.CourseCode;
-
 /**
  * Published by {@code CourseService.remove(...)} after the course row is deleted, so {@code
  * enrollment} can react without a direct dependency on {@code course}'s internals

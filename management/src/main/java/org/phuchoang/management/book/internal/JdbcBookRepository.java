@@ -50,6 +50,16 @@ class JdbcBookRepository implements BookRepository {
   }
 
   @Override
+  public Page<Book> findByOwnerId(StudentId ownerId, Pageable pageable) {
+    List<Book> content =
+        springRepo.findByOwnerId(ownerId.value(), pageable.getPageSize(), pageable.getOffset()).stream()
+            .map(this::toDomain)
+            .toList();
+    long total = springRepo.countByOwnerId(ownerId.value());
+    return new PageImpl<>(content, pageable, total);
+  }
+
+  @Override
   public Book save(Book book) {
     try {
       return toDomain(springRepo.save(toRow(book)));
@@ -61,6 +71,11 @@ class JdbcBookRepository implements BookRepository {
   @Override
   public void deleteByIsbn(Isbn isbn) {
     springRepo.deleteByIsbn(isbn.value());
+  }
+
+  @Override
+  public void clearOwnerByStudentId(StudentId studentId) {
+    springRepo.clearOwnerByStudentId(studentId.value());
   }
 
   private BookRow toRow(Book book) {

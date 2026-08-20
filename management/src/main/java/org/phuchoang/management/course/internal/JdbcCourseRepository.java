@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import org.phuchoang.management.course.CourseId;
 import org.phuchoang.management.course.domain.Course;
-import org.phuchoang.management.course.domain.CourseCode;
+import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.course.domain.Credits;
 import org.phuchoang.management.course.port.CourseRepository;
 import org.phuchoang.management.shared.exception.StaleWriteException;

@@ -114,11 +114,12 @@ No new UC; makes the whole system's non-functional guarantees testable and close
 | PM-010 | RBAC matrix integration tests (role × endpoint) | Must | 8h | `Testing/03-test-cases/cross-cutting.md` |
 | PM-011 | Must-change-password gate enforced across all endpoints | Must | 4h | Identity.3; `use-cases.md` UC-21/UC-22 postconditions |
 | PM-012 | Optimistic locking implementation + tests | Must | 5h | `06-low-level-design.md` §10 |
+| PM-018 | Cross-module student-removal cascade: `book` reacts to `StudentDeleted` (`BookService.onStudentDeleted` clears ownership); `identity` is deprovisioned synchronously instead (`AccountProvisioning.deprovisionForStudent`, called from `StudentService.remove`) — an `@ApplicationModuleListener` on `identity` would cycle back against its existing `student` dependency (`AccountProvisioning`), which `ApplicationModules.verify()` rejects at build time | Must | 3h | `06-low-level-design.md` §13 (lines 1122/1124) specified both as listeners; only `enrollment`'s was decomposed into a Sprint 3 task, and implementing `identity`'s literally as specified proved to be a genuine module cycle, corrected during implementation |
 | PM-013 | Cross-module cascade/lifecycle integration tests (student/book/course/enrollment removal chains) | Must | 6h | `req.md` §5; `Testing/03-test-cases/cross-cutting.md` |
 | PM-014 | Implement and test the 7 explicit ambiguity resolutions | Must | 5h | `api-specification.md` §5 |
 | PM-015 | JaCoCo coverage report + finalize living traceability matrix | Should | 3h | `Testing/02-test-plan.md` §6 |
 
-**Epic G subtotal: 31h**
+**Epic G subtotal: 34h** (31h original + 3h added by PM-018)
 
 ---
 
@@ -162,8 +163,9 @@ Matches the sprint sequence in [02-sprint-plan.md](./02-sprint-plan.md); this is
 | 32 | PM-010 | RBAC matrix tests | Sprint 4 |
 | 33 | PM-011 | Must-change-password gate | Sprint 4 |
 | 34 | PM-012 | Optimistic locking | Sprint 4 |
-| 35 | PM-013 | Cascade/lifecycle integration tests | Sprint 4 |
-| 36 | PM-014 | 7 ambiguity resolutions | Sprint 4 |
-| 37 | PM-015 | Coverage report + traceability matrix | Sprint 4 |
+| 35 | PM-018 | Cascade listeners: `book` + `identity` (`StudentDeleted`) | Sprint 4 |
+| 36 | PM-013 | Cascade/lifecycle integration tests | Sprint 4 |
+| 37 | PM-014 | 7 ambiguity resolutions | Sprint 4 |
+| 38 | PM-015 | Coverage report + traceability matrix | Sprint 4 |
 
-**Total: 160 ideal-hours across 37 backlog items** (22 user stories, 15 platform/hardening `PM-0xx` items), covering all 25 UCs identified in the Testing documentation. PM-016/017 and US-7.1/7.2 (13h) are a sudden mid-plan addition — see [02-sprint-plan.md](./02-sprint-plan.md) Sprint 3 for how this changed that sprint's capacity.
+**Total: 163 ideal-hours across 38 backlog items** (22 user stories, 16 platform/hardening `PM-0xx` items), covering all 25 UCs identified in the Testing documentation. PM-016/017 and US-7.1/7.2 (13h) are a sudden mid-plan addition — see [02-sprint-plan.md](./02-sprint-plan.md) Sprint 3 for how this changed that sprint's capacity. PM-018 (3h) is a second, later addition — see Sprint 4 for how it closes a gap between `06-low-level-design.md` §13 and this backlog's original decomposition.

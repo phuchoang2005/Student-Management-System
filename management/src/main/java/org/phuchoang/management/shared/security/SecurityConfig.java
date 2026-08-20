@@ -16,12 +16,12 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -37,9 +37,9 @@ public class SecurityConfig {
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   // AuthenticationConfiguration is resolved here rather than exposed as its own AuthenticationManager
-  // @Bean: with no UserDetailsService in the context yet (identity ships in a later sprint),
-  // getAuthenticationManager() falls back to looking up "the" AuthenticationManager bean --
-  // which, if that bean were this method, would be itself, mid-construction (StackOverflowError).
+  // @Bean: declaring one would make getAuthenticationManager() resolve to this method itself,
+  // mid-construction (StackOverflowError). Injected as-is, it builds the manager from the beans
+  // already in the context -- identity's AppUserDetailsService plus the PasswordEncoder below.
   @Bean
   public SecurityFilterChain filterChain(
       HttpSecurity http,
@@ -51,6 +51,11 @@ public class SecurityConfig {
     loginFilter.setFilterProcessesUrl("/api/v1/auth/login");
     loginFilter.setAuthenticationSuccessHandler(this::onLoginSuccess);
     loginFilter.setAuthenticationFailureHandler(this::onLoginFailure);
+    // Without this the filter keeps its default RequestAttributeSecurityContextRepository, which
+    // discards the authenticated context at the end of the login request -- no session, no
+    // JSESSIONID, every following request unauthenticated. Session-based auth is the decision in
+    // 04-authentication-authorization.md §1, so the context has to be saved to the HTTP session.
+    loginFilter.setSecurityContextRepository(new HttpSessionSecurityContextRepository());
 
     http
         // No HTML form surface -- every write is a JSON body from a programmatic client, not a
@@ -59,6 +64,9 @@ public class SecurityConfig {
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+            // PM-017 — public so it's callable before login; only reachable at all when
+            // app.demo-accounts.enabled=true registers DemoAccountsController's bean (§11.4).
+            .requestMatchers(HttpMethod.GET, "/api/v1/auth/demo-accounts").permitAll()
             .requestMatchers(HttpMethod.POST, "/api/v1/auth/password").authenticated()
             .requestMatchers(HttpMethod.GET, "/api/v1/students/*/initial-password").hasRole("REGISTRAR")
             .requestMatchers(HttpMethod.POST, "/api/v1/students/**").hasRole("REGISTRAR")
@@ -73,6 +81,16 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.PUT, "/api/v1/books/**").hasRole("LIBRARIAN")
             .requestMatchers(HttpMethod.PATCH, "/api/v1/books/**").hasRole("LIBRARIAN")
             .requestMatchers(HttpMethod.DELETE, "/api/v1/books/**").hasRole("LIBRARIAN")
+            .requestMatchers(HttpMethod.POST, "/api/v1/staff-accounts/**").hasRole("SYSTEM_ADMINISTRATOR")
+            .requestMatchers(HttpMethod.PATCH, "/api/v1/staff-accounts/**").hasRole("SYSTEM_ADMINISTRATOR")
+            .requestMatchers(HttpMethod.GET, "/api/v1/me/**").hasRole("STUDENT")
+            // Explicit allow-list, not just an absent grant: without this, adding
+            // SYSTEM_ADMINISTRATOR as a 5th authenticated role would let it fall through to
+            // .anyRequest().authenticated() below on every domain GET, even though it's granted
+            // zero domain read access (06-low-level-design.md §11.1, TC-XC-040).
+            .requestMatchers(HttpMethod.GET, "/api/v1/students/**", "/api/v1/books/**", "/api/v1/courses/**",
+                    "/api/v1/enrollments/**")
+                .hasAnyRole("REGISTRAR", "LIBRARIAN", "COURSE_ADMINISTRATOR", "STUDENT")
             .anyRequest().authenticated())
         .addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(mustChangePasswordFilter, AuthorizationFilter.class);
@@ -85,20 +103,16 @@ public class SecurityConfig {
     return new BCryptPasswordEncoder();
   }
 
-  // Reads role/username generically off the Authentication rather than casting to
-  // AuthenticatedPrincipal -- that type, and the real UserDetailsService backing it, don't ship
-  // until identity's US-6.1 (04-sprint-backlog.md), which wires this handler against it for real.
+  // The cast is safe: identity's AppUserDetailsService is the only UserDetailsService in the
+  // context, so every principal that reaches a success handler is an AuthenticatedPrincipal.
   private void onLoginSuccess(HttpServletRequest req, HttpServletResponse res, Authentication auth)
       throws IOException {
-    String role =
-        auth.getAuthorities().stream()
-            .findFirst()
-            .map(GrantedAuthority::getAuthority)
-            .map(authority -> authority.startsWith("ROLE_") ? authority.substring(5) : authority)
-            .orElse("");
+    AuthenticatedPrincipal principal = (AuthenticatedPrincipal) auth.getPrincipal();
     res.setStatus(HttpServletResponse.SC_OK);
     res.setContentType(MediaType.APPLICATION_JSON_VALUE);
-    objectMapper.writeValue(res.getWriter(), Map.of("role", role, "mustChangePassword", false));
+    objectMapper.writeValue(
+        res.getWriter(),
+        Map.of("role", principal.role(), "mustChangePassword", principal.mustChangePassword()));
   }
 
   private void onLoginFailure(HttpServletRequest req, HttpServletResponse res, AuthenticationException ex)
