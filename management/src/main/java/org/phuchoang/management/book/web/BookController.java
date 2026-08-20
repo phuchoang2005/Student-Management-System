@@ -7,9 +7,11 @@ import org.phuchoang.management.book.web.dto.BookDetailDto;
 import org.phuchoang.management.book.web.dto.BookOwnerRequest;
 import org.phuchoang.management.book.web.dto.BookResponse;
 import org.phuchoang.management.book.web.dto.BookSummaryDto;
+import org.phuchoang.management.shared.security.AuthenticatedPrincipal;
 import org.phuchoang.management.shared.web.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -37,13 +39,17 @@ public class BookController {
   public PageResponse<BookSummaryDto> searchBooks(
       @RequestParam(required = false) String query,
       @RequestParam(required = false) Long owner,
-      Pageable pageable) {
-    return PageResponse.from(bookService.search(query, owner, pageable).map(mapper::toSummaryDto));
+      Pageable pageable,
+      Authentication authentication) {
+    Long callerStudentId = AuthenticatedPrincipal.studentIdOf(authentication);
+    return PageResponse.from(
+        bookService.search(query, owner, pageable, callerStudentId).map(mapper::toSummaryDto));
   }
 
   @GetMapping("/{isbn}")
-  public BookDetailDto getBook(@PathVariable String isbn) {
-    return mapper.toDetailDto(bookService.getDetail(isbn));
+  public BookDetailDto getBook(@PathVariable String isbn, Authentication authentication) {
+    Long callerStudentId = AuthenticatedPrincipal.studentIdOf(authentication);
+    return mapper.toDetailDto(bookService.getDetail(isbn, callerStudentId));
   }
 
   @PostMapping

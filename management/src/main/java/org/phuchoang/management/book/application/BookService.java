@@ -20,6 +20,7 @@ import org.phuchoang.management.student.StudentSummary;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.modulith.ApplicationModuleListener;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -161,10 +162,15 @@ public class BookService implements BookLookup {
 
   /**
    * UC-14 — matches isbn/title/author, optionally filtered by owner, paged.
-   * {@code query} may be blank/{@code null}.
+   * {@code query} may be blank/{@code null}. {@code callerStudentId} is non-null only for a
+   * STUDENT caller (02-component-diagram.md §4); when present it silently overrides {@code
+   * ownerFilter} rather than rejecting a mismatched client-supplied value — consistent with the
+   * "transparently scoped, never blocked" search philosophy (api-specification.md §5 decision #4).
    */
-  public Page<BookSummaryView> search(String query, Long ownerFilter, Pageable pageable) {
-    StudentId ownerId = ownerFilter == null ? null : new StudentId(ownerFilter);
+  public Page<BookSummaryView> search(
+      String query, Long ownerFilter, Pageable pageable, Long callerStudentId) {
+    Long effectiveOwner = callerStudentId != null ? callerStudentId : ownerFilter;
+    StudentId ownerId = effectiveOwner == null ? null : new StudentId(effectiveOwner);
     return repository.search(query, ownerId, pageable).map(this::toSummaryView);
   }
 
@@ -174,12 +180,22 @@ public class BookService implements BookLookup {
    * current owner's summary, mirroring {@code CourseService.getDetail}'s
    * findByCode-then-compose
    * shape.
+   *
+   * <p>{@code callerStudentId} is non-null only for a STUDENT caller; a book not owned by that
+   * student — including an unowned book — is a 403, not a 404: the resource exists, only
+   * authorization fails (api-specification.md §5 decision #3, same "own records only" reading as
+   * {@code StudentService.getDetail}).
    */
-  public BookDetailView getDetail(String isbn) {
+  public BookDetailView getDetail(String isbn, Long callerStudentId) {
     Isbn bookIsbn = new Isbn(isbn);
     Book book = repository
         .findByIsbn(bookIsbn)
         .orElseThrow(() -> new NotFoundException("Book '" + isbn + "' does not exist."));
+
+    if (callerStudentId != null
+        && (book.ownerId() == null || !book.ownerId().value().equals(callerStudentId))) {
+      throw new AccessDeniedException("Book '" + isbn + "' is not owned by the requesting student.");
+    }
 
     StudentSummary owner = book.ownerId() == null ? null : studentLookup.summaryOf(book.ownerId());
 

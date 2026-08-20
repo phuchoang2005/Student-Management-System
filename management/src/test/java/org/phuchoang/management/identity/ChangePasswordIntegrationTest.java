@@ -1,6 +1,7 @@
 package org.phuchoang.management.identity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -8,6 +9,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
+import org.phuchoang.management.identity.domain.User;
+import org.phuchoang.management.identity.domain.Username;
+import org.phuchoang.management.identity.port.PasswordHasher;
+import org.phuchoang.management.identity.port.UserRepository;
+import org.phuchoang.management.shared.exception.StaleWriteException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -43,6 +49,8 @@ class ChangePasswordIntegrationTest {
 
   @Autowired private MockMvc mockMvc;
   @Autowired private JdbcTemplate jdbcTemplate;
+  @Autowired private UserRepository userRepository;
+  @Autowired private PasswordHasher passwordHasher;
 
   /** A registered student plus a logged-in session, still on its system-issued password. */
   private record Account(String username, String initialPassword, MockHttpSession session) {}
@@ -238,6 +246,28 @@ class ChangePasswordIntegrationTest {
     mockMvc
         .perform(get("/api/v1/students").session(account.session()))
         .andExpect(status().isOk());
+  }
+
+  @Test
+  void concurrentPasswordChangeOnTheSameAccountReturns409ForTheSecondWriter() throws Exception {
+    // TC-IDN-016 / TC-XC-018. The API exposes no client-visible version token to race over a real
+    // HTTP interleaving, so this drives UserRepository directly to reproduce the two-readers-
+    // one-stale-writer scenario deterministically, mirroring StudentUpdateIntegrationTest's
+    // concurrentUpdateOfTheSameStudentReturns409ForTheSecondWriter.
+    Account account = anAccount("S00321", "change.321@example.edu");
+    Username username = new Username(account.username());
+
+    User clientA = userRepository.findByUsername(username).orElseThrow();
+    User clientB = userRepository.findByUsername(username).orElseThrow();
+
+    clientA.changePassword(passwordHasher.hash("secretOne1"));
+    userRepository.save(clientA);
+
+    clientB.changePassword(passwordHasher.hash("secretTwo1"));
+    assertThatThrownBy(() -> userRepository.save(clientB)).isInstanceOf(StaleWriteException.class);
+
+    assertThat(loginStatus(account.username(), "secretOne1")).isEqualTo(200);
+    assertThat(loginStatus(account.username(), "secretTwo1")).isEqualTo(401);
   }
 
   @Test

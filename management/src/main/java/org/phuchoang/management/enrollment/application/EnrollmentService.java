@@ -20,6 +20,7 @@ import org.phuchoang.management.student.StudentSummary;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.modulith.ApplicationModuleListener;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -120,9 +121,21 @@ public class EnrollmentService implements EnrollmentLookup {
    * mirroring {@code
    * BookService.getDetail}'s findByIsbn-then-compose shape
    * (06-low-level-design.md §7, UC-20).
+   *
+   * <p>{@code callerStudentId} is non-null only for a STUDENT caller; the ownership check runs
+   * <em>before</em> the repository lookup, unlike {@code StudentService.getDetail}/{@code
+   * BookService.getDetail}'s check-after-lookup — {@code studentId} here is a caller-supplied path
+   * variable exposing another student's numeric id directly, so a probing Student must get an
+   * identical 403 whether the target enrollment exists, has ended, or the pairing never existed at
+   * all, with no existence signal leaking through a differently-timed 404.
    */
   @Transactional(readOnly = true)
-  public EnrollmentDetailView getDetail(Long studentId, String courseCode) {
+  public EnrollmentDetailView getDetail(Long studentId, String courseCode, Long callerStudentId) {
+    if (callerStudentId != null && !callerStudentId.equals(studentId)) {
+      throw new AccessDeniedException(
+          "Enrollment for student " + studentId + " is not visible to the requesting student.");
+    }
+
     StudentId id = new StudentId(studentId);
     CourseCode code = new CourseCode(courseCode);
     Enrollment enrollment = repository

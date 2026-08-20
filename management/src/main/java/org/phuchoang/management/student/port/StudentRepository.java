@@ -24,8 +24,13 @@ public interface StudentRepository {
 
   boolean existsByEmailExcludingCode(Email email, StudentCode excluding);
 
-  /** UC-13 — matches code/name/email; {@code query} may be {@code null} to return every student. */
-  Page<Student> search(String query, Pageable pageable);
+  /**
+   * UC-13 — matches code/name/email; {@code query} may be {@code null} to return every student.
+   * {@code scopeToId} narrows the result to a single student (own-records-only scoping for a
+   * STUDENT caller, 02-component-diagram.md §4); {@code null} means unscoped, mirroring {@code
+   * BookRepository.search}'s {@code ownerFilter} parameter.
+   */
+  Page<Student> search(String query, StudentId scopeToId, Pageable pageable);
 
   Student save(Student student);
 

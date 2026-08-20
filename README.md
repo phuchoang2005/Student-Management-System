@@ -42,21 +42,69 @@ Under the hood, this is a Java/Spring Boot REST API — a backend service that o
 
 For architecture details, module boundaries, database design, and the technical roadmap, see the documentation: [Document](docs/).
 
+## Getting Started
+
+### Prerequisites
+
+- JDK 21
+- Docker (or [Colima](https://github.com/abiosoft/colima) on macOS) — needed both to run MySQL via `docker-compose.yml` and for the [Testcontainers](https://testcontainers.com/)-backed integration tests
+- The Maven wrapper (`./mvnw`) checked into `management/` — no local Maven install required
+
+### 1. Start the database
+
+```sh
+make up
+```
+
+This creates `.env` from `.env.example` if missing (see `.env.example` for the MySQL credentials/port and the `INITIAL_PASSWORD_KEY` used to encrypt students' initial passwords), starts Colima if needed, then brings up the `management-mysql` container defined in `docker-compose.yml`.
+
+Other useful targets: `make down` (stop), `make logs` (tail MySQL logs), `make mysql` (open a MySQL shell), `make reset` (wipe the data volume and start fresh). Run `make help` to list them all.
+
+### 2. Run the app
+
+```sh
+cd management
+./mvnw spring-boot:run
+```
+
+The API listens on `http://localhost:8080` by default, backed by the MySQL instance started in step 1 (Flyway migrates the schema automatically on startup).
+
+### 3. Run the test suite
+
+```sh
+cd management
+./mvnw test      # unit + architecture (ArchUnit) + Testcontainers-backed integration tests
+./mvnw verify     # same, plus packaging and the JaCoCo coverage report
+```
+
+The integration tests (`*IntegrationTest`) spin up their own throwaway MySQL container per class via Testcontainers — they don't need `make up` to be running, just a working Docker daemon.
+
+> **Colima users:** if a test run fails immediately with `Container startup failed for image testcontainers/ryuk:0.14.0` / `error while creating mount source path '.../docker.sock'`, Testcontainers' Ryuk cleanup sidecar can't mount the Colima socket. Work around it with:
+> ```sh
+> TESTCONTAINERS_RYUK_DISABLED=true ./mvnw verify
+> ```
+
+After `./mvnw verify`, the coverage report is at `management/target/site/jacoco/index.html`.
+
+### 4. Build / package
+
+```sh
+cd management
+./mvnw package             # produces management/target/management-<version>.jar (runs tests first)
+./mvnw package -DskipTests # same, skipping tests for a faster local build
+
+java -jar target/management-*.jar
+```
+
 ## Continuous Integration
 
 Every pull request against `main` triggers the [`CI` workflow](.github/workflows/ci.yml), which:
 
 1. Checks out the repository and sets up JDK 21 (Temurin), matching `management/pom.xml`.
 2. Starts a MySQL 8.4 service container (same defaults as `docker-compose.yml`) so Flyway-backed tests can run.
-3. Runs `./mvnw verify` from `management/`, which compiles, runs the full test suite (unit, [ArchUnit](https://www.archunit.org/) architecture rules, and the Spring Modulith module-boundary check), and packages the app.
+3. Runs `./mvnw verify` from `management/`, which compiles, runs the full test suite (unit tests, [ArchUnit](https://www.archunit.org/) architecture rules, the Spring Modulith module-boundary check, and the Testcontainers-backed integration suites), generates the JaCoCo coverage report, and packages the app.
+4. Uploads the JaCoCo report (`management/target/site/jacoco/`) as a workflow artifact.
 
-At this stage no `@DataJdbcTest`/Testcontainers-backed integration suites exist yet, so `mvn verify` only exercises the unit and architecture levels described in [`docs/Testing/01-test-strategy.md`](docs/Testing/01-test-strategy.md); the ArchUnit rules under `management/src/test/java/org/phuchoang/management/architecture/` and the `shared/ModuleBoundaryTest` are wired to fail as soon as code violates the module layout, even before any domain code exists.
+See [`docs/Testing/01-test-strategy.md`](docs/Testing/01-test-strategy.md) and [`docs/Testing/README.md`](docs/Testing/README.md) for the test strategy and the use-case → test-case traceability matrix. The ArchUnit rules under `management/src/test/java/org/phuchoang/management/architecture/` and the `shared/ModuleBoundaryTest` fail the build as soon as code violates the module layout.
 
-To run the same check locally:
-
-```sh
-cd management
-./mvnw verify
-```
-
-This requires a reachable MySQL instance matching `application.properties`' defaults — run `make up` from the repo root first.
+To run the same check locally, see [Getting Started](#getting-started) above.

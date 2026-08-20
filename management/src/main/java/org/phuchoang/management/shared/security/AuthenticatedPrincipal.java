@@ -2,6 +2,7 @@ package org.phuchoang.management.shared.security;
 
 import java.util.Collection;
 import java.util.List;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -61,5 +62,22 @@ public record AuthenticatedPrincipal(
    */
   public AuthenticatedPrincipal withPasswordChanged() {
     return new AuthenticatedPrincipal(username, passwordHash, role, studentId, false, enabled);
+  }
+
+  /**
+   * {@code student}/{@code book}/{@code enrollment}'s "own records only" scoping
+   * (02-component-diagram.md §4) needs the caller's {@code studentId} wherever the general-purpose
+   * read endpoints are reachable by all four domain roles, unlike {@code /me/**} which the filter
+   * chain already restricts to STUDENT alone — so a blind cast isn't safe here the way it is in
+   * {@code MeController}. Returns {@code null} for staff-role callers and for any principal that
+   * isn't this type (test principals of other shapes), both treated as "unscoped" by callers. Also
+   * null-safe for {@code authentication} itself — a standalone (filter-chain-free) MockMvc test
+   * resolves an unset {@code Authentication} controller parameter to {@code null}, not a wrongly
+   * typed principal.
+   */
+  public static Long studentIdOf(Authentication authentication) {
+    return authentication != null && authentication.getPrincipal() instanceof AuthenticatedPrincipal principal
+        ? principal.studentId()
+        : null;
   }
 }

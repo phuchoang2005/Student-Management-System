@@ -368,6 +368,8 @@ Per `06-low-level-design.md` §11.4, `04-authentication-authorization.md` §8. *
 | Integration tests: `STUDENT`-role "own records only" scoping (book/enrollment/self-view) | Tests | 2h |
 | Integration tests: unauthenticated → 401, wrong-role → 403 | Tests | 1.5h |
 
+**Scope note (picked up during implementation):** the "own records only" scoping this ticket's tests assume (row 3) turned out not to exist in production code — only `/me/**` implemented it; `StudentController`/`BookController`/`EnrollmentController`'s general read endpoints let any authenticated STUDENT read any record. Rather than write tests against incomplete behavior, the scoping itself was implemented as part of this ticket (`06-low-level-design.md` §11.5), so the tests exercise real, correct behavior. This widened the ticket beyond its original test-only scope; see §11.5 for the implementation and `RbacMatrixIntegrationTest`/`OwnRecordsScopingIntegrationTest` for the tests.
+
 ### PM-011 — Must-change-password gate (4h)
 
 | Task | Layer | Est. |
@@ -375,6 +377,8 @@ Per `06-low-level-design.md` §11.4, `04-authentication-authorization.md` §8. *
 | Implement `MustChangePasswordFilter.doFilterInternal()` (403 unless path == `/api/v1/auth/password`), replacing PM-006's stub | Security config | 2h |
 | Confirm `addFilterAfter(mustChangePasswordFilter, AuthorizationFilter.class)` ordering | Security config | 0.5h |
 | Tests: gate blocks all endpoints except password-change while flag is true; clears after `changePassword` | Tests | 1.5h |
+
+**Status:** the filter body and ordering (rows 1–2) shipped ahead of this ticket, alongside US-6.1 (see `MustChangePasswordFilter`'s own Javadoc). This ticket's remaining scope was row 3 — the dedicated `MustChangePasswordGateIntegrationTest` covering TC-XC-012/014; TC-XC-013 is `@Disabled` pending a staff-provisioning flow that can set `mustChangePassword=true` for a non-Student role (none exists yet).
 
 ### PM-012 — Optimistic locking implementation + tests (5h)
 
@@ -412,6 +416,18 @@ Per `06-low-level-design.md` §13 (lines 1122/1124), with one correction found d
 | Implement/verify each resolution (spread across the module that owns it) | Various | 2.5h |
 | One test per resolution | Tests | 1.5h |
 
+**Status:** the audit (row 1) found all 7 resolutions already correctly implemented, and 6 of the 7 already had direct, on-point tests written incidentally as part of earlier UC tickets:
+
+1. Email format/duplicate (400/409) — `Email` VO + `StudentService.register`/`update` — `StudentRegistrationIntegrationTest`, `StudentUpdateIntegrationTest`
+2. Unknown FK → 400, not 409 — `BookService.addBook`/`assignOwner`, `EnrollmentService.enroll` — `BookCreationIntegrationTest`, `EnrollmentCreationIntegrationTest`
+3. Cross-student single-record read → 403 — `StudentService`/`BookService`/`EnrollmentService.getDetail` — `OwnRecordsScopingIntegrationTest`
+4. Student search/list transparently scoped, never 403 — `StudentService`/`BookService.search` — `OwnRecordsScopingIntegrationTest`, `RbacMatrixIntegrationTest`
+5. Initial-password 404 collapsing (info-hiding) — `StudentService.viewInitialPassword` — `InitialPasswordViewIntegrationTest`
+6. `/me/books-and-courses` by non-Student → 403 — `SecurityConfig` filter chain — `MeControllerIntegrationTest`
+7. Idempotent unassign-owner → 200 — `BookService.unassignOwner`/`Book.clearOwner` — `BookUnassignmentIntegrationTest`, `BookServiceTest`, `BookControllerTest`
+
+The one gap found: item 1's malformed-email path was tested on student *create* (`StudentRegistrationIntegrationTest.rejectsMalformedEmail`) but not on *update* — `StudentUpdateIntegrationTest` only covered the duplicate-email (409) case there. Closed by adding `StudentUpdateIntegrationTest.rejectsMalformedEmailOnUpdate` (400); no production code changes were needed since `Email`'s validation already runs identically on both paths.
+
 ### PM-015 — JaCoCo coverage report + traceability matrix (3h)
 
 | Task | Layer | Est. |
@@ -419,6 +435,8 @@ Per `06-low-level-design.md` §13 (lines 1122/1124), with one correction found d
 | Add the JaCoCo Maven plugin + CI report-publish step | Build config | 1h |
 | Run the full suite; capture coverage numbers | Verification | 0.5h |
 | Update `Testing/README.md`'s UC → File Index: mark UC-1–25 implemented + tested | Docs | 1.5h |
+
+**Status:** `jacoco-maven-plugin` 0.8.12 added to `management/pom.xml` (`prepare-agent` + `report` bound to the `verify` phase, so it runs automatically in CI with no extra invocation); `.github/workflows/ci.yml` uploads `management/target/site/jacoco/` as a build artifact after `mvn verify`. Full suite run (`./mvnw verify`, Testcontainers-backed): **449 tests, 0 failures, 1 skipped** (the pre-existing `@Disabled` TC-XC-013 from PM-011, not a new gap). Coverage: **97.6% line, 80.7% branch, 98.5% instruction** across 153 analyzed classes. `Testing/README.md`'s UC → File Index now has a Status column marking all UC-1–25 implemented + tested, naming the concrete test class(es) per UC.
 
 **Sprint 4 subtotal: 8 + 4 + 5 + 3 + 6 + 5 + 3 = 34h** ✓ matches `02-sprint-plan.md`.
 

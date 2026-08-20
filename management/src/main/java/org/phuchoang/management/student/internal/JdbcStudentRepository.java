@@ -55,12 +55,13 @@ class JdbcStudentRepository implements StudentRepository {
   }
 
   @Override
-  public Page<Student> search(String query, Pageable pageable) {
+  public Page<Student> search(String query, StudentId scopeToId, Pageable pageable) {
+    Long scopeId = scopeToId == null ? null : scopeToId.value();
     List<Student> content =
-        springRepo.search(query, pageable.getPageSize(), pageable.getOffset()).stream()
+        springRepo.search(query, scopeId, pageable.getPageSize(), pageable.getOffset()).stream()
             .map(this::toDomain)
             .toList();
-    long total = springRepo.countBySearch(query);
+    long total = springRepo.countBySearch(query, scopeId);
     return new PageImpl<>(content, pageable, total);
   }
 

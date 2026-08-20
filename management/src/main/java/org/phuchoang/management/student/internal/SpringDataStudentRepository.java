@@ -21,25 +21,27 @@ interface SpringDataStudentRepository extends CrudRepository<StudentRow, Long> {
   // JdbcStudentRepository pairs this with countBySearch and binds limit/offset itself.
   @Query("""
       SELECT * FROM students
-      WHERE :query IS NULL OR :query = ''
+      WHERE (:query IS NULL OR :query = ''
          OR student_code LIKE CONCAT('%', :query, '%')
          OR first_name LIKE CONCAT('%', :query, '%')
          OR last_name LIKE CONCAT('%', :query, '%')
-         OR email LIKE CONCAT('%', :query, '%')
+         OR email LIKE CONCAT('%', :query, '%'))
+        AND (:scopeId IS NULL OR id = :scopeId)
       ORDER BY student_code
       LIMIT :limit OFFSET :offset
       """)
-  List<StudentRow> search(String query, int limit, long offset);
+  List<StudentRow> search(String query, Long scopeId, int limit, long offset);
 
   @Query("""
       SELECT COUNT(*) FROM students
-      WHERE :query IS NULL OR :query = ''
+      WHERE (:query IS NULL OR :query = ''
          OR student_code LIKE CONCAT('%', :query, '%')
          OR first_name LIKE CONCAT('%', :query, '%')
          OR last_name LIKE CONCAT('%', :query, '%')
-         OR email LIKE CONCAT('%', :query, '%')
+         OR email LIKE CONCAT('%', :query, '%'))
+        AND (:scopeId IS NULL OR id = :scopeId)
       """)
-  long countBySearch(String query);
+  long countBySearch(String query, Long scopeId);
 
   void deleteByStudentCode(String studentCode);
 }
