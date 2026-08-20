@@ -6,7 +6,11 @@ import org.phuchoang.management.identity.web.dto.CreateStaffAccountRequest;
 import org.phuchoang.management.identity.web.dto.SetStatusRequest;
 import org.phuchoang.management.identity.web.dto.StaffAccountResponse;
 import org.phuchoang.management.identity.web.dto.StaffAccountStatusResponse;
+import org.phuchoang.management.identity.web.dto.StaffAccountSummaryDto;
+import org.phuchoang.management.shared.web.PageResponse;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,6 +36,16 @@ public class StaffAccountController {
   public StaffAccountController(IdentityService identityService, StaffAccountMapper mapper) {
     this.identityService = identityService;
     this.mapper = mapper;
+  }
+
+  /**
+   * UC-25's read half. {@link #setStatus} is keyed by a numeric user id that {@link
+   * #createStaffAccount} deliberately does not return, so this is the only way a client can find
+   * the account it needs to enable or disable.
+   */
+  @GetMapping
+  public PageResponse<StaffAccountSummaryDto> listStaffAccounts(Pageable pageable) {
+    return PageResponse.from(identityService.listStaffAccounts(pageable).map(mapper::toSummaryDto));
   }
 
   @PostMapping

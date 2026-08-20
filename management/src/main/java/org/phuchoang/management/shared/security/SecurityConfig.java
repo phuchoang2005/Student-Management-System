@@ -83,6 +83,10 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.DELETE, "/api/v1/books/**").hasRole("LIBRARIAN")
             .requestMatchers(HttpMethod.POST, "/api/v1/staff-accounts/**").hasRole("SYSTEM_ADMINISTRATOR")
             .requestMatchers(HttpMethod.PATCH, "/api/v1/staff-accounts/**").hasRole("SYSTEM_ADMINISTRATOR")
+            // Required, not redundant: the domain-read allow-list below doesn't cover
+            // /staff-accounts, so without this matcher a GET here would fall through to
+            // .anyRequest().authenticated() and let every logged-in role enumerate staff.
+            .requestMatchers(HttpMethod.GET, "/api/v1/staff-accounts/**").hasRole("SYSTEM_ADMINISTRATOR")
             .requestMatchers(HttpMethod.GET, "/api/v1/me/**").hasRole("STUDENT")
             // Explicit allow-list, not just an absent grant: without this, adding
             // SYSTEM_ADMINISTRATOR as a 5th authenticated role would let it fall through to

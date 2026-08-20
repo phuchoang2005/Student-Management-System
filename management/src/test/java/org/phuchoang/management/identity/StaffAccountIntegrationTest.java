@@ -2,12 +2,14 @@ package org.phuchoang.management.identity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.phuchoang.management.identity.domain.Username;
 import org.phuchoang.management.identity.port.UserRepository;
@@ -30,9 +32,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * rejection) is covered by {@link org.phuchoang.management.shared.security.SecurityConfigTest}.
  *
  * <p>{@code createStaffAccount}'s response is fixed as {@code {username, role, initialPassword}}
- * (06-low-level-design.md §8.7) — no {@code id} field, so {@code setStatus} tests resolve the
- * numeric id via {@link UserRepository} directly, the same way {@code StudentUpdateIntegrationTest}
- * drives {@code StudentRepository} for state a black-box HTTP call alone can't reach.
+ * (06-low-level-design.md §8.7) — no {@code id} field, so most {@code setStatus} tests below resolve
+ * the numeric id via {@link UserRepository} directly, the same way {@code
+ * StudentUpdateIntegrationTest} drives {@code StudentRepository}. {@code GET /api/v1/staff-accounts}
+ * now also exposes that id over HTTP, which is what {@link
+ * #listStaffAccountsExposesTheIdThatDeactivationRequires} covers: UC-24 → UC-25 is reachable by an
+ * API client alone, without the repository back door.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -211,5 +216,58 @@ class StaffAccountIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"enabled\":false}"))
         .andExpect(status().isNotFound());
+  }
+
+  /**
+   * The UC-24 → UC-25 round trip driven purely over HTTP: create an account, discover its id from
+   * the list, then deactivate it by that id. Before {@code GET /api/v1/staff-accounts} existed the
+   * middle step was impossible for any API client, because the create response carries no id and
+   * nothing else surfaced one.
+   */
+  @Test
+  void listStaffAccountsExposesTheIdThatDeactivationRequires() throws Exception {
+    String username = "staff.list.031";
+    createStaffAccount(username, "LIBRARIAN");
+
+    String listing =
+        mockMvc
+            .perform(get("/api/v1/staff-accounts").with(SYSADMIN).param("size", "100"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content").isArray())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+    List<Number> matchedIds =
+        JsonPath.read(listing, "$.content[?(@.username=='%s')].id".formatted(username));
+    assertThat(matchedIds).hasSize(1);
+    long listedId = matchedIds.get(0).longValue();
+    assertThat(listedId).isEqualTo(idOf(username));
+
+    // No password material is ever re-readable from the list (Identity.6).
+    assertThat(listing).doesNotContain("initialPassword");
+
+    mockMvc
+        .perform(
+            patch("/api/v1/staff-accounts/%d/status".formatted(listedId))
+                .with(SYSADMIN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":false}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.username").value(username))
+        .andExpect(jsonPath("$.enabled").value(false));
+  }
+
+  /**
+   * The listing is scoped to {@code Role.STAFF_ROLES}, so UC-25 can never be pointed at a
+   * System Administrator or a Student account — neither is a staff account it governs.
+   */
+  @Test
+  void listStaffAccountsExcludesNonStaffRoles() throws Exception {
+    mockMvc
+        .perform(get("/api/v1/staff-accounts").with(SYSADMIN).param("size", "100"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content[?(@.role=='SYSTEM_ADMINISTRATOR')]").isEmpty())
+        .andExpect(jsonPath("$.content[?(@.role=='STUDENT')]").isEmpty());
   }
 }

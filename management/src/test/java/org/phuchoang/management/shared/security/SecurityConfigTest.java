@@ -72,6 +72,20 @@ class SecurityConfigTest {
         .andExpect(status().isForbidden());
   }
 
+  /**
+   * The staff-account listing needs its own explicit matcher: the domain-read allow-list doesn't
+   * name /staff-accounts, so without one a GET here falls through to {@code
+   * anyRequest().authenticated()} and every logged-in role could enumerate staff accounts.
+   */
+  @Test
+  void staffAccountListingIsForbiddenToNonSystemAdministrators() throws Exception {
+    for (String role : new String[] {"REGISTRAR", "LIBRARIAN", "COURSE_ADMINISTRATOR", "STUDENT"}) {
+      mockMvc
+          .perform(get("/api/v1/staff-accounts").with(user("someone").roles(role)))
+          .andExpect(status().isForbidden());
+    }
+  }
+
   /** PM-016 (TC-XC-041): SYSTEM_ADMINISTRATOR is the only role admitted to staff-accounts writes. */
   @Test
   @WithMockUser(roles = "SYSTEM_ADMINISTRATOR")

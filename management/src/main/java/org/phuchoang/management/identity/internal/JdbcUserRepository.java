@@ -1,14 +1,19 @@
 package org.phuchoang.management.identity.internal;
 
+import java.util.List;
 import java.util.Optional;
 import org.phuchoang.management.identity.domain.EncryptedInitialPassword;
 import org.phuchoang.management.identity.domain.PasswordHash;
+import org.phuchoang.management.identity.domain.Role;
 import org.phuchoang.management.identity.domain.User;
 import org.phuchoang.management.identity.domain.UserId;
 import org.phuchoang.management.identity.domain.Username;
 import org.phuchoang.management.identity.port.UserRepository;
 import org.phuchoang.management.shared.exception.StaleWriteException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -38,6 +43,16 @@ class JdbcUserRepository implements UserRepository {
   @Override
   public boolean existsByUsername(Username username) {
     return springRepo.existsByUsername(username.value());
+  }
+
+  @Override
+  public Page<User> findStaffAccounts(Pageable pageable) {
+    List<String> roles = Role.STAFF_ROLES.stream().map(Role::name).toList();
+    List<User> content =
+        springRepo.findStaffAccounts(roles, pageable.getPageSize(), pageable.getOffset()).stream()
+            .map(this::toDomain)
+            .toList();
+    return new PageImpl<>(content, pageable, springRepo.countStaffAccounts(roles));
   }
 
   @Override

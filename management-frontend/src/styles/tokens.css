@@ -1,0 +1,65 @@
+/* Design tokens. base.css consumes these and nothing else hardcodes a colour or a spacing value. */
+:root {
+  /* Palette */
+  --c-bg: #f5f6f8;
+  --c-surface: #ffffff;
+  --c-border: #dfe3e8;
+  --c-border-strong: #c4cbd4;
+  --c-text: #1c2430;
+  --c-text-muted: #5f6b7a;
+  --c-text-faint: #8a95a3;
+
+  --c-primary: #2f5cd6;
+  --c-primary-hover: #2449ad;
+  --c-primary-soft: #e8eefc;
+
+  --c-danger: #c33636;
+  --c-danger-hover: #a32a2a;
+  --c-danger-soft: #fdecec;
+
+  --c-success: #1f7a4d;
+  --c-success-soft: #e6f4ec;
+
+  --c-warning: #8a5a00;
+  --c-warning-soft: #fdf3de;
+
+  /* Role badge colours -- "who am I logged in as" needs to be readable at a glance during a
+     role-switching demo, which matters more than it sounds. */
+  --c-role-registrar: #2f5cd6;
+  --c-role-librarian: #1f7a4d;
+  --c-role-courseadmin: #8a5a00;
+  --c-role-student: #6b3fa0;
+  --c-role-sysadmin: #c33636;
+
+  /* Spacing scale */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+
+  /* Radii */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
+
+  /* Type scale */
+  --t-xs: 12px;
+  --t-sm: 13px;
+  --t-md: 14px;
+  --t-lg: 16px;
+  --t-xl: 20px;
+  --t-2xl: 26px;
+
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --shadow-sm: 0 1px 2px rgba(20, 30, 45, 0.06);
+  --shadow-md: 0 4px 16px rgba(20, 30, 45, 0.12);
+  --shadow-lg: 0 12px 32px rgba(20, 30, 45, 0.18);
+
+  --sidebar-w: 216px;
+  --topbar-h: 56px;
+}

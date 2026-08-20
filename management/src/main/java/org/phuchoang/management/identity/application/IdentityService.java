@@ -24,6 +24,8 @@ import org.phuchoang.management.shared.exception.FieldError;
 import org.phuchoang.management.shared.exception.InvalidCredentialsException;
 import org.phuchoang.management.shared.exception.UserNotFoundException;
 import org.phuchoang.management.shared.security.AuthenticatedPrincipal;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -128,6 +130,27 @@ public class IdentityService implements AccountProvisioning, InitialPasswordLook
     repository.save(user);
 
     return new ProvisionedStaffAccount(username.value(), role.name(), plaintextPassword);
+  }
+
+  /**
+   * The read half of UC-25 — {@link #setAccountEnabled} is keyed by numeric user id, but {@link
+   * #provisionStaff}'s response deliberately carries none (06-low-level-design.md §8.7), so without
+   * this an HTTP client can never discover the id it has to PATCH.
+   *
+   * <p>Scoped to {@link Role#STAFF_ROLES} in the repository: SYSTEM_ADMINISTRATOR cannot deactivate
+   * itself or any Student account through UC-25, and neither ever appears here.
+   */
+  @Transactional(readOnly = true)
+  public Page<StaffAccountSummary> listStaffAccounts(Pageable pageable) {
+    return repository
+        .findStaffAccounts(pageable)
+        .map(
+            user ->
+                new StaffAccountSummary(
+                    user.id().value(),
+                    user.username().value(),
+                    user.role().name(),
+                    user.enabled()));
   }
 
   /** 04-authentication-authorization.md §3b, UC-25: {@code findById} → {@code User.setEnabled} → save. */
@@ -298,6 +321,9 @@ public class IdentityService implements AccountProvisioning, InitialPasswordLook
 
   /** Result of {@link #setAccountEnabled}. */
   public record StaffAccountStatus(String username, boolean enabled) {}
+
+  /** One entry of {@link #listStaffAccounts}. {@code role} stays {@code String} for the same reason as {@link DemoAccount}'s. {@code id} is the whole point of the endpoint — it is what UC-25's PATCH is keyed by. */
+  public record StaffAccountSummary(Long id, String username, String role, boolean enabled) {}
 
   /** One entry of {@link #listDemoAccounts}. {@code role} stays {@code String} — not the domain {@link Role} — so the Web layer can consume it without a Domain-layer dependency (LayeringRulesTest). */
   public record DemoAccount(String role, String username, String password) {}
