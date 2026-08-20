@@ -1,6 +1,6 @@
 # Testing Documentation
 
-Test Plan / Test Strategy, Test Cases, and Test Data Preparation for the Student Management System, written **ahead of implementation** — `management/` currently has only a Spring Boot skeleton, no domain code and no Flyway migrations yet. These documents are derived entirely from the existing specification (`docs/BA-docs/`, `docs/SA-docs/`) and are meant to drive test authoring the moment each module is built, not to describe tests that already exist.
+Test Plan / Test Strategy, Test Cases, and Test Data Preparation for the Student Management System. These documents were originally written **ahead of implementation**, derived entirely from the specification (`docs/BA-docs/`, `docs/SA-docs/`) to drive test authoring as each module was built. As of Sprint 4 (PM-015), implementation is complete: all UC-1–25 have corresponding automated test classes under `management/src/test/java`, tracked in the [UC → File Index](#uc--file-index) below — see [`docs/PM-docs/04-sprint-backlog.md`](../PM-docs/04-sprint-backlog.md) for the JaCoCo coverage numbers from the latest full run.
 
 This is documentation only — no test code is included here. See [02-test-plan.md](./02-test-plan.md) §4 for the intended suite/package structure once implementation begins.
 
@@ -37,34 +37,34 @@ If a source document changes, the corresponding test cases here should be review
 
 ## UC → File Index
 
-| Use Case | File |
-| --- | --- |
-| UC-1 Register Student | [student.md](./03-test-cases/student.md) |
-| UC-2 Update Student Details | [student.md](./03-test-cases/student.md) |
-| UC-3 Remove Student | [student.md](./03-test-cases/student.md) |
-| UC-4 Add Book | [book.md](./03-test-cases/book.md) |
-| UC-5 Assign Book to Student | [book.md](./03-test-cases/book.md) |
-| UC-6 Unassign Book | [book.md](./03-test-cases/book.md) |
-| UC-7 Remove Book | [book.md](./03-test-cases/book.md) |
-| UC-8 Create Course | [course.md](./03-test-cases/course.md) |
-| UC-9 Update Course | [course.md](./03-test-cases/course.md) |
-| UC-10 Remove Course | [course.md](./03-test-cases/course.md) |
-| UC-11 Enroll Student in Course | [enrollment.md](./03-test-cases/enrollment.md) |
-| UC-12 End Enrollment | [enrollment.md](./03-test-cases/enrollment.md) |
-| UC-13 View/Search Students | [student.md](./03-test-cases/student.md) |
-| UC-14 View/Search Books | [book.md](./03-test-cases/book.md) |
-| UC-15 View/Search Courses | [course.md](./03-test-cases/course.md) |
-| UC-16 View Own Books, Courses & Enrollments | [identity-auth.md](./03-test-cases/identity-auth.md) |
-| UC-17 View Student Detail | [student.md](./03-test-cases/student.md) |
-| UC-18 View Book Detail | [book.md](./03-test-cases/book.md) |
-| UC-19 View Course Detail | [course.md](./03-test-cases/course.md) |
-| UC-20 View Enrollment Detail | [enrollment.md](./03-test-cases/enrollment.md) |
-| UC-21 Login | [identity-auth.md](./03-test-cases/identity-auth.md) |
-| UC-22 Change Password | [identity-auth.md](./03-test-cases/identity-auth.md) |
-| UC-23 View Student's Initial Password | [identity-auth.md](./03-test-cases/identity-auth.md) |
-| UC-24 Create Staff Account | [identity-auth.md](./03-test-cases/identity-auth.md) |
-| UC-25 Deactivate/Reactivate Staff Account | [identity-auth.md](./03-test-cases/identity-auth.md) |
-| RBAC matrix, must-change-password gate, optimistic locking, cross-module cascades, error envelope, architecture conformance (ArchUnit), staff-account/demo-account RBAC | [cross-cutting.md](./03-test-cases/cross-cutting.md) |
+| Use Case | File | Status |
+| --- | --- | --- |
+| UC-1 Register Student | [student.md](./03-test-cases/student.md) | ✅ Implemented & tested — `StudentRegistrationIntegrationTest`, `StudentServiceTest` |
+| UC-2 Update Student Details | [student.md](./03-test-cases/student.md) | ✅ Implemented & tested — `StudentUpdateIntegrationTest`, `StudentServiceTest` |
+| UC-3 Remove Student | [student.md](./03-test-cases/student.md) | ✅ Implemented & tested — `StudentRemovalIntegrationTest`, `StudentServiceTest` |
+| UC-4 Add Book | [book.md](./03-test-cases/book.md) | ✅ Implemented & tested — `BookCreationIntegrationTest`, `BookServiceTest` |
+| UC-5 Assign Book to Student | [book.md](./03-test-cases/book.md) | ✅ Implemented & tested — `BookOwnershipAssignmentIntegrationTest`, `BookServiceTest` |
+| UC-6 Unassign Book | [book.md](./03-test-cases/book.md) | ✅ Implemented & tested — `BookUnassignmentIntegrationTest`, `BookServiceTest` |
+| UC-7 Remove Book | [book.md](./03-test-cases/book.md) | ✅ Implemented & tested — `BookRemovalIntegrationTest`, `BookServiceTest` |
+| UC-8 Create Course | [course.md](./03-test-cases/course.md) | ✅ Implemented & tested — `CourseCreationIntegrationTest`, `CourseServiceTest` |
+| UC-9 Update Course | [course.md](./03-test-cases/course.md) | ✅ Implemented & tested — `CourseUpdateIntegrationTest`, `CourseServiceTest` |
+| UC-10 Remove Course | [course.md](./03-test-cases/course.md) | ✅ Implemented & tested — `CourseRemovalIntegrationTest`, `CourseServiceTest` |
+| UC-11 Enroll Student in Course | [enrollment.md](./03-test-cases/enrollment.md) | ✅ Implemented & tested — `EnrollmentCreationIntegrationTest`, `EnrollmentServiceTest` |
+| UC-12 End Enrollment | [enrollment.md](./03-test-cases/enrollment.md) | ✅ Implemented & tested — `EnrollmentEndIntegrationTest`, `EnrollmentServiceTest` |
+| UC-13 View/Search Students | [student.md](./03-test-cases/student.md) | ✅ Implemented & tested — `StudentLookupIntegrationTest` |
+| UC-14 View/Search Books | [book.md](./03-test-cases/book.md) | ✅ Implemented & tested — `BookLookupIntegrationTest` |
+| UC-15 View/Search Courses | [course.md](./03-test-cases/course.md) | ✅ Implemented & tested — `CourseLookupIntegrationTest` |
+| UC-16 View Own Books, Courses & Enrollments | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `MeControllerIntegrationTest` |
+| UC-17 View Student Detail | [student.md](./03-test-cases/student.md) | ✅ Implemented & tested — `StudentLookupIntegrationTest` |
+| UC-18 View Book Detail | [book.md](./03-test-cases/book.md) | ✅ Implemented & tested — `BookLookupIntegrationTest` |
+| UC-19 View Course Detail | [course.md](./03-test-cases/course.md) | ✅ Implemented & tested — `CourseLookupIntegrationTest` |
+| UC-20 View Enrollment Detail | [enrollment.md](./03-test-cases/enrollment.md) | ✅ Implemented & tested — `EnrollmentLookupIntegrationTest` |
+| UC-21 Login | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `LoginIntegrationTest` |
+| UC-22 Change Password | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `ChangePasswordIntegrationTest` |
+| UC-23 View Student's Initial Password | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `InitialPasswordViewIntegrationTest` |
+| UC-24 Create Staff Account | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `StaffAccountIntegrationTest` |
+| UC-25 Deactivate/Reactivate Staff Account | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `StaffAccountIntegrationTest` |
+| RBAC matrix, must-change-password gate, optimistic locking, cross-module cascades, error envelope, architecture conformance (ArchUnit), staff-account/demo-account RBAC | [cross-cutting.md](./03-test-cases/cross-cutting.md) | ✅ Implemented & tested — `RbacMatrixIntegrationTest`, `MustChangePasswordGateIntegrationTest`, `OwnRecordsScopingIntegrationTest`, `EnrollmentOptimisticLockingConfirmationTest`, `CascadeLifecycleIntegrationTest`, `EventPublicationRegistryIntegrationTest`, `GlobalExceptionHandlerTest`, `architecture/*`, `DemoAccountsIntegrationTest`, `DemoAccountsDisabledIntegrationTest` |
 
 ## Test Case Volume Summary
 

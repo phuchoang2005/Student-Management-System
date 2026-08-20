@@ -126,6 +126,31 @@ class StudentUpdateIntegrationTest {
 
   @Test
   @WithMockUser(roles = "REGISTRAR")
+  void rejectsMalformedEmailOnUpdate() throws Exception {
+    // api-specification.md §5 item 1 — malformed email format -> 400 (duplicate email -> 409 is
+    // already covered by rejectsEmailThatCollidesWithAnotherStudent above)
+    mockMvc
+        .perform(
+            post("/api/v1/students")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody("S00309", "Ivy", "Reed", "ivy.reed.309@example.edu")))
+        .andExpect(status().isCreated());
+
+    mockMvc
+        .perform(
+            put("/api/v1/students/S00309")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(updateBody("Ivy", "Reed", "not-an-email", "2000-01-01")))
+        .andExpect(status().isBadRequest());
+
+    String email =
+        jdbcTemplate.queryForObject(
+            "SELECT email FROM students WHERE student_code = ?", String.class, "S00309");
+    assertThat(email).isEqualTo("ivy.reed.309@example.edu");
+  }
+
+  @Test
+  @WithMockUser(roles = "REGISTRAR")
   void rejectsBlankLastName() throws Exception {
     // TC-STU-015
     mockMvc
