@@ -97,6 +97,8 @@ Source of truth: `06-low-level-design.md` §11.1.
 - **Steps:** As a STUDENT principal, `GET /api/v1/students?q=<term matching multiple students, including others>`.
 - **Expected Result:** `200 OK` (never `403`) with 0 or 1 result — only the caller's own record if it matches, following the same "no match → `200 []`" pattern every search use case already uses; never another student's record, even if it matches the search term.
 
+TC-XC-009–011 cover `student`; `book` and `enrollment` need the same "own records only" scoping per `02-component-diagram.md` §4 — see TC-XC-043–045 in §10 below. All of TC-XC-009–011 and TC-XC-043–045 are implemented in `OwnRecordsScopingIntegrationTest`.
+
 ---
 
 ## 2. Must-Change-Password Gate
@@ -107,14 +109,14 @@ Source of truth: `04-authentication-authorization.md` §4.2.
 - **Related UC / Rule:** `04-authentication-authorization.md` §4.2; Identity.3
 - **Priority:** P0 · **Type:** Security
 - **Preconditions:** Freshly-provisioned Student account, never logged a password change.
-- **Steps:** Log in with the initial password; then attempt one representative `GET` and one representative write endpoint the role would otherwise be allowed to call.
-- **Expected Result:** `403 Forbidden` on every endpoint except `POST /api/v1/auth/password`.
+- **Steps:** Log in with the initial password; then attempt two representative otherwise-allowed reads (`GET /api/v1/students` and `GET /api/v1/me/books-and-courses`). A write endpoint isn't used as the second case: STUDENT has zero write endpoints anywhere in the API (TC-XC-005), so a write-endpoint 403 here would be indistinguishable from ordinary RBAC denial rather than gate denial.
+- **Expected Result:** `403 Forbidden` on both, and on every endpoint except `POST /api/v1/auth/password`. Implemented in `MustChangePasswordGateIntegrationTest`.
 
 ### TC-XC-013 — The gate applies to every role, not only Student
 - **Related UC / Rule:** `04-authentication-authorization.md` §4.2 (gate is principal-level, not role-specific)
 - **Priority:** P1 · **Type:** Security
 - **Steps:** If any staff account is ever created with `mustChangePassword = true` (e.g. via a future admin-provisioning flow), repeat TC-XC-012 for that role.
-- **Expected Result:** Same `403` behavior — the gate is not hardcoded to the STUDENT role. (Currently only Student accounts are auto-provisioned with this flag set; this case documents the rule's generality for when staff provisioning is designed.)
+- **Expected Result:** Same `403` behavior — the gate is not hardcoded to the STUDENT role. (Currently only Student accounts are auto-provisioned with this flag set; this case documents the rule's generality for when staff provisioning is designed.) Represented in `MustChangePasswordGateIntegrationTest` as an `@Disabled` test with this reasoning, rather than fabricating a staff-provisioning path that doesn't exist yet.
 
 ### TC-XC-014 — The gate clears immediately after a successful password change, same session
 - **Related UC / Rule:** `04-authentication-authorization.md` §5.1; see also [identity-auth.md](./identity-auth.md) TC-IDN-015
@@ -346,6 +348,30 @@ Negative-case coverage for the two endpoints added by UC-24/UC-25 and the demo-a
 
 ---
 
+## 10. Own Records Scoping — Book & Enrollment
+
+Source of truth: `02-component-diagram.md` §4 ("Student | none | own records only (`student`, `book`, `enrollment` scoped to `principal.studentId`)"), same rule §1.3 exercises for `student`. This scoping did not exist in production code until PM-010 (`04-sprint-backlog.md` §6, `06-low-level-design.md` §11.5) — only `/me/**` implemented it beforehand. Implemented and tested in `OwnRecordsScopingIntegrationTest`, alongside TC-XC-009–011.
+
+### TC-XC-043 — A Student reading a book they own succeeds; reading another student's book, or an unowned book, is forbidden
+- **Related UC / Rule:** `02-component-diagram.md` §4; `api-specification.md` §5.3 (403, not 404, for a well-formed request that only fails authorization)
+- **Priority:** P0 · **Type:** Security-RBAC
+- **Steps:** As a STUDENT principal owning `book-owned-01`: `GET /api/v1/books/{book-owned-01.isbn}` (own book), `GET /api/v1/books/{book-owned-by-other.isbn}` (someone else's book), `GET /api/v1/books/{book-unowned.isbn}` (nobody's book).
+- **Expected Result:** `200 OK` for the caller's own book; `403 Forbidden` for both the other student's book and the unowned book. The unowned-book case is a resolved product decision, not an oversight: Students have no self-service checkout endpoint, so there's no reason for the general `/books` endpoint to double as a browsable catalog for them — "own records only" is read literally.
+
+### TC-XC-044 — A Student's book search is scoped to their own books regardless of the `owner` query parameter
+- **Related UC / Rule:** `02-component-diagram.md` §4; `api-specification.md` §5.4 (transparently scoped, never `403`)
+- **Priority:** P1 · **Type:** Security-RBAC
+- **Steps:** As a STUDENT principal owning one book while another student owns a second: `GET /api/v1/books` with no `owner` param, then again with `owner=<the other student's id>`.
+- **Expected Result:** `200 OK` both times, results containing only the caller's own book in both cases — the `owner` param is silently overridden by the caller's identity when present, never honored and never rejected with `400`/`403` (that would leak whether the other id is valid).
+
+### TC-XC-045 — A Student reading their own enrollment succeeds; reading another student's enrollment is forbidden whether or not it exists
+- **Related UC / Rule:** `02-component-diagram.md` §4; `api-specification.md` §5.3
+- **Priority:** P0 · **Type:** Security-RBAC
+- **Steps:** As a STUDENT principal: `GET /api/v1/enrollments/{self}/{ownCourse}` (own enrollment); `GET /api/v1/enrollments/{other}/{courseOtherIsEnrolledIn}` (another student's real enrollment); `GET /api/v1/enrollments/{other}/{courseOtherIsNotEnrolledIn}` (a pairing that was never created).
+- **Expected Result:** `200 OK` for the caller's own enrollment; identical `403 Forbidden` for both other-student cases, regardless of whether that enrollment actually exists — the ownership check runs before the repository lookup precisely so no existence signal leaks through a differently-timed `404` (unlike `student`/`book`, where the check runs after an existence check because the resource identifier isn't itself another student's numeric id exposed in the path).
+
+---
+
 ## Traceability Summary
 
 | Concern | Test Case IDs |
@@ -360,4 +386,6 @@ Negative-case coverage for the two endpoints added by UC-24/UC-25 and the demo-a
 | §5 ambiguity resolutions | Table in §6 (cross-references) |
 | Architecture conformance (ArchUnit) | TC-XC-028–035 |
 | Pagination conventions | TC-XC-036–038 |
+| Staff account provisioning & demo accounts (RBAC) | TC-XC-039–042 |
+| Own records scoping — book & enrollment | TC-XC-043–045 |
 | Staff account provisioning & demo accounts (RBAC) | TC-XC-039–042 |

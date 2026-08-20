@@ -37,6 +37,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 
 @ExtendWith(MockitoExtension.class)
 class StudentServiceTest {
@@ -212,9 +213,9 @@ class StudentServiceTest {
     service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     Pageable pageable = PageRequest.of(0, 20);
     Page<Student> repoPage = new PageImpl<>(java.util.List.of(existingStudent), pageable, 1);
-    when(repository.search("jane", pageable)).thenReturn(repoPage);
+    when(repository.search("jane", null, pageable)).thenReturn(repoPage);
 
-    Page<StudentService.StudentSummaryView> result = service.search("jane", pageable);
+    Page<StudentService.StudentSummaryView> result = service.search("jane", pageable, null);
 
     assertThat(result.getTotalElements()).isEqualTo(1);
     StudentService.StudentSummaryView summary = result.getContent().get(0);
@@ -227,11 +228,22 @@ class StudentServiceTest {
   void searchReturnsEmptyPageWhenNothingMatches() {
     service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     Pageable pageable = PageRequest.of(0, 20);
-    when(repository.search("nobody", pageable)).thenReturn(Page.empty(pageable));
+    when(repository.search("nobody", null, pageable)).thenReturn(Page.empty(pageable));
 
-    Page<StudentService.StudentSummaryView> result = service.search("nobody", pageable);
+    Page<StudentService.StudentSummaryView> result = service.search("nobody", pageable, null);
 
     assertThat(result.getContent()).isEmpty();
+  }
+
+  @Test
+  void searchScopesToTheCallingStudentWhenACallerStudentIdIsGiven() {
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
+    Pageable pageable = PageRequest.of(0, 20);
+    when(repository.search(null, new StudentId(1L), pageable)).thenReturn(Page.empty(pageable));
+
+    service.search(null, pageable, 1L);
+
+    verify(repository).search(null, new StudentId(1L), pageable);
   }
 
   @Test
@@ -239,7 +251,7 @@ class StudentServiceTest {
     service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.getDetail("S00123")).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.getDetail("S00123", null)).isInstanceOf(NotFoundException.class);
   }
 
   @Test
@@ -247,12 +259,30 @@ class StudentServiceTest {
     service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
 
-    StudentService.StudentDetailView detail = service.getDetail("S00123");
+    StudentService.StudentDetailView detail = service.getDetail("S00123", null);
 
     assertThat(detail.studentCode()).isEqualTo("S00123");
     assertThat(detail.firstName()).isEqualTo("Jane");
     assertThat(detail.ownedBooks()).isEmpty();
     assertThat(detail.activeCourses()).isEmpty();
+  }
+
+  @Test
+  void getDetailAllowsTheOwningStudentToReadTheirOwnRecord() {
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
+    when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
+
+    StudentService.StudentDetailView detail = service.getDetail("S00123", 1L);
+
+    assertThat(detail.studentCode()).isEqualTo("S00123");
+  }
+
+  @Test
+  void getDetailForbidsAStudentFromReadingAnotherStudentsRecord() {
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
+    when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
+
+    assertThatThrownBy(() -> service.getDetail("S00123", 2L)).isInstanceOf(AccessDeniedException.class);
   }
 
   @Test

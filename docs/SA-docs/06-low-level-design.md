@@ -1055,6 +1055,30 @@ public class DemoAccountsController {
 
 `application-prod.properties` fixes `app.demo-accounts.enabled=false`, overriding whatever the base `application.properties` default is — a `prod`-profile value that can't be forgotten by omission, since Spring Boot profile-specific properties always win over the base file. When the property is `false`, `@ConditionalOnProperty` skips registering `DemoAccountsController` entirely: no bean, no route, no `.permitAll()` matcher in §11.1 that could ever be exercised — a request to `GET /api/v1/auth/demo-accounts` in `prod` gets Spring MVC's ordinary `404` for an unmapped path, indistinguishable from any other nonexistent endpoint.
 
+### 11.5 Own-records-only scoping implementation (PM-010)
+
+§11.1's table already decided that `student`/`book`/`enrollment` GETs are open to all four domain roles at the filter-chain level, with STUDENT's "own records only" narrowing left to each Application Service (`02-component-diagram.md` §4). That narrowing shipped as part of PM-010 (`04-sprint-backlog.md` §6), alongside the RBAC matrix tests the ticket was originally scoped for — the scoping logic didn't exist yet when the ticket was picked up, only its test cases (`cross-cutting.md` §1.3, TC-XC-009/010/011) did.
+
+**Extracting the caller's identity.** `AuthenticatedPrincipal` gained a static helper used by every affected controller:
+
+```java
+public static Long studentIdOf(Authentication authentication) {
+    return authentication != null && authentication.getPrincipal() instanceof AuthenticatedPrincipal principal
+        ? principal.studentId()
+        : null;
+}
+```
+
+Null-safe on both `authentication` itself (a standalone/filter-chain-free MockMvc test resolves an unset `Authentication` parameter to `null`, not a wrongly typed principal) and on the principal's shape (a non-`AuthenticatedPrincipal` principal, e.g. a `@WithMockUser`-installed test principal, is treated the same as an unscoped staff caller). This differs from `MeController`'s blind cast to `AuthenticatedPrincipal`, which is only safe there because `/me/**` is already filter-chain-restricted to `hasRole("STUDENT")` — `/students`, `/books`, `/enrollments` are reachable by all four domain roles, so a blind cast would throw for every non-Student caller.
+
+**Threading the check through.** Each web controller extracts `Long callerStudentId = AuthenticatedPrincipal.studentIdOf(authentication)` and passes it into the corresponding Application Service method, which performs the actual authorization check — per §4's mandate that this live in `application/`, not `web/`:
+
+- `StudentService.search(query, pageable, callerStudentId)` / `getDetail(code, callerStudentId)` — `search` passes `callerStudentId` through as `StudentRepository.search`'s new nullable `scopeToId` parameter (`AND (:scopeId IS NULL OR id = :scopeId)`, mirroring `BookRepository.search`'s pre-existing `ownerFilter` pattern); `getDetail` checks existence first (404), then ownership (`AccessDeniedException` → 403) — a mismatch is a 403, not a 404, per `api-specification.md` §5 decision #3.
+- `BookService.search(query, ownerFilter, pageable, callerStudentId)` — when `callerStudentId` is present it **silently overrides** the client-supplied `ownerFilter` rather than rejecting a mismatched value, consistent with decision #4's "transparently scoped, never blocked" search philosophy. `getDetail(isbn, callerStudentId)` — existence check first, then ownership; **an unowned book is also a 403 for a Student caller**, not a 200 — resolved as a product decision during PM-010: "own records only" means the caller must actually own the book, and Students have no self-service checkout endpoint that would give them a reason to browse the full catalog.
+- `EnrollmentService.getDetail(studentId, courseCode, callerStudentId)` — the ownership check runs **before** the repository lookup, unlike Student/Book's check-after-lookup. `studentId` here is a caller-supplied path variable exposing another student's numeric id directly, so a probing Student must get an identical 403 whether the target enrollment exists, has ended, or the pairing never existed at all — checking after the lookup would let a 403-vs-404 timing difference leak existence information the check-before-lookup ordering avoids.
+
+**Exception choice.** All three reuse `org.springframework.security.access.AccessDeniedException` rather than a new `shared.exception` type — `GlobalExceptionHandler` already maps it to the standard `{timestamp,status,error,message,path}` 403 envelope (§3), so this was a zero-new-class change, and `AccessDeniedException` thrown from deep inside an `application/` service is still resolved by Spring MVC's `ExceptionHandlerExceptionResolver` inside `DispatcherServlet` before it can reach `ExceptionTranslationFilter`'s own (envelope-less) default handler — confirmed via `OwnRecordsScopingIntegrationTest`, which exercises this path through the real `SecurityFilterChain` rather than the standalone-MVC harness `GlobalExceptionHandlerTest` uses.
+
 ## 12. MapStruct Mapper Method Bodies
 
 Every `*Mapper` interface (`@Mapper(componentModel = "spring")`) mixes two kinds of method, per §2.2's Command/DTO conventions:

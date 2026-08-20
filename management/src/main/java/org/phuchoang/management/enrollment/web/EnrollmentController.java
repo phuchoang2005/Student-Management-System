@@ -5,7 +5,9 @@ import org.phuchoang.management.enrollment.application.EnrollmentService;
 import org.phuchoang.management.enrollment.web.dto.EnrollmentCreateRequest;
 import org.phuchoang.management.enrollment.web.dto.EnrollmentDetailDto;
 import org.phuchoang.management.enrollment.web.dto.EnrollmentResponse;
+import org.phuchoang.management.shared.security.AuthenticatedPrincipal;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,8 +37,10 @@ public class EnrollmentController {
   }
 
   @GetMapping("/{studentId}/{courseCode}")
-  public EnrollmentDetailDto getEnrollment(@PathVariable Long studentId, @PathVariable String courseCode) {
-    return mapper.toDetailDto(enrollmentService.getDetail(studentId, courseCode));
+  public EnrollmentDetailDto getEnrollment(
+      @PathVariable Long studentId, @PathVariable String courseCode, Authentication authentication) {
+    Long callerStudentId = AuthenticatedPrincipal.studentIdOf(authentication);
+    return mapper.toDetailDto(enrollmentService.getDetail(studentId, courseCode, callerStudentId));
   }
 
   @DeleteMapping("/{studentId}/{courseCode}")

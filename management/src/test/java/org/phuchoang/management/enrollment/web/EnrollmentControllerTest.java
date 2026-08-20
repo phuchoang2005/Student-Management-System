@@ -1,5 +1,7 @@
 package org.phuchoang.management.enrollment.web;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -41,7 +43,7 @@ class EnrollmentControllerTest {
 
   @Test
   void getEnrollmentReturns200WithStudentAndCourseSummaries() throws Exception {
-    when(enrollmentService.getDetail(1L, "CS101")).thenReturn(aDetailView());
+    when(enrollmentService.getDetail(eq(1L), eq("CS101"), any())).thenReturn(aDetailView());
 
     mockMvc
         .perform(get("/api/v1/enrollments/1/CS101"))
@@ -53,7 +55,7 @@ class EnrollmentControllerTest {
 
   @Test
   void getEnrollmentPropagatesNotFoundAs404() throws Exception {
-    when(enrollmentService.getDetail(1L, "CS101"))
+    when(enrollmentService.getDetail(eq(1L), eq("CS101"), any()))
         .thenThrow(new NotFoundException("No active enrollment for student 1 in course 'CS101'."));
 
     mockMvc.perform(get("/api/v1/enrollments/1/CS101")).andExpect(status().isNotFound());

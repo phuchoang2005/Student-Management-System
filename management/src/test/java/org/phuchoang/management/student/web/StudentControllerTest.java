@@ -1,6 +1,7 @@
 package org.phuchoang.management.student.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -209,7 +210,7 @@ class StudentControllerTest {
   void searchStudentsReturnsPagedSummaries() throws Exception {
     Page<StudentService.StudentSummaryView> page =
         new PageImpl<>(List.of(A_SUMMARY), PageRequest.of(0, 20), 1);
-    when(studentService.search(any(), any())).thenReturn(page);
+    when(studentService.search(any(), any(), any())).thenReturn(page);
 
     mockMvc
         .perform(get("/api/v1/students").param("query", "jane"))
@@ -220,7 +221,7 @@ class StudentControllerTest {
 
   @Test
   void searchStudentsReturnsEmptyContentWhenNoMatch() throws Exception {
-    when(studentService.search(any(), any()))
+    when(studentService.search(any(), any(), any()))
         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
     mockMvc
@@ -238,7 +239,7 @@ class StudentControllerTest {
 
   @Test
   void getStudentReturnsDetailWithEmptyBooksAndCourses() throws Exception {
-    when(studentService.getDetail("S00123")).thenReturn(aStudentDetailView());
+    when(studentService.getDetail(eq("S00123"), any())).thenReturn(aStudentDetailView());
 
     mockMvc
         .perform(get("/api/v1/students/S00123"))
@@ -252,7 +253,7 @@ class StudentControllerTest {
 
   @Test
   void getStudentPropagatesNotFoundAs404() throws Exception {
-    when(studentService.getDetail("S00123"))
+    when(studentService.getDetail(eq("S00123"), any()))
         .thenThrow(new NotFoundException("Student 'S00123' does not exist."));
 
     mockMvc.perform(get("/api/v1/students/S00123")).andExpect(status().isNotFound());

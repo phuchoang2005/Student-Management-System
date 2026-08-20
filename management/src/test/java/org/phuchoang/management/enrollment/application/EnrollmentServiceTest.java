@@ -32,6 +32,7 @@ import org.phuchoang.management.student.StudentDeleted;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
 import org.phuchoang.management.student.StudentSummary;
+import org.springframework.security.access.AccessDeniedException;
 
 @ExtendWith(MockitoExtension.class)
 class EnrollmentServiceTest {
@@ -169,7 +170,7 @@ class EnrollmentServiceTest {
     when(repository.findByStudentAndCourse(new StudentId(1L), new CourseCode("CS101")))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.getDetail(1L, "CS101")).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.getDetail(1L, "CS101", null)).isInstanceOf(NotFoundException.class);
 
     verifyNoInteractions(studentLookup, courseLookup);
   }
@@ -188,10 +189,38 @@ class EnrollmentServiceTest {
     when(studentLookup.summaryOf(new StudentId(1L))).thenReturn(studentSummary);
     when(courseLookup.summaryOf(new CourseCode("CS101"))).thenReturn(courseSummary);
 
-    EnrollmentService.EnrollmentDetailView detail = service.getDetail(1L, "CS101");
+    EnrollmentService.EnrollmentDetailView detail = service.getDetail(1L, "CS101", null);
 
     assertThat(detail.student()).isEqualTo(studentSummary);
     assertThat(detail.course()).isEqualTo(courseSummary);
     assertThat(detail.enrolledAt()).isEqualTo(enrolledAt);
+  }
+
+  @Test
+  void getDetailAllowsTheOwningStudentToReadTheirOwnEnrollment() {
+    service = new EnrollmentService(repository, studentLookup, courseLookup);
+    Instant enrolledAt = Instant.parse("2024-01-01T00:00:00Z");
+    Enrollment enrollment =
+        Enrollment.reconstitute(
+            new EnrollmentId(1L), new StudentId(1L), new CourseCode("CS101"), enrolledAt);
+    when(repository.findByStudentAndCourse(new StudentId(1L), new CourseCode("CS101")))
+        .thenReturn(Optional.of(enrollment));
+    when(studentLookup.summaryOf(new StudentId(1L)))
+        .thenReturn(new StudentSummary(1L, "S00123", "Jane", "Doe", "jane.doe@example.edu"));
+    when(courseLookup.summaryOf(new CourseCode("CS101")))
+        .thenReturn(new CourseSummary(1L, "CS101", "Intro to CS", 3));
+
+    EnrollmentService.EnrollmentDetailView detail = service.getDetail(1L, "CS101", 1L);
+
+    assertThat(detail.enrolledAt()).isEqualTo(enrolledAt);
+  }
+
+  @Test
+  void getDetailForbidsAStudentFromReadingAnotherStudentsEnrollmentBeforeTouchingTheRepository() {
+    service = new EnrollmentService(repository, studentLookup, courseLookup);
+
+    assertThatThrownBy(() -> service.getDetail(1L, "CS101", 2L)).isInstanceOf(AccessDeniedException.class);
+
+    verifyNoInteractions(repository, studentLookup, courseLookup);
   }
 }

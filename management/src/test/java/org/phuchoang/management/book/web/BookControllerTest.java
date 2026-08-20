@@ -1,6 +1,7 @@
 package org.phuchoang.management.book.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -236,7 +237,7 @@ class BookControllerTest {
   void searchBooksReturnsPagedSummaries() throws Exception {
     Page<BookService.BookSummaryView> page =
         new PageImpl<>(List.of(A_SUMMARY), PageRequest.of(0, 20), 1);
-    when(bookService.search(any(), any(), any())).thenReturn(page);
+    when(bookService.search(any(), any(), any(), any())).thenReturn(page);
 
     mockMvc
         .perform(get("/api/v1/books").param("query", "clean"))
@@ -248,7 +249,7 @@ class BookControllerTest {
 
   @Test
   void searchBooksReturnsEmptyContentWhenNoMatch() throws Exception {
-    when(bookService.search(any(), any(), any()))
+    when(bookService.search(any(), any(), any(), any()))
         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
     mockMvc
@@ -275,7 +276,7 @@ class BookControllerTest {
 
   @Test
   void getBookReturnsDetailWithNullOwnerWhenUnowned() throws Exception {
-    when(bookService.getDetail("978-0-13-468599-1")).thenReturn(anUnownedBookDetail());
+    when(bookService.getDetail(eq("978-0-13-468599-1"), any())).thenReturn(anUnownedBookDetail());
 
     mockMvc
         .perform(get("/api/v1/books/978-0-13-468599-1"))
@@ -286,7 +287,7 @@ class BookControllerTest {
 
   @Test
   void getBookReturnsDetailWithOwnerSummaryWhenOwned() throws Exception {
-    when(bookService.getDetail("978-0-13-468599-1")).thenReturn(anOwnedBookDetail());
+    when(bookService.getDetail(eq("978-0-13-468599-1"), any())).thenReturn(anOwnedBookDetail());
 
     mockMvc
         .perform(get("/api/v1/books/978-0-13-468599-1"))
@@ -297,7 +298,7 @@ class BookControllerTest {
 
   @Test
   void getBookPropagatesNotFoundAs404() throws Exception {
-    when(bookService.getDetail("978-0-13-468599-1"))
+    when(bookService.getDetail(eq("978-0-13-468599-1"), any()))
         .thenThrow(new NotFoundException("Book '978-0-13-468599-1' does not exist."));
 
     mockMvc.perform(get("/api/v1/books/978-0-13-468599-1")).andExpect(status().isNotFound());

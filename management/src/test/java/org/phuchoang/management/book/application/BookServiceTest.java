@@ -30,6 +30,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 
 @ExtendWith(MockitoExtension.class)
 class BookServiceTest {
@@ -239,7 +240,7 @@ class BookServiceTest {
     Page<Book> repoPage = new PageImpl<>(List.of(anOwnedBook()), pageable, 1);
     when(repository.search("clean", null, pageable)).thenReturn(repoPage);
 
-    Page<BookService.BookSummaryView> result = service.search("clean", null, pageable);
+    Page<BookService.BookSummaryView> result = service.search("clean", null, pageable, null);
 
     assertThat(result.getTotalElements()).isEqualTo(1);
     BookService.BookSummaryView summary = result.getContent().get(0);
@@ -255,7 +256,7 @@ class BookServiceTest {
     Pageable pageable = PageRequest.of(0, 20);
     when(repository.search(null, new StudentId(1L), pageable)).thenReturn(Page.empty(pageable));
 
-    service.search(null, 1L, pageable);
+    service.search(null, 1L, pageable, null);
 
     verify(repository).search(null, new StudentId(1L), pageable);
   }
@@ -266,9 +267,21 @@ class BookServiceTest {
     Pageable pageable = PageRequest.of(0, 20);
     when(repository.search("nobody", null, pageable)).thenReturn(Page.empty(pageable));
 
-    Page<BookService.BookSummaryView> result = service.search("nobody", null, pageable);
+    Page<BookService.BookSummaryView> result = service.search("nobody", null, pageable, null);
 
     assertThat(result.getContent()).isEmpty();
+  }
+
+  @Test
+  void searchOverridesTheOwnerFilterWithTheCallerStudentIdWhenGiven() {
+    service = new BookService(repository, studentLookup);
+    Pageable pageable = PageRequest.of(0, 20);
+    when(repository.search(null, new StudentId(9L), pageable)).thenReturn(Page.empty(pageable));
+
+    // Client asked for owner=1L, but the caller is Student 9L -- the caller wins, silently.
+    service.search(null, 1L, pageable, 9L);
+
+    verify(repository).search(null, new StudentId(9L), pageable);
   }
 
   @Test
@@ -276,7 +289,7 @@ class BookServiceTest {
     service = new BookService(repository, studentLookup);
     when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.getDetail("978-0-13-468599-1"))
+    assertThatThrownBy(() -> service.getDetail("978-0-13-468599-1", null))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -285,7 +298,7 @@ class BookServiceTest {
     service = new BookService(repository, studentLookup);
     when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.of(anUnownedBook()));
 
-    BookService.BookDetailView detail = service.getDetail("978-0-13-468599-1");
+    BookService.BookDetailView detail = service.getDetail("978-0-13-468599-1", null);
 
     assertThat(detail.isbn()).isEqualTo("978-0-13-468599-1");
     assertThat(detail.ownerId()).isNull();
@@ -299,10 +312,40 @@ class BookServiceTest {
     StudentSummary summary = new StudentSummary(1L, "S00101", "Amy", "Lee", "amy.lee@example.edu");
     when(studentLookup.summaryOf(new StudentId(1L))).thenReturn(summary);
 
-    BookService.BookDetailView detail = service.getDetail("978-0-13-468599-1");
+    BookService.BookDetailView detail = service.getDetail("978-0-13-468599-1", null);
 
     assertThat(detail.ownerId()).isEqualTo(1L);
     assertThat(detail.owner()).isEqualTo(summary);
+  }
+
+  @Test
+  void getDetailAllowsTheOwningStudentToReadTheirOwnBook() {
+    service = new BookService(repository, studentLookup);
+    when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.of(anOwnedBook()));
+    StudentSummary summary = new StudentSummary(1L, "S00101", "Amy", "Lee", "amy.lee@example.edu");
+    when(studentLookup.summaryOf(new StudentId(1L))).thenReturn(summary);
+
+    BookService.BookDetailView detail = service.getDetail("978-0-13-468599-1", 1L);
+
+    assertThat(detail.ownerId()).isEqualTo(1L);
+  }
+
+  @Test
+  void getDetailForbidsAStudentFromReadingABookOwnedBySomeoneElse() {
+    service = new BookService(repository, studentLookup);
+    when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.of(anOwnedBook()));
+
+    assertThatThrownBy(() -> service.getDetail("978-0-13-468599-1", 2L))
+        .isInstanceOf(AccessDeniedException.class);
+  }
+
+  @Test
+  void getDetailForbidsAStudentFromReadingAnUnownedBook() {
+    service = new BookService(repository, studentLookup);
+    when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.of(anUnownedBook()));
+
+    assertThatThrownBy(() -> service.getDetail("978-0-13-468599-1", 1L))
+        .isInstanceOf(AccessDeniedException.class);
   }
 
   @Test

@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -62,6 +63,58 @@ class EnrollmentLookupIntegrationTest {
             .andReturn();
 
     return ((Number) JsonPath.read(result.getResponse().getContentAsString(), "$.id")).longValue();
+  }
+
+  private record LoggedInStudent(long id, MockHttpSession session) {}
+
+  /**
+   * Registers, logs in, and clears the must-change-password gate, mirroring {@code
+   * MeControllerIntegrationTest.aStudent} — {@code @WithMockUser} can't carry a real {@code
+   * studentId}, and TC-ENR-013 needs one to exercise "own records only" scoping meaningfully.
+   */
+  private LoggedInStudent aLoggedInStudent(String code, String email) throws Exception {
+    String body =
+        """
+        {"studentCode":"%s","firstName":"Amy","lastName":"Lee","email":"%s","dateOfBirth":"2000-01-01"}
+        """
+        .formatted(code, email);
+
+    MvcResult registration =
+        mockMvc
+            .perform(
+                post("/api/v1/students")
+                    .with(user("registrar").roles("REGISTRAR"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+            .andExpect(status().isCreated())
+            .andReturn();
+    String registrationBody = registration.getResponse().getContentAsString();
+    long studentId = ((Number) JsonPath.read(registrationBody, "$.id")).longValue();
+    String initialPassword = JsonPath.read(registrationBody, "$.initialPassword");
+
+    MvcResult login =
+        mockMvc
+            .perform(
+                post("/api/v1/auth/login")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"username\":\"%s\",\"password\":\"%s\"}".formatted(email, initialPassword)))
+            .andExpect(status().isOk())
+            .andReturn();
+    MockHttpSession session = (MockHttpSession) login.getRequest().getSession(false);
+
+    mockMvc
+        .perform(
+            post("/api/v1/auth/password")
+                .session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"currentPassword":"%s","newPassword":"chosenSecret1","retypeNewPassword":"chosenSecret1"}
+                    """
+                        .formatted(initialPassword)))
+        .andExpect(status().isOk());
+
+    return new LoggedInStudent(studentId, session);
   }
 
   private void createCourse(String code, String name) throws Exception {
@@ -120,14 +173,16 @@ class EnrollmentLookupIntegrationTest {
   }
 
   @Test
-  @WithMockUser(roles = "STUDENT")
-  void getEnrollmentIsVisibleToStudentToo() throws Exception {
-    // TC-ENR-013
-    long studentId = registerStudent("S00603", "amy.lee.603@example.edu");
+  void getEnrollmentIsVisibleToTheOwningStudentToo() throws Exception {
+    // TC-ENR-013 — a real logged-in Student session, not @WithMockUser: the latter carries no real
+    // studentId, and PM-010's "own records only" scoping needs one to exercise meaningfully.
+    LoggedInStudent student = aLoggedInStudent("S00603", "amy.lee.603@example.edu");
     createCourse("CS603", "Detail View Course");
-    enroll(studentId, "CS603");
+    enroll(student.id(), "CS603");
 
-    mockMvc.perform(get("/api/v1/enrollments/" + studentId + "/CS603")).andExpect(status().isOk());
+    mockMvc
+        .perform(get("/api/v1/enrollments/" + student.id() + "/CS603").session(student.session()))
+        .andExpect(status().isOk());
   }
 
   @Test

@@ -1,6 +1,7 @@
 package org.phuchoang.management.student.web;
 
 import jakarta.validation.Valid;
+import org.phuchoang.management.shared.security.AuthenticatedPrincipal;
 import org.phuchoang.management.shared.web.PageResponse;
 import org.phuchoang.management.student.application.StudentService;
 import org.phuchoang.management.student.web.dto.InitialPasswordResponse;
@@ -12,6 +13,7 @@ import org.phuchoang.management.student.web.dto.StudentSummaryDto;
 import org.phuchoang.management.student.web.dto.UpdateStudentRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,13 +39,16 @@ public class StudentController {
 
   @GetMapping
   public PageResponse<StudentSummaryDto> searchStudents(
-      @RequestParam(required = false) String query, Pageable pageable) {
-    return PageResponse.from(studentService.search(query, pageable).map(mapper::toSummaryDto));
+      @RequestParam(required = false) String query, Pageable pageable, Authentication authentication) {
+    Long callerStudentId = AuthenticatedPrincipal.studentIdOf(authentication);
+    return PageResponse.from(
+        studentService.search(query, pageable, callerStudentId).map(mapper::toSummaryDto));
   }
 
   @GetMapping("/{code}")
-  public StudentDetailDto getStudent(@PathVariable String code) {
-    return mapper.toDetailDto(studentService.getDetail(code));
+  public StudentDetailDto getStudent(@PathVariable String code, Authentication authentication) {
+    Long callerStudentId = AuthenticatedPrincipal.studentIdOf(authentication);
+    return mapper.toDetailDto(studentService.getDetail(code, callerStudentId));
   }
 
   /** US-6.3 — Registrar only, enforced by the filter chain (06-low-level-design.md §11.1). */

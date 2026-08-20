@@ -368,6 +368,8 @@ Per `06-low-level-design.md` §11.4, `04-authentication-authorization.md` §8. *
 | Integration tests: `STUDENT`-role "own records only" scoping (book/enrollment/self-view) | Tests | 2h |
 | Integration tests: unauthenticated → 401, wrong-role → 403 | Tests | 1.5h |
 
+**Scope note (picked up during implementation):** the "own records only" scoping this ticket's tests assume (row 3) turned out not to exist in production code — only `/me/**` implemented it; `StudentController`/`BookController`/`EnrollmentController`'s general read endpoints let any authenticated STUDENT read any record. Rather than write tests against incomplete behavior, the scoping itself was implemented as part of this ticket (`06-low-level-design.md` §11.5), so the tests exercise real, correct behavior. This widened the ticket beyond its original test-only scope; see §11.5 for the implementation and `RbacMatrixIntegrationTest`/`OwnRecordsScopingIntegrationTest` for the tests.
+
 ### PM-011 — Must-change-password gate (4h)
 
 | Task | Layer | Est. |
@@ -375,6 +377,8 @@ Per `06-low-level-design.md` §11.4, `04-authentication-authorization.md` §8. *
 | Implement `MustChangePasswordFilter.doFilterInternal()` (403 unless path == `/api/v1/auth/password`), replacing PM-006's stub | Security config | 2h |
 | Confirm `addFilterAfter(mustChangePasswordFilter, AuthorizationFilter.class)` ordering | Security config | 0.5h |
 | Tests: gate blocks all endpoints except password-change while flag is true; clears after `changePassword` | Tests | 1.5h |
+
+**Status:** the filter body and ordering (rows 1–2) shipped ahead of this ticket, alongside US-6.1 (see `MustChangePasswordFilter`'s own Javadoc). This ticket's remaining scope was row 3 — the dedicated `MustChangePasswordGateIntegrationTest` covering TC-XC-012/014; TC-XC-013 is `@Disabled` pending a staff-provisioning flow that can set `mustChangePassword=true` for a non-Student role (none exists yet).
 
 ### PM-012 — Optimistic locking implementation + tests (5h)
 
