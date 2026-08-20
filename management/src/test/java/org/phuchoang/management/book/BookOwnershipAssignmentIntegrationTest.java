@@ -1,6 +1,7 @@
 package org.phuchoang.management.book;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -9,6 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
+import org.phuchoang.management.book.domain.Book;
+import org.phuchoang.management.book.domain.Isbn;
+import org.phuchoang.management.book.port.BookRepository;
+import org.phuchoang.management.shared.exception.StaleWriteException;
+import org.phuchoang.management.student.StudentId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -41,6 +47,7 @@ class BookOwnershipAssignmentIntegrationTest {
   }
 
   @Autowired private MockMvc mockMvc;
+  @Autowired private BookRepository bookRepository;
 
   private long registerStudent(String code, String email) throws Exception {
     String body =
@@ -155,6 +162,31 @@ class BookOwnershipAssignmentIntegrationTest {
                     {"studentId":%d}
                     """.formatted(ownerId)))
         .andExpect(status().isNotFound());
+  }
+
+  @Test
+  @WithMockUser(roles = "LIBRARIAN")
+  void concurrentAssignmentOfTheSameBookReturns409ForTheSecondWriter() throws Exception {
+    // TC-BOOK-010 / TC-XC-017. The API exposes no client-visible version token to race over a real
+    // HTTP interleaving, so this drives BookRepository directly to reproduce the two-readers-
+    // one-stale-writer scenario deterministically, mirroring StudentUpdateIntegrationTest's
+    // concurrentUpdateOfTheSameStudentReturns409ForTheSecondWriter.
+    addBook("978-0-13-235088-4", "Clean Code", "Robert C. Martin");
+    long studentA = registerStudent("S00210A", "amy.lee.210a@example.edu");
+    long studentB = registerStudent("S00210B", "amy.lee.210b@example.edu");
+
+    Isbn isbn = new Isbn("978-0-13-235088-4");
+    Book clientA = bookRepository.findByIsbn(isbn).orElseThrow();
+    Book clientB = bookRepository.findByIsbn(isbn).orElseThrow();
+
+    clientA.assignOwner(new StudentId(studentA));
+    bookRepository.save(clientA);
+
+    clientB.assignOwner(new StudentId(studentB));
+    assertThatThrownBy(() -> bookRepository.save(clientB)).isInstanceOf(StaleWriteException.class);
+
+    Book stillPersisted = bookRepository.findByIsbn(isbn).orElseThrow();
+    assertThat(stillPersisted.ownerId().value()).isEqualTo(studentA);
   }
 
   @Test
