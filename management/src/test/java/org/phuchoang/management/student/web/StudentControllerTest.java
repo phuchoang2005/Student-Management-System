@@ -55,7 +55,6 @@ class StudentControllerTest {
   private static StudentService.ProvisionedStudent aProvisionedStudent() {
     Instant now = Instant.now();
     return new StudentService.ProvisionedStudent(
-        1L,
         "S00123",
         "Jane",
         "Doe",
@@ -126,7 +125,7 @@ class StudentControllerTest {
   private static StudentService.UpdatedStudent anUpdatedStudent() {
     Instant now = Instant.now();
     return new StudentService.UpdatedStudent(
-        1L, "S00123", "Janet", "Roe", "jane.new@example.edu", LocalDate.of(1999, 5, 5), now, now);
+        "S00123", "Janet", "Roe", "jane.new@example.edu", LocalDate.of(1999, 5, 5), now, now);
   }
 
   @Test
@@ -204,7 +203,7 @@ class StudentControllerTest {
   }
 
   private static final StudentService.StudentSummaryView A_SUMMARY =
-      new StudentService.StudentSummaryView(1L, "S00123", "Jane", "Doe", "jane.doe@example.edu");
+      new StudentService.StudentSummaryView("S00123", "Jane", "Doe", "jane.doe@example.edu");
 
   @Test
   void searchStudentsReturnsPagedSummaries() throws Exception {
@@ -234,21 +233,23 @@ class StudentControllerTest {
   private static StudentService.StudentDetailView aStudentDetailView() {
     Instant now = Instant.now();
     return new StudentService.StudentDetailView(
-        1L, "S00123", "Jane", "Doe", "jane.doe@example.edu", LocalDate.of(2000, 1, 1), now, now, List.of(), List.of());
+        "S00123", "Jane", "Doe", "jane.doe@example.edu", LocalDate.of(2000, 1, 1), now, now);
   }
 
   @Test
-  void getStudentReturnsDetailWithEmptyBooksAndCourses() throws Exception {
+  void getStudentReturnsDetail() throws Exception {
     when(studentService.getDetail(eq("S00123"), any())).thenReturn(aStudentDetailView());
 
     mockMvc
         .perform(get("/api/v1/students/S00123"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.studentCode").value("S00123"))
-        .andExpect(jsonPath("$.books").isArray())
-        .andExpect(jsonPath("$.books").isEmpty())
-        .andExpect(jsonPath("$.courses").isArray())
-        .andExpect(jsonPath("$.courses").isEmpty());
+        .andExpect(jsonPath("$.email").value("jane.doe@example.edu"))
+        .andExpect(jsonPath("$.dateOfBirth").value("2000-01-01"))
+        // Owned books and enrolled courses are their own endpoints now, not fields here.
+        .andExpect(jsonPath("$.books").doesNotExist())
+        .andExpect(jsonPath("$.courses").doesNotExist())
+        .andExpect(jsonPath("$.id").doesNotExist());
   }
 
   @Test

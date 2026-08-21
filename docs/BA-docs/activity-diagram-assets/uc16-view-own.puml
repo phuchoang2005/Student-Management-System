@@ -13,29 +13,36 @@ skinparam swimlane {
 
 |Student|
 start
-:Select "my books" and/or "my courses";
+:Select "my details", "my books",\nor "my courses";
 
 |System|
-if (Books requested?) then (yes)
-  :Look up books owned by the student;
-  if (Owns any books?) then (no)
-    :Return empty book list;
+:Identify the student from the\nauthenticated session\n(no caller-supplied code);
+if (Which view?) then (my details)
+  if (Student record still exists?) then (no)
+    :Report that the record\nno longer exists;
+    |Student|
+    stop
   else (yes)
-    :Return book summaries;
   endif
-endif
-if (Courses requested?) then (yes)
-  :Look up active enrollments for the student;
+  :Return the student's own record,\nincluding their student code;
+elseif (my books) then
+  :Look up books held by the student;
+  if (Holds any books?) then (no)
+    :Return an empty page;
+  else (yes)
+    :Return one page of book summaries;
+  endif
+else (my courses)
+  :Look up active enrollments\nfor the student;
   if (Has any active enrollments?) then (no)
-    :Return empty course list;
+    :Return an empty page;
   else (yes)
-    :Return course summaries;
+    :Return one page of course summaries;
   endif
 endif
-:Return requested information;
 
 |Student|
-:View own books/courses;
+:View own record / books / courses;
 if (Select a book?) then (yes)
   :Continue at UC-18\n(View Book Detail);
 elseif (Select a course?) then (yes)
@@ -43,4 +50,14 @@ elseif (Select a course?) then (yes)
 else (no)
 endif
 stop
+
+note right
+  Each view pages on its own, so
+  browsing books never disturbs
+  the courses view.
+
+  A Student reaches enrolled
+  courses only here -- UC-20's
+  lookups are not available to them.
+end note
 @enduml

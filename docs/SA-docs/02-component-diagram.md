@@ -169,7 +169,7 @@ flowchart LR
 
 ### 2.5 Why `book`/`enrollment` depend on a public API, not a port
 
-A hexagonal *port* is owned and defined by the module that needs it, for infrastructure it plugs in itself (e.g., `student`'s own `StudentRepository` port, implemented by its own JDBC adapter). A cross-module dependency is different: `book` doesn't want to own persistence for students, it wants to ask a question of the `student` module. Spring Modulith's answer is a **published interface** — `student` exposes `StudentLookup` from its top-level (non-`internal`) package as a small, deliberately narrow read API (`existsById`, `summaryOf`). `book` and `enrollment` inject it like any other Spring bean. This keeps `Book.ownerId` a plain `StudentId` value (never a `Student` reference or `@ManyToOne`), while still letting `book` enforce Book.4 ("cannot be assigned to a student who does not exist"). The same principle holds for `student`'s own outbound call into `identity.AccountProvisioning` (§2.2) even though the direction is inverted — `student` is asking `identity` to do something on its behalf, not the other way around, but it's still a narrow published interface, never a reach into `identity/internal/`.
+A hexagonal *port* is owned and defined by the module that needs it, for infrastructure it plugs in itself (e.g., `student`'s own `StudentRepository` port, implemented by its own JDBC adapter). A cross-module dependency is different: `book` doesn't want to own persistence for students, it wants to ask a question of the `student` module. Spring Modulith's answer is a **published interface** — `student` exposes `StudentLookup` from its top-level (non-`internal`) package as a small, deliberately narrow read API (`idOf`, `summaryOf`, `profileOf`). `book` and `enrollment` inject it like any other Spring bean. This keeps `Book.ownerId` a plain `StudentId` value (never a `Student` reference or `@ManyToOne`), while still letting `book` enforce Book.4 ("cannot be assigned to a student who does not exist") — `idOf` answers that question and yields the FK value in the same call, which is why `book` and `enrollment` accept a `StudentCode` from callers and never a raw id. The same principle holds for `student`'s own outbound call into `identity.AccountProvisioning` (§2.2) even though the direction is inverted — `student` is asking `identity` to do something on its behalf, not the other way around, but it's still a narrow published interface, never a reach into `identity/internal/`.
 
 ## 3. Inside a Module: Hexagonal Layering (`student`, the reference module)
 
@@ -226,10 +226,31 @@ Spring Security's filter chain sits in front of every controller, not inside any
 | Role (principal) | Write access | Read access |
 | --- | --- | --- |
 | System Administrator | `identity` (staff accounts only, via UC-24/25) | none — no `student`/`book`/`course`/`enrollment` access |
-| Registrar | `student`, `enrollment` | all |
-| Librarian | `book` | all |
-| Course Administrator | `course` | all |
-| Student | none | own records only (`student`, `book`, `enrollment` scoped to `principal.studentId`) |
+| Registrar | `student`, `enrollment` | `student`, `course`, `enrollment` |
+| Librarian | `book` | `student`, `book` |
+| Course Administrator | `course` | `student`, `course`, `enrollment` |
+| Student | none | own records only — `student` and `book` scoped to `principal.studentId`, plus the course catalogue; no `enrollment` access |
+
+**Read access is granted per module, not as one undifferentiated "domain read".** Each role reads
+what its own work needs and nothing more, which is a narrowing of an earlier version of this table
+that granted all four domain roles read access to everything. What each grant is *for*:
+
+- **Registrar** reads `enrollment` to answer "what is this student taking" and `course` to enroll
+  them; it has no reason to read `book`, so it no longer can.
+- **Librarian** reads `student` to attach a loan to a person and to show that person's books; it has
+  no reason to read `course` or `enrollment`.
+- **Course Administrator** reads `enrollment` for a course's roster and `student` to open a profile
+  from that roster — the *only* way it reaches a student record, since browsing students is not part
+  of its job. It has no reason to read `book`.
+- **Student** reads their own `student` record and their own `book` loans (both scoped
+  server-side), and the course catalogue. It has no `enrollment` access at all: a Student's enrolled
+  courses come from `identity`-scoped self-service (`GET /api/v1/me/courses`), keyed off the session
+  principal rather than off a student code the caller supplies — so there is nothing on
+  `enrollment`'s surface for a Student to read that self-service does not already answer.
+
+Every grant above is an **explicit allow-list** in the filter chain, not merely an absent denial: a
+role that fell through to `.anyRequest().authenticated()` would read everything
+(06-low-level-design.md §11.1).
 
 The exact scoping check ("own records only") is implemented as a method-level authorization check in each module's `application/` service — it needs the authenticated principal's student identity compared against the aggregate being read, which is domain-specific logic, not something the filter chain alone can express. `identity`'s *own-credential* surface (login, change password) doesn't fit this table's per-domain-module shape and isn't added as a row: every role may write to `identity`, but only ever their own credentials (UC-22) — no role may change another principal's password. The one asymmetric exception is UC-23: the Registrar additionally gets read access to a student's *initial* password, and only for as long as that student hasn't changed it yet. `identity`'s *staff-account-management* surface (UC-24/25) is asymmetric the other way — it's the System Administrator row above, and no other role may reach it. See [Authentication & Authorization](./04-authentication-authorization.md) §5–§6 for both.
 

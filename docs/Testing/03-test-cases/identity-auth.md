@@ -2,7 +2,7 @@
 
 Testing Documentation — [Test Strategy](../01-test-strategy.md) → [Test Plan](../02-test-plan.md) → Test Cases (`identity`) → [Test Data Preparation](../04-test-data-preparation.md).
 
-Covers **UC-16** (View Own Books, Courses & Enrollments), **UC-21** (Login), **UC-22** (Change Password), **UC-23** (View Student's Initial Password), **UC-24** (Create Staff Account), **UC-25** (Deactivate/Reactivate Staff Account), the demo-accounts convenience, and related user stories US-5.4, US-6.1–6.3, US-7.1–7.2. Endpoints: `POST /auth/login`, `POST /auth/password`, `GET /auth/demo-accounts`, `GET /students/{code}/initial-password`, `GET /me/books-and-courses`, `POST /staff-accounts`, `PATCH /staff-accounts/{id}/status`. Account auto-provisioning at registration (UC-1's identity tail) is tested in [student.md](./student.md) TC-STU-008–010; this file covers the account once it exists. The full RBAC matrix and the must-change-password gate as a cross-cutting concern are in [cross-cutting.md](./cross-cutting.md) §1–2, §9.
+Covers **UC-16** (View Own Record, Books & Courses), **UC-21** (Login), **UC-22** (Change Password), **UC-23** (View Student's Initial Password), **UC-24** (Create Staff Account), **UC-25** (Deactivate/Reactivate Staff Account), the demo-accounts convenience, and related user stories US-5.4, US-6.1–6.3, US-7.1–7.2. Endpoints: `POST /auth/login`, `POST /auth/password`, `GET /auth/demo-accounts`, `GET /students/{code}/initial-password`, `GET /me/profile`, `GET /me/courses`, `GET /me/books`, `GET|POST /staff-accounts`, `PATCH /staff-accounts/{id}/status`. Account auto-provisioning at registration (UC-1's identity tail) is tested in [student.md](./student.md) TC-STU-008–010; this file covers the account once it exists. The full RBAC matrix and the must-change-password gate as a cross-cutting concern are in [cross-cutting.md](./cross-cutting.md) §1–2, §9.
 
 ---
 
@@ -138,37 +138,37 @@ Covers **UC-16** (View Own Books, Courses & Enrollments), **UC-21** (Login), **U
 
 ## UC-16: View Own Books, Courses & Enrollments (Student self-service read)
 
-### TC-IDN-019 — Student views their own owned books and enrolled courses
+### TC-IDN-019 — Student views their own record, books, and courses
 - **Related UC / Rule:** UC-16 main flow
 - **Priority:** P1 · **Type:** Functional
-- **Test Data:** A Student-role account whose linked student owns books and holds enrollments.
-- **Steps:** As Student, `GET /api/v1/me/books-and-courses`.
-- **Expected Result:** `200 OK`; response contains summaries of exactly the books owned by and courses enrolled in by *this* student — never another student's.
+- **Test Data:** A Student-role account whose linked student holds books and enrollments, alongside a second student who holds different ones.
+- **Steps:** As Student: `GET /api/v1/me/profile`, `GET /api/v1/me/books`, `GET /api/v1/me/courses`.
+- **Expected Result:** `200 OK` for all three. `profile` returns *this* student's record — including their `studentCode`, which nothing else in the API tells them. `books` and `courses` contain exactly the books held by and courses enrolled in by *this* student, never the other student's. No response carries a surrogate `id`.
 
-### TC-IDN-020 — Student with no books or enrollments sees empty lists, not an error
+### TC-IDN-020 — Student with no books or enrollments sees empty pages, not an error
 - **Related UC / Rule:** UC-16 flows 2a/3a
 - **Priority:** P2 · **Type:** Boundary
-- **Steps:** As a Student with no associations, `GET /api/v1/me/books-and-courses`.
-- **Expected Result:** `200 OK`; both lists empty.
+- **Steps:** As a Student with no associations: `GET /api/v1/me/books`, `GET /api/v1/me/courses`.
+- **Expected Result:** `200 OK` for both; each is `{content: [], page: 0, size: 20, totalElements: 0, totalPages: 0}`.
 
-### TC-IDN-021 — `GET /me/books-and-courses` called by a non-Student role
+### TC-IDN-021 — `GET /me/**` called by a non-Student role
 - **Related UC / Rule:** `api-specification.md` §5.6 (explicit deviation resolution)
 - **Priority:** P1 · **Type:** Security-RBAC
-- **Steps:** As Registrar/Librarian/Course Administrator, `GET /api/v1/me/books-and-courses`.
-- **Expected Result:** `403 Forbidden` — this endpoint is Student-only by design, even though the role can read everything via other endpoints.
+- **Steps:** As Registrar, Librarian, and Course Administrator in turn: `GET /api/v1/me/profile`, `/me/books`, `/me/courses`.
+- **Expected Result:** `403 Forbidden` for every combination — these endpoints are Student-only by design, even for a role that can read the same underlying records through its own endpoints.
 
-### TC-IDN-022 — `books` and `courses` page independently
+### TC-IDN-022 — Books and courses page independently
 - **Related UC / Rule:** UC-16 flows 2b/3b (`api-specification.md` §3 Pagination)
 - **Priority:** P2 · **Type:** Functional
-- **Test Data:** A Student-role account whose linked student owns at least 3 books and holds at least 1 active enrollment.
-- **Steps:** As Student, `GET /api/v1/me/books-and-courses?booksPage=1&booksSize=2&coursesPage=0&coursesSize=20`.
-- **Expected Result:** `200 OK`; `books.page` is `1` (the second page of the caller's books) while `courses.page` is `0` — moving one collection's page does not affect the other's.
+- **Test Data:** A Student-role account whose linked student holds at least 3 books and at least 2 active enrollments.
+- **Steps:** As Student: `GET /api/v1/me/books?page=1&size=2`, then `GET /api/v1/me/courses?size=1`.
+- **Expected Result:** `200 OK` for both, each paged on its own terms. This is now structural rather than something to defend: the collections are separate requests, so paging one cannot disturb the other. The single composed `GET /me/books-and-courses` this replaces needed `booksPage`/`coursesPage`-prefixed parameters precisely because Spring resolves only one `page`/`size` pair per request.
 
-### TC-IDN-023 — Empty `books`/`courses` pages are still `200`, not an error
-- **Related UC / Rule:** UC-16 flows 2a/3a, extended to the paginated envelope
-- **Priority:** P2 · **Type:** Boundary
-- **Steps:** As a Student with no owned books and no active enrollments, `GET /api/v1/me/books-and-courses`.
-- **Expected Result:** `200 OK`; both `books` and `courses` are `{content: [], page: 0, size: 20, totalElements: 0, totalPages: 0}`.
+### TC-IDN-023 — `/me/profile` is the only way a Student learns their own student code
+- **Related UC / Rule:** UC-16; `04-authentication-authorization.md` §5
+- **Priority:** P1 · **Type:** Functional
+- **Steps:** As a Student, inspect the `POST /api/v1/auth/login` response, then call `GET /api/v1/me/profile`.
+- **Expected Result:** the login response carries only `{role, mustChangePassword}` — no student code, no id. `/me/profile` supplies the code. This matters because every other identifier in the API is a business code the caller is expected to know; a Student is the one principal that starts out knowing none.
 
 ---
 

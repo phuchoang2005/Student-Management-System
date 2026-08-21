@@ -1,3 +1,25 @@
+StudentCodeFilterParam:
+  name: studentCode
+  in: query
+  required: false
+  description: |
+    Restrict enrollments to this student — i.e. "the courses this student is taking". Mutually
+    exclusive with `courseCode`; exactly one of the two is required. An unresolvable code is a `400`.
+  schema:
+    type: string
+    maxLength: 20
+
+CourseCodeFilterParam:
+  name: courseCode
+  in: query
+  required: false
+  description: |
+    Restrict enrollments to this course — i.e. "the students taking this course". Mutually exclusive
+    with `studentCode`; exactly one of the two is required. An unresolvable code is a `400`.
+  schema:
+    type: string
+    maxLength: 20
+
 SearchQueryParam:
   name: query
   in: query
@@ -7,19 +29,22 @@ SearchQueryParam:
     type: string
 
 OwnerFilterParam:
-  name: owner
+  name: ownerStudentCode
   in: query
   required: false
-  description: Restrict results to books currently owned by this student id.
+  description: |
+    Restrict results to books currently held by this student, named by business-key code — the
+    surrogate `students.id` is never accepted here (api-specification.md §5 decision #9). An
+    unresolvable code is a `400`. This is how a Librarian pulls up one student's borrowed books.
   schema:
-    type: integer
-    format: int64
+    type: string
+    maxLength: 20
 
 PageParam:
   name: page
   in: query
   required: false
-  description: Zero-based page number to return. Values below 0 are rejected with `400`.
+  description: Zero-based page number to return. A page past the end returns `200` with empty `content`.
   schema:
     type: integer
     format: int32
@@ -30,53 +55,7 @@ SizeParam:
   name: size
   in: query
   required: false
-  description: Number of records per page. Values outside 1-100 are rejected with `400`.
-  schema:
-    type: integer
-    format: int32
-    minimum: 1
-    maximum: 100
-    default: 20
-
-BooksPageParam:
-  name: booksPage
-  in: query
-  required: false
-  description: Zero-based page number for the `books` collection, paged independently from `courses`.
-  schema:
-    type: integer
-    format: int32
-    minimum: 0
-    default: 0
-
-BooksSizeParam:
-  name: booksSize
-  in: query
-  required: false
-  description: Page size for the `books` collection. Values outside 1-100 are rejected with `400`.
-  schema:
-    type: integer
-    format: int32
-    minimum: 1
-    maximum: 100
-    default: 20
-
-CoursesPageParam:
-  name: coursesPage
-  in: query
-  required: false
-  description: Zero-based page number for the `courses` collection, paged independently from `books`.
-  schema:
-    type: integer
-    format: int32
-    minimum: 0
-    default: 0
-
-CoursesSizeParam:
-  name: coursesSize
-  in: query
-  required: false
-  description: Page size for the `courses` collection. Values outside 1-100 are rejected with `400`.
+  description: Number of records per page, clamped to 100 by `spring.data.web.pageable.max-page-size`.
   schema:
     type: integer
     format: int32
@@ -111,14 +90,18 @@ IsbnPathParam:
     type: string
     maxLength: 20
 
-EnrollmentStudentIdPathParam:
-  name: studentId
+EnrollmentStudentCodePathParam:
+  name: studentCode
   in: path
   required: true
-  description: Surrogate id of the enrolled student (`students.id`).
+  description: |
+    Business-key code of the enrolled student (`students.student_code`). An unresolvable code is a
+    `404` here rather than the `400` a *reference* gets, because it is part of the address of one
+    enrollment — an enrollment whose student does not exist cannot exist either, and answering
+    differently would leak whether the student does.
   schema:
-    type: integer
-    format: int64
+    type: string
+    maxLength: 20
 
 EnrollmentCourseCodePathParam:
   name: courseCode

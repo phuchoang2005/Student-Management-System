@@ -106,7 +106,7 @@ class StudentLookupIntegrationTest {
 
   @Test
   @WithMockUser(roles = "REGISTRAR")
-  void getStudentReturnsFullDetailWithEmptyBooksAndCourses() throws Exception {
+  void getStudentReturnsFullDetail() throws Exception {
     mockMvc
         .perform(
             post("/api/v1/students")
@@ -120,10 +120,12 @@ class StudentLookupIntegrationTest {
         .andExpect(jsonPath("$.studentCode").value("S00305"))
         .andExpect(jsonPath("$.firstName").value("Full"))
         .andExpect(jsonPath("$.email").value("full.detail.305@example.edu"))
-        .andExpect(jsonPath("$.books").isArray())
-        .andExpect(jsonPath("$.books").isEmpty())
-        .andExpect(jsonPath("$.courses").isArray())
-        .andExpect(jsonPath("$.courses").isEmpty());
+        .andExpect(jsonPath("$.dateOfBirth").exists())
+        // Owned books and enrolled courses are their own endpoints now
+        // (GET /api/v1/books?ownerStudentCode=, GET /api/v1/enrollments?studentCode=).
+        .andExpect(jsonPath("$.books").doesNotExist())
+        .andExpect(jsonPath("$.courses").doesNotExist())
+        .andExpect(jsonPath("$.id").doesNotExist());
   }
 
   @Test

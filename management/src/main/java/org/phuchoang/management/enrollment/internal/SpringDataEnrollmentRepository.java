@@ -55,6 +55,26 @@ interface SpringDataEnrollmentRepository extends CrudRepository<EnrollmentRow, L
   @Query("SELECT COUNT(*) FROM enrollments WHERE student_id = :studentId")
   long countByStudentId(Long studentId);
 
+  // The roster half of EnrollmentRepository.search. Returns EnrollmentRow, not EnrollmentCourseRow:
+  // every row in this page shares the one course the caller filtered on, so there is nothing per-row
+  // for a joined course_code column to carry -- JdbcEnrollmentRepository threads the caller's
+  // CourseCode through instead, the same way findByStudentAndCourse already does.
+  @Query("""
+      SELECT e.* FROM enrollments e
+      JOIN courses c ON c.id = e.course_id
+      WHERE c.course_code = :courseCode
+      ORDER BY e.enrolled_at
+      LIMIT :limit OFFSET :offset
+      """)
+  List<EnrollmentRow> findByCourseCode(String courseCode, int limit, long offset);
+
+  @Query("""
+      SELECT COUNT(*) FROM enrollments e
+      JOIN courses c ON c.id = e.course_id
+      WHERE c.course_code = :courseCode
+      """)
+  long countByCourseCode(String courseCode);
+
   @Modifying
   @Query("""
       DELETE e FROM enrollments e

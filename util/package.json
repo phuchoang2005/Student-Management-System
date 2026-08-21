@@ -1,0 +1,14 @@
+{
+  "name": "student-management-util",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Build utilities for the Student Management System. Currently: the docs Markdown -> HTML compiler.",
+  "scripts": {
+    "docs": "node md-to-html.js",
+    "docs:watch": "node md-to-html.js --watch"
+  },
+  "dependencies": {
+    "marked": "^16.4.1"
+  }
+}

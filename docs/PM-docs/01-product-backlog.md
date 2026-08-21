@@ -123,6 +123,25 @@ No new UC; makes the whole system's non-functional guarantees testable and close
 
 ---
 
+## 8a. Epic H — Role-scoped access rework
+
+Added after Sprint 4, in response to a walkthrough of the demo UI: with all four domain roles granted read access to everything, each role's screens showed data it had no reason to see, and two endpoints exposed database ids to the person operating them. No new UC — this narrows existing ones and re-keys two APIs. Sources: `note-fix.md` (the walkthrough findings), `02-component-diagram.md` §4, `api-specification.md` §5 decisions #9/#10.
+
+| ID | Item | Priority | Estimate | Source |
+| --- | --- | --- | --- | --- |
+| PM-019 | Per-resource read grants: split the single four-role `GET` allow-list into one per resource, so a Registrar cannot read books, a Librarian cannot read courses or enrollments, and a Course Administrator reaches a student record only through a roster | Must | 4h | `02-component-diagram.md` §4; walkthrough findings |
+| PM-020 | Business keys end to end: `POST`/`GET`/`DELETE /enrollments` keyed on `studentCode`; `PATCH /books/{isbn}/owner` and `GET /books?ownerStudentCode=` keyed on `studentCode`; every surrogate id removed from every response DTO. `StudentCode` promoted to `student`'s module root as published language, with `StudentLookup.idOf` as the single translation point | Must | 6h | `api-specification.md` §5 decision #9 |
+| PM-021 | Related data as endpoints, not embedded fields: `GET /enrollments?studentCode\|courseCode` added; the permanently-empty `StudentDetail.books`/`.courses` and `CourseDetail.roster` stubs removed. Each list is separately paged and separately authorized | Must | 4h | `api-specification.md` §5 decision #10; the three stubs `06-low-level-design.md` §4.6/§5 had carried since Sprint 1 |
+| PM-022 | Student self-service split: `GET /me/books-and-courses` replaced by `/me/profile`, `/me/courses`, `/me/books`. `/me/profile` is what lets a Student see their own record directly instead of searching for themselves, and is the only thing that tells them their own student code | Must | 3h | UC-16; walkthrough findings |
+| PM-023 | Frontend rebuilt on Next.js + TypeScript + Chakra UI, with each role's navigation and screens narrowed to match PM-019 | Must | 13h | `UI-UX/01-frontend-strategy.md` |
+| PM-024 | Docs HTML generated rather than hand-maintained: `util/md-to-html.js` compiles `docs/**/*.md`, the committed `.html` twins are deleted and gitignored | Should | 4h | The twins had already drifted — `SA-docs/01-system-overview.html` said "Part 1 of 5" where its Markdown source said "Part 1 of 6" |
+
+**Epic H subtotal: 34h**
+
+The four backend items are deliberately ordered PM-020 → PM-021 → PM-019 → PM-022: re-keying first means the new list endpoints are born business-key-addressed, and tightening the grants last means the tests written for the new endpoints are already in place when the RBAC matrix changes underneath them.
+
+---
+
 ## 9. Ranked backlog (delivery order)
 
 Matches the sprint sequence in [02-sprint-plan.md](./02-sprint-plan.md); this is the order items are pulled off the backlog, not a strict one-at-a-time queue within a sprint.
@@ -167,5 +186,11 @@ Matches the sprint sequence in [02-sprint-plan.md](./02-sprint-plan.md); this is
 | 36 | PM-013 | Cascade/lifecycle integration tests | Sprint 4 |
 | 37 | PM-014 | 7 ambiguity resolutions | Sprint 4 |
 | 38 | PM-015 | Coverage report + traceability matrix | Sprint 4 |
+| 39 | PM-020 | Business keys end to end (no ids on the API) | Sprint 5 |
+| 40 | PM-021 | Related data as endpoints, not embedded fields | Sprint 5 |
+| 41 | PM-019 | Per-resource read grants | Sprint 5 |
+| 42 | PM-022 | Student self-service split | Sprint 5 |
+| 43 | PM-023 | Frontend rebuild (Next.js + TypeScript + Chakra) | Sprint 5 |
+| 44 | PM-024 | Generated docs HTML | Sprint 5 |
 
-**Total: 163 ideal-hours across 38 backlog items** (22 user stories, 16 platform/hardening `PM-0xx` items), covering all 25 UCs identified in the Testing documentation. PM-016/017 and US-7.1/7.2 (13h) are a sudden mid-plan addition — see [02-sprint-plan.md](./02-sprint-plan.md) Sprint 3 for how this changed that sprint's capacity. PM-018 (3h) is a second, later addition — see Sprint 4 for how it closes a gap between `06-low-level-design.md` §13 and this backlog's original decomposition.
+**Total: 197 ideal-hours across 44 backlog items** (22 user stories, 22 platform/hardening `PM-0xx` items), covering all 25 UCs identified in the Testing documentation. PM-016/017 and US-7.1/7.2 (13h) are a sudden mid-plan addition — see [02-sprint-plan.md](./02-sprint-plan.md) Sprint 3 for how this changed that sprint's capacity. PM-018 (3h) is a second, later addition — see Sprint 4 for how it closes a gap between `06-low-level-design.md` §13 and this backlog's original decomposition. Epic H (PM-019–024, 34h) is a third: it came out of walking the finished demo UI role by role, which surfaced access breadth and id exposure that reading the specification had not.

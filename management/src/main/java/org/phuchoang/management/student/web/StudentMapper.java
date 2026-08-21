@@ -1,7 +1,6 @@
 package org.phuchoang.management.student.web;
 
 import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
 import org.phuchoang.management.student.application.StudentService.InitialPassword;
 import org.phuchoang.management.student.application.StudentService.ProvisionedStudent;
 import org.phuchoang.management.student.application.StudentService.StudentDetailView;
@@ -32,7 +31,5 @@ public interface StudentMapper {
 
   StudentSummaryDto toSummaryDto(StudentSummaryView view);
 
-  @Mapping(target = "books", source = "ownedBooks")
-  @Mapping(target = "courses", source = "activeCourses")
   StudentDetailDto toDetailDto(StudentDetailView view);
 }

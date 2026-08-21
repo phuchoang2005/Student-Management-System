@@ -52,7 +52,7 @@ class BookLookupIntegrationTest {
         .formatted(isbn, title, author);
   }
 
-  private long registerStudent(String code, String firstName, String lastName, String email) throws Exception {
+  private String registerStudent(String code, String firstName, String lastName, String email) throws Exception {
     String body =
         """
         {"studentCode":"%s","firstName":"%s","lastName":"%s","email":"%s","dateOfBirth":"2000-01-01"}
@@ -69,7 +69,7 @@ class BookLookupIntegrationTest {
             .andExpect(status().isCreated())
             .andReturn();
 
-    return ((Number) JsonPath.read(result.getResponse().getContentAsString(), "$.id")).longValue();
+    return JsonPath.read(result.getResponse().getContentAsString(), "$.studentCode");
   }
 
   @Test
@@ -133,7 +133,7 @@ class BookLookupIntegrationTest {
   @Test
   @WithMockUser(roles = "LIBRARIAN")
   void searchCanBeFilteredByOwner() throws Exception {
-    long ownerId = registerStudent("S00401", "Owner", "Filter", "owner.filter@example.edu");
+    String ownerCode = registerStudent("S00401", "Owner", "Filter", "owner.filter@example.edu");
     mockMvc
         .perform(
             post("/api/v1/books")
@@ -145,8 +145,8 @@ class BookLookupIntegrationTest {
             patch("/api/v1/books/978-0-13-597444-5/owner")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d}
-                    """.formatted(ownerId)))
+                    {"studentCode":"%s"}
+                    """.formatted(ownerCode)))
         .andExpect(status().isOk());
     mockMvc
         .perform(
@@ -156,10 +156,11 @@ class BookLookupIntegrationTest {
         .andExpect(status().isCreated());
 
     mockMvc
-        .perform(get("/api/v1/books").param("owner", String.valueOf(ownerId)))
+        .perform(get("/api/v1/books").param("ownerStudentCode", ownerCode))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.totalElements").value(1))
-        .andExpect(jsonPath("$.content[0].isbn").value("978-0-13-597444-5"));
+        .andExpect(jsonPath("$.content[0].isbn").value("978-0-13-597444-5"))
+        .andExpect(jsonPath("$.content[0].ownerStudentCode").value(ownerCode));
   }
 
   @Test
@@ -177,14 +178,14 @@ class BookLookupIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.isbn").value("978-0-13-468599-1"))
         .andExpect(jsonPath("$.title").value("Unowned Detail Book"))
-        .andExpect(jsonPath("$.ownerId").doesNotExist())
+        .andExpect(jsonPath("$.ownerStudentCode").doesNotExist())
         .andExpect(jsonPath("$.owner").doesNotExist());
   }
 
   @Test
   @WithMockUser(roles = "LIBRARIAN")
   void getBookReturnsFullDetailWithOwnerSummaryWhenOwned() throws Exception {
-    long ownerId = registerStudent("S00402", "Book", "Owner", "book.owner@example.edu");
+    String ownerCode = registerStudent("S00402", "Book", "Owner", "book.owner@example.edu");
     mockMvc
         .perform(
             post("/api/v1/books")
@@ -196,14 +197,14 @@ class BookLookupIntegrationTest {
             patch("/api/v1/books/978-0-13-597446-9/owner")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d}
-                    """.formatted(ownerId)))
+                    {"studentCode":"%s"}
+                    """.formatted(ownerCode)))
         .andExpect(status().isOk());
 
     mockMvc
         .perform(get("/api/v1/books/978-0-13-597446-9"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.ownerId").value(ownerId))
+        .andExpect(jsonPath("$.ownerStudentCode").value(ownerCode))
         .andExpect(jsonPath("$.owner.studentCode").value("S00402"))
         .andExpect(jsonPath("$.owner.firstName").value("Book"))
         .andExpect(jsonPath("$.owner.email").value("book.owner@example.edu"));

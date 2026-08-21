@@ -9,10 +9,14 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 | Actor | Description |
 | ----- | ----------- |
 | **System Administrator** | Provisions and disables staff user accounts (Registrar, Librarian, Course Administrator). Has no access to student, book, course, or enrollment data. |
-| **Registrar** | Manages student records and enrollments. |
-| **Librarian** | Manages the book catalog and book ownership assignments. |
-| **Course Administrator** | Manages course offerings. |
-| **Student** | May look up their own books, courses, and enrollments. Cannot enroll or end their own enrollment — that is Registrar-only. |
+| **Registrar** | Manages student records and enrollments. Reads students, courses, and enrollments — not books. |
+| **Librarian** | Manages the book catalog and book ownership assignments. Reads books and students (to see who holds what) — not courses or enrollments. |
+| **Course Administrator** | Manages course offerings and reads their rosters. Reads courses, enrollments, and — only by clicking through a roster — a student's record. Does not browse students, and does not read books. |
+| **Student** | May look up their own record, their own books, and their own enrolled courses. Cannot enroll or end their own enrollment — that is Registrar-only — and does not use the enrollment lookups at all. |
+
+**Each actor reads what its own work needs, and no more.** The read scopes above are not incidental: they are why UC-17 shows a Librarian a student's books but a Registrar that student's courses, and why UC-19 shows a roster to staff but not to a Student browsing the catalogue.
+
+**No actor ever handles a database identifier.** Every code in this document — student code, course code, ISBN — is a business key a person can read out loud. Internal record ids exist, but no actor sees or supplies one.
 
 ---
 
@@ -221,7 +225,7 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 - **Actor:** Registrar
 - **Preconditions:** The student and course both exist.
 
-> Student self-service enrollment is out of scope — a Student may view their own enrollments (UC-16, UC-20) but cannot create one.
+> Student self-service enrollment is out of scope — a Student may view their own enrolled courses (UC-16) but cannot create an enrollment, and has no access to the enrollment lookups in UC-20.
 - **Trigger:** Actor requests to enroll a student in a course.
 
 **Main Flow**
@@ -246,7 +250,7 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 - **Actor:** Registrar
 - **Preconditions:** An active enrollment exists for the (student, course) pair.
 
-> Student self-service withdrawal is out of scope — a Student may view their own enrollments (UC-16, UC-20) but cannot end one.
+> Student self-service withdrawal is out of scope — a Student may view their own enrolled courses (UC-16) but cannot end an enrollment, and has no access to the enrollment lookups in UC-20.
 - **Trigger:** Actor requests to withdraw a student from a course.
 
 **Main Flow**
@@ -330,29 +334,33 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 
 ---
 
-## UC-16: View Own Books, Courses & Enrollments
+## UC-16: View Own Record, Books & Courses
 
 - **Actor:** Student
 - **Preconditions:** The student record exists and the Student actor is looking up their own data.
-- **Trigger:** Student requests to view the books they own and/or the courses they are enrolled in.
+- **Trigger:** Student requests to view their own details, the books they hold, or the courses they are enrolled in.
 
 **Main Flow**
-1. Student selects "my books" and/or "my courses."
-2. System looks up books owned by the student and returns one page of a summary for each.
-3. System looks up active enrollments for the student and returns one page of a course summary for each.
-4. System returns the requested information.
+1. Student selects "my details", "my books", or "my courses."
+2. System identifies the student **from the authenticated session**, not from any identifier the Student supplies — this is the only lookup in the system with no caller-supplied key.
+3. System returns the requested view:
+   - *my details* → the student's own record (including their student code, which nothing else tells them);
+   - *my books* → one page of summaries of the books they hold;
+   - *my courses* → one page of summaries of the courses they are enrolled in.
 
 **Alternate / Exception Flows**
-- **2a.** Student owns no books → system returns an empty list for books.
-- **2b.** More owned books exist than fit on one page → Student may request the next page of books, independently of the courses list.
-- **3a.** Student has no active enrollments → system returns an empty list for courses.
-- **3b.** More active enrollments exist than fit on one page → Student may request the next page of courses, independently of the books list.
+- **3a.** Student holds no books → system returns an empty page for books.
+- **3b.** Student has no active enrollments → system returns an empty page for courses.
+- **3c.** More results exist than fit on one page → Student may request the next page. Each view pages on its own, so moving through books never disturbs the courses view.
+- **3d.** The student record was removed while the session was still open → system reports that the record no longer exists.
 
 **Extension Points**
-- **Select a book:** Student selects one owned book → continues at **UC-18: View Book Detail**.
+- **Select a book:** Student selects one held book → continues at **UC-18: View Book Detail**.
 - **Select a course:** Student selects one enrolled course → continues at **UC-19: View Course Detail**.
 
-**Postconditions:** No data is changed; the Student sees summaries of their own current books and course enrollments.
+**Postconditions:** No data is changed; the Student sees their own record and their own current books and course enrollments.
+
+**Note on enrollments.** A Student reads their enrolled courses *here*, and has no access to the enrollment lookups in UC-20 at all. The distinction is deliberate: this use case derives the answer from who is logged in, while UC-20 derives it from a student code the caller types — which is a code a Student could substitute for someone else's. Withdrawing the access is stronger than checking it.
 
 **Related User Story:** US-5.4.
 
@@ -360,29 +368,36 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 
 ## UC-17: View Student Detail
 
-- **Actor:** Registrar
-- **Extends:** UC-13 (View/Search Students)
-- **Preconditions:** A student search has returned at least one result.
-- **Trigger:** Registrar selects a student from the search results.
+- **Actors:** Registrar, Librarian, Course Administrator
+- **Extends:** UC-13 (View/Search Students) for the Registrar and Librarian; **UC-19 (View Course Detail)** for the Course Administrator, which is its only way in
+- **Preconditions:** A student search has returned at least one result, or a course roster is on screen.
+- **Trigger:** An actor selects a student from a list.
 
 **Main Flow**
-1. Registrar selects one student from the list of search results.
-2. System retrieves the full record for the selected student: all student fields, the list of books they currently own, and the list of courses they are currently enrolled in.
-3. System displays the full student detail.
+1. The actor selects one student.
+2. System retrieves that student's record.
+3. System additionally retrieves **the side of the student's associations that the actor is responsible for**, and only that side:
+   - **Librarian** → the books the student currently holds;
+   - **Registrar** and **Course Administrator** → the courses the student is currently enrolled in.
+4. System displays the record together with that one related list.
 
 **Alternate / Exception Flows**
-- **2a.** The selected student no longer exists (e.g., removed after the search ran) → system returns a not-found result; Registrar returns to the search results.
+- **2a.** The selected student no longer exists (e.g., removed after the search ran) → system returns a not-found result; the actor returns to the previous list.
+- **3a.** The student holds no books / has no enrollments → system shows an empty list, not an error.
+- **3b.** More related records exist than fit on one page → the actor may request the next page.
 
-**Postconditions:** No data is changed; the Registrar sees the selected student's complete detail, including owned books and enrollments.
+**Postconditions:** No data is changed; the actor sees the selected student's record plus the one associated list their role covers.
 
-**Related User Story:** US-5.1.
+**Note on the split.** Step 3 is the whole point of separating the two lists rather than showing both to everyone. A Librarian has no business seeing a student's timetable, and a Course Administrator has none seeing what they have borrowed. The Course Administrator reaches this use case only by clicking a name on a course roster — it has no student-browsing entry point at all, because browsing students is not part of its job.
+
+**Related User Stories:** US-5.1, US-5.2, US-5.3.
 
 ---
 
 ## UC-18: View Book Detail
 
 - **Actor:** Librarian (also reachable by Student via UC-16)
-- **Extends:** UC-14 (View/Search Books), UC-16 (View Own Books, Courses & Enrollments)
+- **Extends:** UC-14 (View/Search Books), UC-16 (View Own Record, Books & Courses)
 - **Preconditions:** A book search or "my books" list has returned at least one result.
 - **Trigger:** Actor selects a book from the results.
 
@@ -402,43 +417,63 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 
 ## UC-19: View Course Detail
 
-- **Actor:** Course Administrator (also reachable by Student via UC-16)
-- **Extends:** UC-15 (View/Search Courses), UC-16 (View Own Books, Courses & Enrollments)
+- **Actors:** Course Administrator, Registrar, Student (the latter via UC-16)
+- **Extends:** UC-15 (View/Search Courses), UC-16 (View Own Record, Books & Courses)
 - **Preconditions:** A course search or "my courses" list has returned at least one result.
 - **Trigger:** Actor selects a course from the results.
 
 **Main Flow**
 1. Actor selects one course from the list of results.
-2. System retrieves the full record for the selected course: course code, name, description, credits, and one page of the currently enrolled-student roster.
-3. System displays the full course detail.
+2. System retrieves the record for the selected course: course code, name, description, credits.
+3. **If the actor is a Course Administrator or Registrar**, system additionally retrieves one page of the currently enrolled-student roster.
+4. System displays the course detail, with the roster when step 3 applied.
 
 **Alternate / Exception Flows**
 - **2a.** The selected course no longer exists (e.g., removed after the results were shown) → system returns a not-found result; Actor returns to the results list.
-- **2b.** More students are enrolled than fit on one roster page → Actor may request the next page of the roster.
+- **3a.** No students are enrolled → system shows an empty roster, not an error.
+- **3b.** More students are enrolled than fit on one roster page → Actor may request the next page of the roster.
 
-**Postconditions:** No data is changed; the Actor sees the selected course's complete detail, including a page of its enrolled-student roster.
+**Extension Points**
+- **Select a student:** a Course Administrator or Registrar selects one name on the roster → continues at **UC-17: View Student Detail**. For the Course Administrator this is the *only* path into a student record.
 
-**Related User Story:** US-5.3, US-5.4.
+**Postconditions:** No data is changed; the Actor sees the selected course's record, and — for the two staff roles — a page of its enrolled-student roster.
+
+**Note on the roster.** Step 3 is conditional rather than universal because a Student browsing a course they are taking has no business receiving the names and contact details of everyone else taking it. The catalogue itself is open to them; the roster is not.
+
+**Related User Stories:** US-5.3, US-5.4.
 
 ---
 
-## UC-20: View Enrollment Detail
+## UC-20: Look Up Enrollments
 
-- **Actor:** Registrar, Course Administrator, or Student
-- **Extends:** UC-17 (View Student Detail), UC-19 (View Course Detail), UC-16 (View Own Books, Courses & Enrollments)
-- **Preconditions:** A student's enrollment list or a course's roster is being displayed, listing at least one enrollment.
-- **Trigger:** Actor selects a specific enrollment (a student-course pairing) from the list.
+- **Actors:** Registrar, Course Administrator
+- **Extends:** UC-17 (View Student Detail), UC-19 (View Course Detail)
+- **Preconditions:** The actor knows a student code or a course code, or has one of those records on screen.
+- **Trigger:** Actor asks either "what is this student taking?" or "who is taking this course?"
 
 **Main Flow**
-1. Actor selects one enrollment entry from a student's enrollment list or a course's roster.
-2. System retrieves the enrollment for the selected (student, course) pair.
-3. System retrieves the linked student's summary information and the linked course's summary information.
-4. System displays the full enrollment detail (student summary + course summary).
+1. Actor supplies **exactly one** of a student code or a course code.
+   - A **Registrar** typically types a student code directly — this is how the Registrar works, student first.
+   - A **Course Administrator** typically arrives from a course, having picked it from the current course list.
+2. System returns one page of the matching enrollments, each showing both sides: the student's summary, the course's summary, and when the enrollment began.
+3. Actor may select one entry to see that single enrollment on its own.
 
 **Alternate / Exception Flows**
-- **2a.** The selected enrollment no longer exists (e.g., it was ended after the list was shown) → system returns a not-found result; Actor returns to the list. *(req.md §4 Enrollment.4)*
+- **1a.** Neither code is supplied, or both are → system rejects the request. Neither would be meaningful: with no code this would list every enrollment in the system, which no actor has asked for; with both, the answer is the single entry step 3 already reaches.
+- **1b.** The supplied code matches no student / no course → system reports the code as invalid, rather than showing an empty list that would look like "enrolled in nothing."
+- **2a.** The student is enrolled in nothing / the course has nobody enrolled → system returns an empty page.
+- **2b.** More enrollments exist than fit on one page → Actor may request the next page.
+- **3a.** The selected enrollment no longer exists (e.g., it was ended after the list was shown) → system returns a not-found result; Actor returns to the list. *(req.md §4 Enrollment.4)*
 
-**Postconditions:** No data is changed; the Actor sees the full detail of the selected enrollment.
+**Extension Points**
+- **Select a student:** the Actor selects the student side of an entry → continues at **UC-17: View Student Detail**.
+- **Select a course:** the Actor selects the course side of an entry → continues at **UC-19: View Course Detail**.
+
+**Postconditions:** No data is changed; the Actor sees the enrollments matching the code they supplied.
+
+**Note on the Student actor.** A Student is deliberately *not* an actor here, though an earlier version of this use case listed one. A Student reads their enrolled courses through **UC-16**, where the system identifies them from their session rather than from a code they type. The two use cases answer the same question; only UC-16 does it without a caller-supplied identifier that could name somebody else.
+
+**Note on identifiers.** Every code above is a business code — a student code, a course code. No actor ever handles or types a database identifier, in this or any other use case.
 
 **Related User Story:** US-5.5.
 
@@ -571,11 +606,11 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 | UC-13 View/Search Students | Registrar | — (read-only) |
 | UC-14 View/Search Books | Librarian | — (read-only) |
 | UC-15 View/Search Courses | Course Administrator | — (read-only) |
-| UC-16 View Own Books, Courses & Enrollments | Student | — (read-only) |
-| UC-17 View Student Detail | Registrar | — (read-only) |
+| UC-16 View Own Record, Books & Courses | Student | — (read-only) |
+| UC-17 View Student Detail | Registrar/Librarian/Course Administrator | — (read-only) |
 | UC-18 View Book Detail | Librarian/Student | — (read-only) |
-| UC-19 View Course Detail | Course Administrator/Student | — (read-only) |
-| UC-20 View Enrollment Detail | Registrar/Course Administrator/Student | Enrollment.4 (read-only) |
+| UC-19 View Course Detail | Course Administrator/Registrar/Student | — (read-only) |
+| UC-20 Look Up Enrollments | Registrar/Course Administrator | Enrollment.4 (read-only) |
 | UC-21 Login | Registrar/Librarian/Course Administrator/Student | Identity.2–3 |
 | UC-22 Change Password | Registrar/Librarian/Course Administrator/Student | Identity.3–5 |
 | UC-23 View Student's Initial Password | Registrar | Identity.4–5 |

@@ -9,7 +9,6 @@ import java.time.LocalDate;
  * the API that ever shows the plaintext initial password.
  */
 public record StudentRegistrationResponse(
-    Long id,
     String studentCode,
     String firstName,
     String lastName,

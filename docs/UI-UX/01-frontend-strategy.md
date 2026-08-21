@@ -2,9 +2,9 @@
 
 UI-UX Documentation — Part 1 of 1.
 
-A build strategy for a **demo-grade frontend** over the completed backend in [`management/`](../../management/). It introduces no new business rules, roles, or endpoints: every screen below maps onto a use case already specified in [BA-docs/use-cases.md](../BA-docs/use-cases.md) and an endpoint already implemented and covered by tests.
+A build strategy for a **demo-grade frontend** over the completed backend in [`management/`](../../management/). It introduces no new business rules: every screen below maps onto a use case already specified in [BA-docs/use-cases.md](../BA-docs/use-cases.md) and an endpoint already implemented and covered by tests.
 
-Unlike [SA-docs/api-specification.md](../SA-docs/api-specification.md), which was hand-authored *before* any backend existed, this document is derived **from the shipped source**. Where the running code and the specification differ, the code is treated as authoritative and the difference is called out explicitly (§4, §9).
+Unlike [SA-docs/api-specification.md](../SA-docs/api-specification.md), which was hand-authored *before* any backend existed, this document is derived **from the shipped source**. Where the running code and the specification differ, the code is treated as authoritative and the difference is called out explicitly (§4).
 
 ---
 
@@ -12,7 +12,7 @@ Unlike [SA-docs/api-specification.md](../SA-docs/api-specification.md), which wa
 
 ### 1.1 Why a frontend at all
 
-The backend is feature-complete — all 4 sprints merged, 22 user stories, 25 use cases, RBAC and the must-change-password gate enforced and integration-tested. None of that is *visible*. The purpose of this frontend is to make the finished system demonstrable: a person sits down, logs in as each of the 5 roles in turn, and walks the use cases end to end in a browser.
+The backend is feature-complete — RBAC and the must-change-password gate enforced and integration-tested. None of that is *visible*. The purpose of this frontend is to make the finished system demonstrable: a person sits down, logs in as each of the 5 roles in turn, and walks the use cases end to end in a browser.
 
 That is the whole goal. It is **not** a production UI, and the strategy below trades polish for coverage deliberately.
 
@@ -20,8 +20,8 @@ That is the whole goal. It is **not** a production UI, and the strategy below tr
 
 - All 5 roles: `REGISTRAR`, `LIBRARIAN`, `COURSE_ADMINISTRATOR`, `STUDENT`, `SYSTEM_ADMINISTRATOR`.
 - Every implemented endpoint reachable from some screen (§3 is the full inventory).
-- The two cross-cutting behaviours that are the most interesting things this backend does: **role-based access control** and the **forced initial password change**.
-- An end-to-end demo script (§10) that ties the five modules into one narrative.
+- The three cross-cutting behaviours that are the most interesting things this backend does: **per-resource role-based access control**, the **forced initial password change**, and the fact that **no screen ever holds a database id**.
+- An end-to-end demo script (§11) that ties the five modules into one narrative.
 
 ### 1.3 Out of scope
 
@@ -29,13 +29,11 @@ Named explicitly so their absence reads as a decision, not an oversight:
 
 | Excluded | Why |
 | --- | --- |
-| TypeScript | Requested stack is plain JavaScript. |
-| A component library | See §2.2. |
-| Automated frontend tests | The backend already carries the test burden ([Testing/](../Testing/)); duplicating it here buys nothing for a demo. |
-| Production build / deployment | The demo runs on the Vite dev server. |
-| Responsive / mobile layout | Demoed on a laptop. A single desktop breakpoint. |
-| i18n, accessibility audit, dark mode | Not on the demo path. |
-| Optimistic-locking UI (PM-012) | The backend implements it, but no endpoint currently surfaces a version token to the client. |
+| Automated frontend tests | The backend already carries the test burden ([Testing/](../Testing/)); duplicating it here buys nothing for a demo. §12 is the manual counterpart. |
+| Server-side rendering of data | The session lives in a browser cookie and the app is a client-rendered SPA behind Next's router. Next is used for its routing, dev server, and rewrite proxy, not for RSC data fetching. |
+| Production deployment | The demo runs on `next dev`. |
+| i18n, formal accessibility audit | Not on the demo path — though Chakra's primitives carry keyboard and ARIA behaviour by default, and every table row that acts as a link is keyboard-activatable. |
+| Optimistic-locking UI (PM-012) | The backend implements it, but no endpoint surfaces a version token to the client. |
 
 ---
 
@@ -45,25 +43,33 @@ Named explicitly so their absence reads as a decision, not an oversight:
 
 | Layer | Choice |
 | --- | --- |
-| Markup | HTML5 — one `index.html` shell, single `#root` mount |
-| Styling | CSS3 — custom properties for tokens, plain class selectors, two stylesheets |
-| Framework | React 19, plain JSX (`.jsx`, no TypeScript) |
-| Build/dev | Vite 7 + `@vitejs/plugin-react` |
-| Routing | `react-router-dom` 7 |
-| Data fetching | Native `fetch`, wrapped once in `src/api/client.js` |
+| Framework | Next.js 16, App Router |
+| Language | TypeScript 5.9 (strict) |
+| UI | React 19 + Chakra UI v3 |
+| Styling | Emotion (via Chakra) + an SSR style registry — §7.5 |
+| Theming | `next-themes`, `attribute="class"`, following the OS |
+| Data fetching | Native `fetch`, wrapped once in `src/lib/api/client.ts` |
 | State | React Context (`AuthContext`) + local component state |
 
-**Total dependency count: 3 runtime, 2 dev.** No UI kit, no state library, no data-fetching library, no CSS framework.
+### 2.2 Why TypeScript, and why a component library
 
-### 2.2 Why no component library
+Both are reversals of an earlier version of this document, which specified plain JavaScript and no UI kit. What changed:
 
-The screens this demo needs are tables, forms, and modals — roughly a dozen components, none of them novel. A component library would add setup cost, a theming layer to learn, and bundle weight, in exchange for widgets we can write in ~200 lines of CSS3 (§7.5). The backend is the artifact being demoed; every hour spent configuring a design system is an hour not spent on the demo path.
+**TypeScript** earns its place because of §2.4: this API is addressed entirely by business keys, and the single most valuable compile-time guarantee here is that a `studentCode` is never confused with an id, or a `courseCode` with an ISBN. `src/lib/api/types.ts` transcribes the response DTOs, and the absence of an `id` field on those types is what makes "the UI cannot use a database id" a fact the compiler checks rather than a convention a reviewer has to spot.
 
-*(An earlier draft of this strategy specified Kuma UI. It was dropped: Kuma UI provides styling primitives — `Box`, `Flex`, `Text`, `styled` — but no table, modal, select, or toast, so it would have added a dependency without removing any of the components we actually have to write.)*
+**Chakra UI** earns its place because the screens are no longer just tables and forms. The role rework gave several screens *two* shapes (`/students` renders a profile for a Student and a searchable roll for staff; `/enrollments` is a code lookup for a Registrar and a drill-down for a Course Administrator), and every detail screen now composes a record card with one or two independently paged related tables. Hand-rolling dialogs, focus management, and a coherent light/dark palette across that surface is more work than adopting primitives that already have them — the earlier argument ("roughly a dozen components, none of them novel") stopped being true.
 
 ### 2.3 Why React state and not a data library
 
-Every screen in §6 follows one of two patterns: *fetch a page and render it*, or *submit a form and show the result*. Two hooks (`usePagedResource`, `useAsyncAction`, §7.4) cover both. There is no cache invalidation problem worth a library here — after any write, the list simply refetches.
+Every screen follows one of two patterns: *fetch a page and render it*, or *submit a form and show the result*. Three hooks (`usePagedResource`, `useResource`, `useAsyncAction`, §7.3) cover both. There is no cache-invalidation problem worth a library here — after any write, the list simply refetches.
+
+### 2.4 Business keys, not ids
+
+The single rule that shapes the API layer: **no screen holds a numeric id**. A student is a `studentCode`, a book an `isbn`, a course a `courseCode`. That is what every endpoint accepts and what every response returns (api-specification.md §5 decision #9).
+
+The one exception is the staff-account `id` on `/staff-accounts`, which addresses an `identity` record with no business key of its own — a username can be renamed, an id cannot. It comes from the listing and is never typed by a human.
+
+This is verifiable rather than aspirational: `grep -rn "studentId\|ownerId" management-frontend/src` returns nothing outside comments.
 
 ---
 
@@ -80,67 +86,75 @@ Derived from the controllers in `management/src/main/java/org/phuchoang/manageme
 | `POST` | `/auth/login` | public | `{username, password}` | `200 {role, mustChangePassword}` · `401 Error` |
 | `POST` | `/auth/password` | any authenticated | `{currentPassword, newPassword, retypeNewPassword}` | `200` (no body) |
 | `GET` | `/auth/demo-accounts` | public | — | `200 [{role, username, password}]` |
+| `GET` | `/staff-accounts?page&size` | `SYSTEM_ADMINISTRATOR` | — | `200 PageResponse<StaffAccountSummary>` |
 | `POST` | `/staff-accounts` | `SYSTEM_ADMINISTRATOR` | `{username, role}` | `201 {username, role, initialPassword}` |
 | `PATCH` | `/staff-accounts/{id}/status` | `SYSTEM_ADMINISTRATOR` | `{enabled}` | `200 {username, enabled}` |
 
-`role` on staff creation must be one of `REGISTRAR`, `LIBRARIAN`, `COURSE_ADMINISTRATOR` — `Role.STAFF_ROLES` rejects `SYSTEM_ADMINISTRATOR` and `STUDENT`.
+`role` on staff creation must be one of `REGISTRAR`, `LIBRARIAN`, `COURSE_ADMINISTRATOR`.
 
 ### 3.2 Student — `student/web/StudentController.java`
 
 | Method | Path | Roles | Request | Response |
 | --- | --- | --- | --- | --- |
-| `GET` | `/students?query&page&size` | `REGISTRAR`, `LIBRARIAN`, `COURSE_ADMINISTRATOR`, `STUDENT` | — | `200 PageResponse<StudentSummary>` |
+| `GET` | `/students?query&page&size` | `REGISTRAR`, `LIBRARIAN`, `COURSE_ADMINISTRATOR`, `STUDENT`¹ | — | `200 PageResponse<StudentSummary>` |
 | `GET` | `/students/{code}` | same | — | `200 StudentDetail` |
 | `GET` | `/students/{code}/initial-password` | `REGISTRAR` | — | `200 {username, initialPassword}` · `404` once changed |
 | `POST` | `/students` | `REGISTRAR` | `{studentCode, firstName, lastName, email, dateOfBirth}` | `201 StudentRegistration` (**includes `username` + one-time `initialPassword`**) |
 | `PUT` | `/students/{code}` | `REGISTRAR` | `{firstName, lastName, email, dateOfBirth}` | `200 StudentResponse` |
 | `DELETE` | `/students/{code}` | `REGISTRAR` | — | `204` |
 
-`StudentSummary` = `{id, studentCode, firstName, lastName, email}`.
-`StudentDetail` = summary + `{dateOfBirth, createdAt, updatedAt, books[], courses[]}` — see §9 for `books`/`courses`.
+`StudentSummary` = `{studentCode, firstName, lastName, email}`.
+`StudentDetail` = summary + `{dateOfBirth, createdAt, updatedAt}` — **no `books`/`courses` fields**; see §4.4.
+
+¹ `COURSE_ADMINISTRATOR` holds the grant for click-through from a course roster only, and gets no Students nav item (§5).
 
 ### 3.3 Book — `book/web/BookController.java`
 
 | Method | Path | Roles | Request | Response |
 | --- | --- | --- | --- | --- |
-| `GET` | `/books?query&owner&page&size` | 4 domain roles | — | `200 PageResponse<BookSummary>` |
-| `GET` | `/books/{isbn}` | 4 domain roles | — | `200 BookDetail` |
-| `POST` | `/books` | `LIBRARIAN` | `{isbn, title, author, publishedDate?, ownerId?}` | `201 BookResponse` |
-| `PATCH` | `/books/{isbn}/owner` | `LIBRARIAN` | `{studentId}` | `200 BookResponse` |
-| `DELETE` | `/books/{isbn}/owner` | `LIBRARIAN` | — | `200 BookResponse` (idempotent, `ownerId: null`) |
+| `GET` | `/books?query&ownerStudentCode&page&size` | `LIBRARIAN`, `STUDENT` | — | `200 PageResponse<BookSummary>` |
+| `GET` | `/books/{isbn}` | `LIBRARIAN`, `STUDENT` | — | `200 BookDetail` |
+| `POST` | `/books` | `LIBRARIAN` | `{isbn, title, author, publishedDate?, ownerStudentCode?}` | `201 BookResponse` |
+| `PATCH` | `/books/{isbn}/owner` | `LIBRARIAN` | `{studentCode}` | `200 BookResponse` |
+| `DELETE` | `/books/{isbn}/owner` | `LIBRARIAN` | — | `200 BookResponse` (idempotent, `ownerStudentCode: null`) |
 | `DELETE` | `/books/{isbn}` | `LIBRARIAN` | — | `204` |
 
-`owner` is a **numeric student id**, not a student code. `BookDetail.owner` is `null` when unowned, otherwise `{id, studentCode, firstName, lastName, email}`.
+`ownerStudentCode` is a **student code**, never a numeric id. `BookDetail.owner` is `null` when unowned, otherwise `{studentCode, firstName, lastName, email}`.
 
 ### 3.4 Course — `course/web/CourseController.java`
 
 | Method | Path | Roles | Request | Response |
 | --- | --- | --- | --- | --- |
-| `GET` | `/courses?query&page&size` | 4 domain roles | — | `200 PageResponse<CourseSummary>` |
-| `GET` | `/courses/{code}` | 4 domain roles | — | `200 CourseDetail` |
+| `GET` | `/courses?query&page&size` | `REGISTRAR`, `COURSE_ADMINISTRATOR`, `STUDENT` | — | `200 PageResponse<CourseSummary>` |
+| `GET` | `/courses/{code}` | same | — | `200 CourseDetail` |
 | `POST` | `/courses` | `COURSE_ADMINISTRATOR` | `{courseCode, name, description?, credits}` | `201 CourseResponse` |
 | `PUT` | `/courses/{code}` | `COURSE_ADMINISTRATOR` | `{name, description?, credits}` | `200 CourseResponse` |
 | `DELETE` | `/courses/{code}` | `COURSE_ADMINISTRATOR` | — | `204` |
 
-`courseCode` is immutable — `PUT` does not accept it.
+`courseCode` is immutable — `PUT` does not accept it. `CourseDetail` has **no `roster` field**; see §4.4.
 
 ### 3.5 Enrollment — `enrollment/web/EnrollmentController.java`
 
 | Method | Path | Roles | Request | Response |
 | --- | --- | --- | --- | --- |
-| `POST` | `/enrollments` | `REGISTRAR` | `{studentId, courseCode}` | `201 {id, studentId, courseCode, enrolledAt}` |
-| `GET` | `/enrollments/{studentId}/{courseCode}` | 4 domain roles | — | `200 {student, course, enrolledAt}` |
-| `DELETE` | `/enrollments/{studentId}/{courseCode}` | `REGISTRAR` | — | `204` |
+| `GET` | `/enrollments?studentCode\|courseCode&page&size` | `REGISTRAR`, `COURSE_ADMINISTRATOR` | — | `200 PageResponse<EnrollmentDetail>` |
+| `POST` | `/enrollments` | `REGISTRAR` | `{studentCode, courseCode}` | `201 {studentCode, courseCode, enrolledAt}` |
+| `GET` | `/enrollments/{studentCode}/{courseCode}` | `REGISTRAR`, `COURSE_ADMINISTRATOR` | — | `200 {student, course, enrolledAt}` |
+| `DELETE` | `/enrollments/{studentCode}/{courseCode}` | `REGISTRAR` | — | `204` |
 
-Keyed by the **student id + course code pair**, not by an enrollment id.
+Keyed by the **student code + course code pair**. The list endpoint requires **exactly one** filter — neither or both is a `400`, which is deliberate: with neither it would enumerate every enrollment in the system, and with both the answer is the single enrollment the item endpoint already addresses.
+
+Both filter directions return the same row shape, which is what lets one screen render "this student's courses" and another "this course's roster" off one response.
 
 ### 3.6 Self-service — `me/web/MeController.java`
 
 | Method | Path | Roles | Request | Response |
 | --- | --- | --- | --- | --- |
-| `GET` | `/me/books-and-courses` | `STUDENT` | `booksPage`, `booksSize`, `coursesPage`, `coursesSize` | `200 {books: PageResponse, courses: PageResponse}` |
+| `GET` | `/me/profile` | `STUDENT` | — | `200 {studentCode, firstName, lastName, email, dateOfBirth}` |
+| `GET` | `/me/courses?page&size` | `STUDENT` | — | `200 PageResponse<CourseSummary>` |
+| `GET` | `/me/books?page&size` | `STUDENT` | — | `200 PageResponse<BookSummary>` |
 
-The only endpoint with **prefixed** paging params — it composes two independently paged collections, and Spring resolves only one `page`/`size` pair per request.
+`/me/profile` is the **only** way a Student learns their own `studentCode`: the login response carries just `{role, mustChangePassword}`, and this API has no session probe. Every `/me` endpoint is scoped by the session principal, never by anything the caller supplies.
 
 ### 3.7 Shared envelopes
 
@@ -156,34 +170,31 @@ The only endpoint with **prefixed** paging params — it composes two independen
   "path": "...", "errors": [ { "field": "email", "message": "must be a well-formed email address" } ] }
 ```
 
-`page` is 0-based (default `0`); `size` defaults to `20` and is capped at `100`. Out-of-range `page` → `200` with empty `content`; invalid `page`/`size` → `400`.
+`page` is 0-based (default `0`); `size` defaults to `20` and is capped at `100`. Out-of-range `page` → `200` with empty `content`.
 
 ---
 
-## 4. Three hard constraints
+## 4. Four hard constraints
 
-These three properties of the running backend drive most of the design decisions in §7. Each is verified against source, not assumed.
+These properties of the running backend drive most of the design decisions in §7. Each is verified against source, not assumed.
 
 ### 4.1 Same-origin or nothing
 
-Auth is a session cookie, and `SecurityConfig` registers **no CORS configuration**. A browser on `localhost:5173` calling `localhost:8080` cross-origin would have its cookie dropped, and the preflight rejected outright.
+Auth is a session cookie, and `SecurityConfig` registers **no CORS configuration**. A browser on `localhost:3000` calling `localhost:8080` cross-origin would have its cookie dropped and its preflight rejected outright.
 
-**Resolution:** `vite.config.js` proxies `/api` to `http://localhost:8080`. Every request uses a relative path (`/api/v1/students`), so from the browser's perspective there is one origin and the cookie is unremarkable.
+**Resolution:** `next.config.ts` rewrites `/api/*` and `/logout` to the backend, so every request uses a relative path and stays same-origin from the browser's point of view:
 
-```js
-// vite.config.js
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    proxy: {
-      '/api':    { target: 'http://localhost:8080', changeOrigin: true },
-      '/logout': { target: 'http://localhost:8080', changeOrigin: true },
-    },
-  },
-});
+```ts
+async rewrites() {
+  const backend = process.env.BACKEND_ORIGIN ?? 'http://localhost:8080';
+  return [
+    { source: '/api/:path*', destination: `${backend}/api/:path*` },
+    { source: '/logout',     destination: `${backend}/logout` },
+  ];
+}
 ```
 
-This is why the "add CORS to the backend" alternative was rejected: it would mean editing production security configuration for the sole benefit of a demo.
+This is why the "add CORS to the backend" alternative was rejected: it would mean editing production security configuration for the sole benefit of a demo. (The previous Vite-based frontend solved the same constraint the same way, with a dev-server proxy.)
 
 ### 4.2 `403` is ambiguous
 
@@ -196,25 +207,30 @@ Three completely different conditions all produce a bare `403`:
 | Logged in, `mustChangePassword` still true | `403` | **empty** — `MustChangePasswordFilter` writes a status and returns |
 | Bad username/password at login | `401` | `Error` envelope |
 
-The anonymous case is verified by `SecurityConfigTest.java:59-62`, which asserts `isForbidden()` — not `isUnauthorized()` — for unauthenticated `GET`s. Only a failed *login* is `401`.
+The anonymous case is verified by `SecurityConfigTest`, which asserts `isForbidden()` — not `isUnauthorized()` — for unauthenticated `GET`s. Only a failed *login* is `401`.
 
 The client therefore **cannot ask the server "who am I?"**. There is no session-probe endpoint for staff roles, and a `403` cannot be decoded on its own.
 
 **Resolution — client-side auth state is the source of truth:**
 
-1. `AuthContext` stores `{role, mustChangePassword}` from the login response, mirrored into `sessionStorage` so a page refresh survives.
-2. `permissions.js` mirrors `SecurityConfig`'s rules as a capability map, so nav items and action buttons are hidden *before* any request is made. A `403` becomes an edge case rather than the normal path.
-3. When a `403` does arrive, `client.js` resolves it against local state:
-   - no stored session → redirect to `/login`
-   - `mustChangePassword === true` → redirect to `/change-password`
-   - otherwise → render "You don't have permission for this action."
-4. If the server session has expired but `sessionStorage` still holds state, the first `403` clears it and drops the user to `/login`. Acceptable for a demo; noted rather than engineered around.
+1. `AuthContext` stores `{role, username, mustChangePassword}` from the login response, mirrored into `sessionStorage` so a page refresh survives.
+2. `permissions.ts` mirrors `SecurityConfig`'s per-resource rules as a capability map, so nav items and action buttons are hidden *before* any request is made. A `403` becomes an edge case rather than the normal path.
+3. `RequireAuth` resolves a missing session or a pending password change against local state; a genuine wrong-role `403` renders `Forbidden`, and `ErrorBanner` distinguishes the bodyless gate `403` from an ordinary one.
+4. If the server session expires while `sessionStorage` still holds state, the first `403` surfaces as a permission message. Acceptable for a demo; noted rather than engineered around.
 
 ### 4.3 Logout is not part of the API
 
-No `/api/v1/auth/logout` exists — `grep -rni logout` finds nothing in `management/src` or the SA docs. Spring Security's default `POST /logout` should still be registered (and CSRF is disabled, so no token is needed), but the contract does not promise it, and the must-change-password gate would `403` it for a user who has not yet changed their password.
+No `/api/v1/auth/logout` exists. Spring Security's default `POST /logout` should still be registered (and CSRF is disabled, so no token is needed), but the contract does not promise it, and the must-change-password gate would `403` it for a user who has not yet changed their password.
 
 **Resolution:** `logout()` POSTs `/logout`, **ignores any failure**, then clears `AuthContext` + `sessionStorage` and navigates to `/login`. Client state is authoritative; the server-side session is best-effort.
+
+### 4.4 Related data is never embedded
+
+`GET /students/{code}` returns the student record alone; `GET /courses/{code}` returns the course record alone. A student's books, a student's courses, and a course's roster are each their own paged endpoint.
+
+This is not an omission to work around — it is the point. Each collection carries its own authorization: a Librarian opening a student profile receives that student's **books** and not their course list, a Course Administrator receives their **courses** and not their books, and a Student opening a course receives no roster at all. An embedded array could not express that, and could not be paged either.
+
+**Resolution:** every detail screen composes the record card with whichever related table its role is entitled to (§6). The role check is `permissions.ts`, and the server enforces the same split independently.
 
 ---
 
@@ -224,49 +240,53 @@ The single source for nav rendering and button gating. Mirrors `SecurityConfig.f
 
 | Capability | REGISTRAR | LIBRARIAN | COURSE_ADMIN | STUDENT | SYSADMIN |
 | --- | :-: | :-: | :-: | :-: | :-: |
-| Read students / books / courses / enrollments | ✅ | ✅ | ✅ | ✅¹ | ❌ |
-| Write students | ✅ | ❌ | ❌ | ❌ | ❌ |
-| View a student's initial password | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Write enrollments | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Write books / assign ownership | ❌ | ✅ | ❌ | ❌ | ❌ |
-| Write courses | ❌ | ❌ | ✅ | ❌ | ❌ |
-| `GET /me/books-and-courses` | ❌ | ❌ | ❌ | ✅ | ❌ |
-| Manage staff accounts | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Change own password | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `students:read` | ✅ | ✅ | ✅¹ | ✅² | ❌ |
+| `students:write` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `students:initial-password` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `books:read` | ❌ | ✅ | ❌ | ✅² | ❌ |
+| `books:write` | ❌ | ✅ | ❌ | ❌ | ❌ |
+| `courses:read` | ✅ | ❌ | ✅ | ✅ | ❌ |
+| `courses:write` | ❌ | ❌ | ✅ | ❌ | ❌ |
+| `enrollments:read` | ✅ | ❌ | ✅ | ❌ | ❌ |
+| `enrollments:write` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `me:read` | ❌ | ❌ | ❌ | ✅ | ❌ |
+| `staff:manage` | ❌ | ❌ | ❌ | ❌ | ✅ |
+| `password:change` | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-¹ Transparently scoped server-side to the caller's own records — a Student searching students gets 0 or 1 rows, and another student's detail page returns `403`. **The UI needs no special-casing for this**; it is the server's job and it already does it.
+¹ **Held, but not a destination.** Course Admin needs `students:read` to open a profile from a course roster, and gets no Students nav item. This is the one case where capability and navigation deliberately differ — which is why `NAV_ITEMS` carries an explicit role list rather than deriving visibility from a capability. A capability-driven nav cannot express "reachable, but not somewhere you browse to".
 
-**`SYSTEM_ADMINISTRATOR` is denied every domain read.** This is a deliberate allow-list in `SecurityConfig`, not an oversight — so the sysadmin's nav shows exactly two items: Staff Accounts, and Change Password.
+² Transparently scoped server-side to the caller's own records — a Student searching students gets 0 or 1 rows, and another student's detail returns `403`. **The UI needs no special-casing for this**; it is the server's job and it already does it. The Student screens use `/me/*` anyway, which is scoped by session rather than by a code.
+
+**`SYSTEM_ADMINISTRATOR` is denied every domain read**, so its nav shows exactly two items: Staff Accounts and Change Password — the RBAC allow-list made visible.
 
 ---
 
 ## 6. Screen map
 
-| Route | Visible to | Endpoints used | Covers |
-| --- | --- | --- | --- |
-| `/login` | public | `GET /auth/demo-accounts`, `POST /auth/login` | UC-21 |
-| `/change-password` | any (forced) | `POST /auth/password` | UC-22 |
-| `/students` | 4 domain roles | `GET /students`; Registrar: `POST`, `PUT`, `DELETE` | UC-1, 2, 3, 13 |
-| `/students/:code` | 4 domain roles | `GET /students/{code}`, `GET /books?owner=`, Registrar: `GET .../initial-password` | UC-17, 23 |
-| `/books` | 4 domain roles | `GET /books`; Librarian: `POST`, `PATCH/DELETE .../owner`, `DELETE` | UC-4, 5, 6, 7, 14 |
-| `/books/:isbn` | 4 domain roles | `GET /books/{isbn}` | UC-18 |
-| `/courses` | 4 domain roles | `GET /courses`; Course Admin: `POST`, `PUT`, `DELETE` | UC-8, 9, 10, 15 |
-| `/courses/:code` | 4 domain roles | `GET /courses/{code}` | UC-19 |
-| `/enrollments` | 4 domain roles (lookup); Registrar (write) | `GET/POST/DELETE /enrollments` | UC-11, 12, 20 |
-| `/me` | STUDENT | `GET /me/books-and-courses` | UC-16 |
-| `/staff-accounts` | SYSADMIN | `POST /staff-accounts`, `PATCH .../status` | UC-24, 25 |
+| Route | Visible to | Behaviour, per role |
+| --- | --- | --- |
+| `/login` | public | `GET /auth/demo-accounts` chips, `POST /auth/login`. UC-21 |
+| `/change-password` | any (forced) | `POST /auth/password`. The one route the must-change gate allows. UC-22 |
+| `/students` | Registrar, Librarian, Student | **Student:** `GET /me/profile` rendered as a card — no list, no search. **Registrar / Librarian:** search + table + pagination over `GET /students`; Registrar also gets register / edit / delete. UC-1, 2, 3, 13, 16 |
+| `/students/[code]` | Registrar, Librarian, Course Admin | Record card, plus: **Librarian** → books on loan (`GET /books?ownerStudentCode=`); **Registrar / Course Admin** → enrolled courses (`GET /enrollments?studentCode=`), each row linking to the course. Registrar also gets the initial-password reveal. UC-17, 23 |
+| `/books` | Librarian, Student | **Student:** `GET /me/books`. **Librarian:** search + table + add / delete. UC-4, 7, 14, 16 |
+| `/books/[isbn]` | Librarian, Student | Record card; Librarian additionally gets assign (by student code) and release. UC-5, 6, 18 |
+| `/courses` | Registrar, Course Admin, Student | **Student:** `GET /me/courses` — enrolled only. **Registrar:** read-only catalogue. **Course Admin:** catalogue + create / edit / delete. UC-8, 9, 10, 15, 16 |
+| `/courses/[code]` | Registrar, Course Admin, Student | Record card; **Registrar / Course Admin** additionally get the roster (`GET /enrollments?courseCode=`), each row linking to that student. UC-19 |
+| `/enrollments` | Registrar, Course Admin | **Registrar:** type a student code → their courses → enroll / end. **Course Admin:** course list → a course → its roster → a student's profile. UC-11, 12, 20 |
+| `/staff-accounts` | SysAdmin | List, create, deactivate / reactivate. UC-24, 25 |
 
-**Coverage: all 25 use cases.** Every numbered UC in [use-cases.md](../BA-docs/use-cases.md) has a screen that reaches it — 11 routes, because several UCs (search + detail, create + update + delete) share one screen.
+**Coverage: all 25 use cases.** Several UCs (search + detail, create + update + delete) share one screen, and UC-16 is spread across the Student's three tabs rather than living on a page of its own.
 
 ### 6.1 Screen anatomy
 
 Three layouts cover every screen:
 
-**List screen** — search input (debounced 300ms) → `DataTable` → `Pagination`. A "New…" button in the header for roles with write access. Row actions (Edit / Delete) rendered per-row, gated by capability.
+**List screen** — search input (debounced 300ms) → `DataTable` → `Pagination`. A "New…" button in the header for roles with write access; row actions gated by capability. Rows are clickable *and* keyboard-activatable, because every drill-down in this app is a row click.
 
-**Detail screen** — a definition-list card of the record's fields, plus related-data sections beneath.
+**Detail screen** — a `RecordCard` definition list, plus zero, one, or two related tables chosen by role (§4.4).
 
-**Action screen** (`/enrollments`, `/staff-accounts`) — small forms rather than lists, because neither resource has a list endpoint.
+**Action screen** (`/enrollments` for a Registrar, `/staff-accounts`) — a small form driving a list, because the work starts with typing a key rather than browsing.
 
 ---
 
@@ -274,117 +294,73 @@ Three layouts cover every screen:
 
 ```
 management-frontend/
-├── index.html                     # HTML5 shell, single #root
-├── vite.config.js                 # /api + /logout proxy → :8080
-├── package.json
+├── next.config.ts                 # /api + /logout rewrites → :8080
+├── tsconfig.json  package.json
 └── src/
-    ├── main.jsx                   # createRoot + BrowserRouter + AuthProvider
-    ├── App.jsx                    # route table
-    ├── styles/
-    │   ├── tokens.css             # CSS3 custom properties: color, space, radius, type
-    │   └── base.css               # reset + component classes
-    ├── api/
-    │   ├── client.js              # fetch wrapper → ApiError
-    │   └── endpoints.js           # one function per endpoint, grouped by module
-    ├── auth/
-    │   ├── AuthContext.jsx        # {role, mustChangePassword} + login/logout
-    │   ├── RequireAuth.jsx        # route guard + must-change redirect
-    │   └── permissions.js         # §5 matrix as code
-    ├── hooks/
-    │   ├── usePagedResource.js    # search + page state for any PageResponse endpoint
-    │   └── useAsyncAction.js      # submit state: pending / error / success
+    ├── app/
+    │   ├── layout.tsx             # server shell
+    │   ├── providers.tsx          # 'use client': Emotion registry + Chakra + next-themes + AuthProvider
+    │   ├── emotion-registry.tsx    # SSR style registry — see §7.5
+    │   ├── page.tsx               # per-role landing redirect
+    │   ├── login/page.tsx
+    │   ├── change-password/page.tsx  # outside (app) on purpose — see §7.3
+    │   └── (app)/                 # everything behind RequireAuth + AppShell
+    │       ├── layout.tsx
+    │       ├── students/page.tsx        students/[code]/page.tsx
+    │       ├── books/page.tsx           books/[isbn]/page.tsx
+    │       ├── courses/page.tsx         courses/[code]/page.tsx
+    │       ├── enrollments/page.tsx
+    │       └── staff-accounts/page.tsx
     ├── components/
-    │   ├── AppShell.jsx           # sidebar (role-filtered) + topbar + <Outlet/>
-    │   ├── DataTable.jsx  Pagination.jsx  EmptyState.jsx
-    │   ├── Modal.jsx      Field.jsx       ErrorBanner.jsx
-    │   └── Toast.jsx      Badge.jsx       ConfirmDialog.jsx
-    └── pages/
-        ├── LoginPage.jsx  ChangePasswordPage.jsx  ForbiddenPage.jsx
-        ├── students/   StudentListPage.jsx  StudentDetailPage.jsx  StudentFormModal.jsx
-        ├── books/      BookListPage.jsx     BookDetailPage.jsx     BookFormModal.jsx
-        ├── courses/    CourseListPage.jsx   CourseDetailPage.jsx   CourseFormModal.jsx
-        ├── enrollments/EnrollmentPage.jsx
-        ├── me/         MyBooksAndCoursesPage.jsx
-        └── staff/      StaffAccountsPage.jsx
+    │   ├── AppShell.tsx    DataTable.tsx     Pagination.tsx   PageHeader.tsx
+    │   ├── RecordCard.tsx  SearchInput.tsx   ErrorBanner.tsx  Forbidden.tsx
+    │   └── FormDialog.tsx  ConfirmDialog.tsx FormField.tsx
+    │       StudentFormDialog.tsx  CourseFormDialog.tsx  BookFormDialog.tsx
+    ├── lib/api/    { client.ts, endpoints.ts, types.ts }
+    ├── lib/auth/   { AuthContext.tsx, RequireAuth.tsx, permissions.ts }
+    ├── lib/hooks/  { usePagedResource.ts, useResource.ts, useAsyncAction.ts }
+    └── theme/system.ts
 ```
 
-### 7.1 API client — `src/api/client.js`
+### 7.1 API client — `src/lib/api/client.ts`
 
 One wrapper, one error type. Every call goes through it.
-
-```js
-export class ApiError extends Error {
-  constructor(status, body) {
-    super(body?.message ?? `Request failed (${status})`);
-    this.status = status;
-    this.errors = body?.errors ?? [];      // ValidationError field errors
-  }
-  fieldError(name) {
-    return this.errors.find((e) => e.field === name)?.message;
-  }
-}
-
-async function request(method, path, { body, params } = {}) {
-  const url = params ? `${path}?${new URLSearchParams(clean(params))}` : path;
-  const res = await fetch(url, {
-    method,
-    credentials: 'include',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (res.status === 204) return null;
-  const payload = await res.json().catch(() => null);   // 403 gate has no body
-  if (!res.ok) throw new ApiError(res.status, payload);
-  return payload;
-}
-```
 
 Responsibilities kept **in** the client: JSON encode/decode, `204`-empty handling, bodyless-`403` tolerance, `ApiError` normalisation, and `ApiError.fieldError(name)` — the single hook that lets any form render inline validation from `ValidationError.errors[]`.
 
 Responsibilities kept **out**: the redirect decision for `403`. That belongs to `RequireAuth` and the page, which know the local auth state (§4.2).
 
-### 7.2 Endpoints — `src/api/endpoints.js`
+### 7.2 Endpoints and types — `src/lib/api/`
 
-One named function per operation in §3, so no component ever writes a URL string:
+`endpoints.ts` has one named function per operation in §3, so no component ever writes a URL string. `types.ts` transcribes the response DTOs. Together they *are* the client-side copy of the contract — when the backend changes, exactly these two files move.
 
-```js
-export const students = {
-  search:  (query, page, size = 20) => request('GET', '/api/v1/students', { params: { query, page, size } }),
-  get:     (code) => request('GET', `/api/v1/students/${encodeURIComponent(code)}`),
-  initialPassword: (code) => request('GET', `/api/v1/students/${encodeURIComponent(code)}/initial-password`),
-  register:(body) => request('POST', '/api/v1/students', { body }),
-  update:  (code, body) => request('PUT', `/api/v1/students/${encodeURIComponent(code)}`, { body }),
-  remove:  (code) => request('DELETE', `/api/v1/students/${encodeURIComponent(code)}`),
-};
-```
+`types.ts` is also where §2.4 is enforced: the types have no `id` field, so a component cannot reach for one.
 
-Same shape for `books`, `courses`, `enrollments`, `me`, `auth`, `staffAccounts`. This file *is* the client-side copy of the contract — when the backend changes, exactly one file moves.
+### 7.3 Auth — `src/lib/auth/`
 
-### 7.3 Auth — `src/auth/`
+`AuthContext` exposes `{session, ready, login, logout, clearMustChange, clearSession}`. `ready` matters under the App Router: the first render happens on the server, where `sessionStorage` does not exist, so without it an authenticated user would be bounced to `/login` on every refresh.
 
-`AuthContext` exposes `{ session, login, logout, clearMustChange }` where `session` is `{role, mustChangePassword} | null`, persisted to `sessionStorage`.
+The stored session is read in an **effect**, never during render. `sessionStorage` is browser-only, so a read during render makes the client's first committed tree differ from the server's (which always has `ready = false`) and hydration fails outright — React discards the server HTML and re-renders everything. Because `RequireAuth` renders a spinner whenever `!ready`, the pre-hydration frame is exactly the markup the server sent, and the effect costs one frame rather than correctness.
 
-`RequireAuth` wraps every protected route and applies three rules in order:
+`RequireAuth` applies three rules in order: no session → `/login`; `mustChangePassword` and not on that page → `/change-password`; capability not held → `Forbidden`. Rule 2 is the client-side mirror of `MustChangePasswordFilter` — it exists so the forced-change flow *feels* like a flow rather than a wall of failed requests.
 
-1. no `session` → `<Navigate to="/login" />`
-2. `session.mustChangePassword` and route ≠ `/change-password` → `<Navigate to="/change-password" />`
-3. route's required capability not in `permissions[session.role]` → `<ForbiddenPage />`
-
-Rule 2 is the client-side mirror of `MustChangePasswordFilter`. It exists so the forced-change flow *feels* like a flow rather than a wall of failed requests — the server enforcement remains the real guarantee.
-
-On a successful `POST /auth/password`, `clearMustChange()` flips the local flag. The backend does the same thing to the live session in `AuthController.clearMustChangePassword`, so no re-login is needed on either side.
+Rule 2 is also why `/change-password` sits **outside** the `(app)` route group, next to `/login`. Inside the group its parent layout would apply a plain `<RequireAuth>` — which, for a session with `mustChangePassword = true`, resolves to "redirect to `/change-password`" and renders a spinner instead of its children. The page would redirect to the route it is already on and never render, leaving an account provisioned by `User.provisionStaff` unable to clear the flag the backend gates every other endpoint on. Outside the group the page's own `<RequireAuth allowDuringPasswordChange>` is the only guard, and a forced user gets the bare centred form rather than a sidebar full of links `MustChangePasswordFilter` would `403`.
 
 ### 7.4 Hooks
 
-`usePagedResource(fetcher)` — owns `{query, page, data, loading, error}`, debounces `query`, resets `page` to 0 on a query change, and exposes `refetch()` for after a write. Drives **all four** list screens plus both halves of `/me`, since every one of them returns the same `PageResponse` envelope.
+`usePagedResource(fetcher, {enabled})` — owns `{query, page, data, loading, error}`, debounces `query`, resets `page` on a query change, and exposes `refetch()`. `enabled` is what lets `/enrollments` hold its fetch until a student code has actually been submitted.
 
-`useAsyncAction(fn)` — owns `{run, pending, error, reset}` for form submits. Its `error` is an `ApiError`, so a form renders `error.fieldError('email')` under the field and `<ErrorBanner error={error}/>` above it. Together these give every form inline `400` validation and a top-level `409`/`404` message without per-form code.
+`useResource(fetcher, deps)` — the single-record equivalent, for detail screens.
+
+`useAsyncAction(fn)` — `{run, pending, error, reset}` for form submits, with `error` narrowed to `ApiError` so a form renders `error.fieldError('email')` under the field and `<ErrorBanner>` above it.
 
 ### 7.5 Styling
 
-`tokens.css` defines the palette, spacing scale, radii, and type scale as custom properties; `base.css` consumes them. Components take semantic class names (`.card`, `.data-table`, `.btn`, `.btn--danger`, `.badge`, `.field__error`). Two files, no build step beyond Vite's own CSS handling.
+Chakra's default system with a small `defineConfig` overlay (`theme/system.ts`): a body font stack and an accent ramp. `next-themes` drives light/dark from the OS. No stylesheet of our own.
 
-A role `Badge` in the topbar — colour-keyed per role — makes "who am I logged in as" readable at a glance, which matters more than it sounds during a role-switching demo.
+Chakra styles through Emotion, which has no first-class App Router support yet, so `app/emotion-registry.tsx` supplies the registry Next's CSS-in-JS guide prescribes: a cache with `compat = true` (which makes Emotion's server branch cache rules and return `null` instead of emitting a `<style>` element inline), plus `useServerInsertedHTML` to re-emit those rules into `<head>`. Without it every SSR page ships ~50 KB of `<style>` tags inside `<body>` that the client never renders — tags React has to reconcile away on hydration, and which are what a hydration mismatch elsewhere in the tree ends up being reported against. The `data-emotion` attributes it writes are load-bearing: Emotion's browser code looks up `style[data-emotion="css-global <name>"]` to adopt a node instead of duplicating it, and `createCache` scans `style[data-emotion]` to learn which rules are already in the document.
+
+A role `Badge` in the topbar, colour-keyed per role, makes "who am I logged in as" readable at a glance — which matters more than it sounds during a role-switching demo.
 
 ---
 
@@ -392,62 +368,42 @@ A role `Badge` in the topbar — colour-keyed per role — makes "who am I logge
 
 | Status | Meaning here | UI |
 | --- | --- | --- |
-| `400` | Validation | Inline under each field via `ApiError.fieldError(field)`; `ErrorBanner` for the summary |
-| `401` | Bad credentials (login only) | Inline message on the login form |
+| `400` | Validation, or an unresolvable business key | Inline under each field via `ApiError.fieldError(field)`; `ErrorBanner` for the summary |
+| `401` | Bad credentials (login), wrong current password (change password) | Inline on the form |
 | `403` | Anonymous / wrong role / must-change | Resolved against local state — §4.2 |
-| `404` | Not found, **or** initial password already changed | Detail pages: `EmptyState`. Initial-password: the deliberate information-hiding message |
+| `404` | Not found, **or** initial password already changed | Detail pages: empty state. Initial-password: the deliberate information-hiding message, worded as "already chosen their own" rather than "not found" |
 | `409` | Duplicate code / ISBN / email / enrollment | `ErrorBanner` with the server's `message` verbatim — it is already user-readable |
 | `5xx` | Unexpected | Generic banner + `console.error` |
 
-The `409` row matters for the demo: the backend's conflict messages are specific ("Student 'S001' already exists"), so passing `message` straight through is both the least code and the best output.
+The `409` row matters for the demo: the backend's conflict messages are specific ("Student code 'S001' is already in use."), so passing `message` straight through is both the least code and the best output.
 
 ---
 
-## 9. Backend gaps — surfaced, not faked
-
-Three stubs remain in the shipped backend. The UI **must show them as gaps** rather than render an empty table that looks like real data.
-
-| Gap | Source | UI treatment |
-| --- | --- | --- |
-| `StudentDetail.books` is always `[]` | `StudentService.java:195` — hardcoded `List.of()` | **Compensate.** Call `GET /books?owner={student.id}` and render the real result. No backend change needed. |
-| `StudentDetail.courses` is always `[]` | `StudentService.java:196` | **Disclose.** No staff-facing endpoint exists — `EnrollmentLookup.findByStudent` is reachable only through `/me`. Render: *"Enrollments are not exposed on this endpoint (US-5.5 composition pending)."* |
-| `CourseDetail.roster` is always `[]` | `CourseService.java:139` | **Disclose.** Same note, for the course roster. |
-| No `GET /staff-accounts` list | Only `POST` and `PATCH .../status` exist | **Disclose.** `PATCH /staff-accounts/{id}/status` needs a numeric user id that `POST` never returns, so the deactivate form takes a typed id with a note explaining why. |
-
-Each disclosure is a small muted note in the section where the data would be — enough that a viewer understands the boundary of what shipped.
-
-Two further notes worth carrying into the demo:
-
-- **`demo.student` is listed but never seeded.** `IdentityService.seedDemoAccounts` skips the `STUDENT` entry, because a student-role account requires a real `students` row (`chk_users_student_role`'s FK co-invariant). Logging in as it fails until a matching student is registered by hand. The login page's demo-account chips should mark it accordingly — the demo script (§10) reaches the student role by registering a real one instead.
-- **`studentId` is not in the login response.** It is never needed: `/me` derives it server-side, and student-scoped searches are scoped server-side too.
-
----
-
-## 10. Build order
+## 9. Build order
 
 | Phase | Work | Est. |
 | --- | --- | --- |
-| 1 | Scaffold; Vite proxy; `client.js` + `endpoints.js`; `AuthContext` + `RequireAuth` + `permissions.js`; `LoginPage` + `ChangePasswordPage`; `AppShell` with role-filtered nav | 3h |
-| 2 | `DataTable`, `Pagination`, `Modal`, `Field`, `ErrorBanner`, `Toast`, `EmptyState`, `Badge`; `usePagedResource`, `useAsyncAction`; `tokens.css` + `base.css` | 2h |
-| 3 | Students (list, detail, register/edit/delete, initial-password) + Books (list, detail, add/assign/unassign/delete) | 3h |
-| 4 | Courses (list, detail, CRUD) + Enrollments + `/me` | 3h |
-| 5 | Staff accounts; demo-account chips on login; gap disclosures (§9); CSS pass | 2h |
+| 1 | Scaffold Next + TS + Chakra; rewrites; `client.ts` + `endpoints.ts` + `types.ts`; `AuthContext` + `RequireAuth` + `permissions.ts`; login + change-password; `AppShell` with role-filtered nav | 3h |
+| 2 | `DataTable`, `Pagination`, `RecordCard`, `FormDialog`, `ConfirmDialog`, `FormField`, `ErrorBanner`; the three hooks; theme | 2h |
+| 3 | Students (both shapes, detail with role-branching related tables) + Books | 3h |
+| 4 | Courses (both shapes, detail with roster) + Enrollments (both shapes) | 3h |
+| 5 | Staff accounts; demo-account chips; typecheck + build pass | 2h |
 
-**~13 hours.** Phases 1–2 are the load-bearing ones; 3–5 are repetitions of the same two patterns and go quickly.
+**~13 hours.** Phases 1–2 are the load-bearing ones; 3–5 are repetitions of the same two patterns.
 
-**Order rationale:** Phase 1 ends with a runnable app that can log in and switch roles — the riskiest integration (the cookie through the proxy) is proven first, before any screen is built on top of it.
+**Order rationale:** Phase 1 ends with a runnable app that can log in and switch roles — the riskiest integration (the cookie through the rewrite proxy) is proven first, before any screen is built on top of it.
 
 ---
 
-## 11. Demo script
+## 10. Demo script
 
 The run-through that exercises all 5 roles and ties the modules into one story.
 
 **Start:**
 ```bash
-make up                                  # MySQL
-cd management && ./mvnw spring-boot:run   # :8080, seeds the 4 staff demo accounts
-cd management-frontend && npm run dev     # :5173
+make up                                    # MySQL
+cd management && ./mvnw spring-boot:run    # :8080, seeds the 4 staff demo accounts
+cd management-frontend && npm run dev      # :3000
 ```
 
 | # | Role | Action | Demonstrates |
@@ -455,40 +411,48 @@ cd management-frontend && npm run dev     # :5173
 | 1 | — | Open `/login`; the seeded accounts are listed live from `GET /auth/demo-accounts` | PM-017 |
 | 2 | `demo.registrar` | Register a student — the one-time `initialPassword` is shown; re-read it from the detail page | UC-1, UC-23 |
 | 3 | `demo.courseadmin` | Create course `CS101` | UC-8 |
-| 4 | `demo.registrar` | Enroll the new student in `CS101` | UC-11 |
-| 5 | `demo.librarian` | Add a book, then assign it to the student | UC-4, UC-5 |
-| 6 | **the new student** | Log in (username = their email, password from step 2) → **forced** to `/change-password` → then `/me` shows the assigned book and enrolled course | UC-21, UC-22, UC-16 |
-| 7 | `demo.sysadmin` | Create a staff account (initial password shown once), then deactivate it | UC-24, UC-25 |
-| 8 | `demo.sysadmin` | Note the nav shows only Staff Accounts — a domain read returns `403` | RBAC allow-list |
+| 4 | `demo.registrar` | Enrollments tab → type the **student code** → enroll in `CS101`. Note there is no id to look up anywhere, and no Books item in the nav | UC-11, §2.4 |
+| 5 | `demo.librarian` | Add a book, assign it by student code; then Students → that student → **their books on loan**. Note: no Courses, no Enrollments in the nav | UC-4, UC-5, UC-17 |
+| 6 | `demo.courseadmin` | Enrollments → `CS101` → **the roster** → click the student → their profile. Note there is no Students nav item — the roster is the only way in | UC-19, UC-17, §5 ¹ |
+| 7 | **the new student** | Log in (username = their email) → **forced** to `/change-password` → then: Students shows *their own record directly*, Courses shows only `CS101`, Books shows the assigned book, and there is no Enrollments tab at all | UC-21, UC-22, UC-16 |
+| 8 | `demo.sysadmin` | Create a staff account (initial password shown once), then deactivate it | UC-24, UC-25 |
+| 9 | `demo.sysadmin` | Note the nav shows only Staff Accounts — a domain read returns `403` | RBAC allow-list |
 
-Steps 2→6 are the narrative spine: a student created by one role, given a course by a second and a book by a third, then logging in as themselves and seeing both. Step 6 is also the must-change-password gate in action, and step 8 is the RBAC allow-list in action.
+Steps 2→7 are the narrative spine: a student created by one role, given a course by a second and a book by a third, then logging in as themselves and seeing exactly their own half of each. Steps 4–6 are the per-resource RBAC in action; step 7 is both the must-change-password gate and the Student's narrowed surface.
 
-**Reset between runs:** `make reset` (drops the volume and restarts MySQL). Demo-account seeding is idempotent, so a restart never resets a password that was changed during a demo.
+**Reset between runs:** `make reset`. Demo-account seeding is idempotent, so a restart never resets a password changed during a demo.
 
 ---
 
-## 12. Verification checklist
+## 11. Verification checklist
 
 Run against a live stack after implementation:
 
-- [ ] Login sets `JSESSIONID` through the proxy — DevTools → Application → Cookies shows it on `localhost:5173`.
-- [ ] A hard refresh on any deep route keeps the session (restored from `sessionStorage`).
-- [ ] A newly registered student is blocked on **every** route until the password is changed, and is released immediately after — no re-login.
-- [ ] `demo.sysadmin` sees only Staff Accounts in the nav; `GET /api/v1/students` returns `403`.
-- [ ] A duplicate student code surfaces the backend's `409` message in `ErrorBanner`.
-- [ ] An invalid email surfaces the `400` `errors[]` entry inline under the email field.
-- [ ] A student searching students gets exactly their own row; another student's detail page returns `403` → `ForbiddenPage`.
+- [ ] `npm run typecheck` and `npm run build` both pass.
+- [ ] Login sets `JSESSIONID` through the rewrite — DevTools → Application → Cookies shows it on `localhost:3000`.
+- [ ] A hard refresh on any deep route keeps the session, with no flash of the login screen.
+- [ ] A newly registered student is blocked on **every** route until the password is changed, and released immediately after — no re-login.
+- [ ] The same holds for a staff account a SysAdmin just created: signing in lands on the bare `/change-password` form (not a spinner), and submitting it releases the session.
+- [ ] A hard reload of `/change-password` and of one deep route logs **no** hydration error and no "Encountered a script tag" warning — check in a clean profile, since browser extensions produce look-alike warnings.
+- [ ] View source on that reload: the `data-emotion` `<style>` tags are in `<head>` and there are none in `<body>`.
+- [ ] Each role's sidebar matches §5 exactly: Registrar has no Books, Librarian has no Courses or Enrollments, Course Admin has no Students, Student has no Enrollments, SysAdmin has two items.
+- [ ] Registrar `GET /api/v1/books` → `403`; Librarian `GET /api/v1/courses` → `403`; Student `GET /api/v1/enrollments?studentCode=…` → `403`.
+- [ ] The Student's Students tab renders their own record with no list and no search box.
+- [ ] A Librarian opening a student sees books and **no** course list; a Registrar opening the same student sees courses and **no** book list.
+- [ ] A Course Administrator reaches a student profile only by clicking a course roster row.
+- [ ] `GET /api/v1/enrollments` with no filter → `400`; with both filters → `400`.
+- [ ] A duplicate student code surfaces the backend's `409` message in `ErrorBanner`; an invalid email surfaces the `400` `errors[]` entry inline under the email field.
 - [ ] Pagination: with >20 students, page 2 loads and `totalPages` is respected.
-- [ ] Student detail shows real owned books (via `?owner=`) and the disclosure note for courses.
+- [ ] `grep -rn "studentId\|ownerId" management-frontend/src` returns nothing outside comments.
 - [ ] Logout clears local state and returns to `/login` even if `POST /logout` fails.
 
 ---
 
-## 13. References
+## 12. References
 
 - [BA-docs/use-cases.md](../BA-docs/use-cases.md) — the 25 UCs each screen covers
 - [BA-docs/user-stories.md](../BA-docs/user-stories.md) — acceptance criteria
-- [SA-docs/api-specification.md](../SA-docs/api-specification.md) — the hand-authored contract; §3 above is the as-built version
-- [SA-docs/04-authentication-authorization.md](../SA-docs/04-authentication-authorization.md) — session auth, RBAC matrix, must-change-password gate
-- [PM-docs/01-product-backlog.md](../PM-docs/01-product-backlog.md) — what shipped, and in which sprint
-- `management/src/main/java/org/phuchoang/management/shared/security/SecurityConfig.java` — the authoritative RBAC rules mirrored in §5
+- [SA-docs/api-specification.md](../SA-docs/api-specification.md) — the contract; §3 above is the as-built version
+- [SA-docs/02-component-diagram.md](../SA-docs/02-component-diagram.md) §4 — what each per-resource read grant is *for*
+- [SA-docs/04-authentication-authorization.md](../SA-docs/04-authentication-authorization.md) §6.1 — the read matrix §5 above mirrors
+- `management/src/main/java/org/phuchoang/management/shared/security/SecurityConfig.java` — the authoritative RBAC rules

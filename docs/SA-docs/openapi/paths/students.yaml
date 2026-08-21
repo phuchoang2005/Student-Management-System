@@ -4,7 +4,7 @@ collection:
     tags: [Students]
     summary: Search / list students
     description: |
-      **Roles:** All authenticated roles. Student results are transparently scoped to the
+      **Roles:** Registrar, Librarian, Course Administrator, Student. Student results are transparently scoped to the
       caller's own record (0 or 1 result), consistent with every other search endpoint's
       "no match → 200 `[]`" shape — no 403 is raised here.
     x-roles: [REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
@@ -81,14 +81,22 @@ item:
     tags: [Students]
     summary: Get student detail
     description: |
-      **Roles:** All authenticated roles. A Student caller requesting a code that is not
+      **Roles:** Registrar, Librarian, Course Administrator, Student. The Course Administrator holds
+      this grant only to open a student's profile from a course roster — it has no student-browsing
+      workflow (`02-component-diagram.md` §4). A Student caller requesting a code that is not
       their own receives 403.
+
+      The student's held books and enrolled courses are *not* part of this response. Each is its own
+      paged, separately authorized read — `GET /books?ownerStudentCode=` for the Librarian,
+      `GET /enrollments?studentCode=` for the Registrar and Course Administrator — so a role that may
+      read a student record does not automatically receive both sides of it
+      (api-specification.md §5 decision #10).
     x-roles: [REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
     parameters:
       - $ref: '../components/parameters/common.yaml#/StudentCodePathParam'
     responses:
       '200':
-        description: Student detail, including owned books and active course enrollments.
+        description: The student record.
         content:
           application/json:
             schema:

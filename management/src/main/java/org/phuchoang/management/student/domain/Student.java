@@ -2,6 +2,7 @@ package org.phuchoang.management.student.domain;
 
 import java.time.Instant;
 import org.phuchoang.management.shared.exception.DomainValidationException;
+import org.phuchoang.management.student.StudentCode;
 import org.phuchoang.management.student.StudentId;
 
 /**

@@ -4,7 +4,7 @@ UI/UX documentation for the demo frontend that sits over the completed backend i
 
 ## Contents
 
-- [01-frontend-strategy.md](./01-frontend-strategy.md) — build strategy for the demo UI: stack decision (React + Vite + plain JS, HTML5/CSS3, no component library), the as-built API contract read from the shipped controllers, the three integration constraints (same-origin cookie, ambiguous `403`, no logout endpoint), screen map, project structure, build order, and an end-to-end demo script covering all 5 roles.
+- [01-frontend-strategy.md](./01-frontend-strategy.md) — build strategy for the demo UI: stack decision (Next.js + TypeScript + Chakra UI), the as-built API contract read from the shipped controllers, the four integration constraints (same-origin cookie, ambiguous `403`, no logout endpoint, no embedded related data), the per-resource role capability matrix, screen map, project structure, build order, and an end-to-end demo script covering all 5 roles.
 
 ## Relationship to the other doc sets
 

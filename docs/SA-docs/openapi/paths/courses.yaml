@@ -4,8 +4,10 @@ collection:
     tags: [Courses]
     summary: Search / list courses
     description: |
-      **Roles:** All authenticated roles.
-    x-roles: [REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
+      **Roles:** Registrar, Course Administrator, Student. The Librarian has no course workflow and
+      no longer holds a read grant here (`02-component-diagram.md` §4). The catalogue is not personal
+      data, so no per-caller scoping applies.
+    x-roles: [REGISTRAR, COURSE_ADMINISTRATOR, STUDENT]
     parameters:
       - $ref: '../components/parameters/common.yaml#/SearchQueryParam'
       - $ref: '../components/parameters/common.yaml#/PageParam'
@@ -75,18 +77,19 @@ item:
     tags: [Courses]
     summary: Get course detail
     description: |
-      **Roles:** All authenticated roles.
+      **Roles:** Registrar, Course Administrator, Student.
 
-      `page`/`size` page the embedded `roster`, not the course itself — a course detail
-      response only ever has one paginated field.
-    x-roles: [REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
+      The enrolled-student roster is *not* part of this response — it is
+      `GET /enrollments?courseCode=`, which a Student cannot reach. Embedding it would have handed a
+      Student browsing the catalogue the names and email addresses of everyone else taking a course
+      (api-specification.md §5 decision #10). This response therefore takes no paging parameters:
+      it has no paginated field left.
+    x-roles: [REGISTRAR, COURSE_ADMINISTRATOR, STUDENT]
     parameters:
       - $ref: '../components/parameters/common.yaml#/CourseCodePathParam'
-      - $ref: '../components/parameters/common.yaml#/PageParam'
-      - $ref: '../components/parameters/common.yaml#/SizeParam'
     responses:
       '200':
-        description: Course detail, including a page of its current enrolled-student roster.
+        description: The course record.
         content:
           application/json:
             schema:

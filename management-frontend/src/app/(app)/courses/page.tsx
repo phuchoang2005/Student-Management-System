@@ -1,0 +1,178 @@
+'use client';
+
+import { Box, Button, Code, Stack } from '@chakra-ui/react';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+
+import ConfirmDialog from '@/components/ConfirmDialog';
+import CourseFormDialog from '@/components/CourseFormDialog';
+import DataTable from '@/components/DataTable';
+import ErrorBanner from '@/components/ErrorBanner';
+import PageHeader from '@/components/PageHeader';
+import Pagination from '@/components/Pagination';
+import SearchInput from '@/components/SearchInput';
+import { courses, me } from '@/lib/api/endpoints';
+import type { CourseSummary } from '@/lib/api/types';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { can } from '@/lib/auth/permissions';
+import RequireAuth from '@/lib/auth/RequireAuth';
+import useAsyncAction from '@/lib/hooks/useAsyncAction';
+import usePagedResource from '@/lib/hooks/usePagedResource';
+
+/**
+ * One route, two shapes again.
+ *
+ * A **Student** sees only the courses they are enrolled in, from `/me/courses` — the tab answers
+ * "what am I taking", not "what does the school offer" — and each row opens that course's detail.
+ *
+ * **Registrar** and **Course Administrator** see the catalogue, with write actions for the latter.
+ */
+export default function CoursesPage() {
+  return (
+    <RequireAuth capability="courses:read">
+      <Courses />
+    </RequireAuth>
+  );
+}
+
+function Courses() {
+  const { session } = useAuth();
+  const router = useRouter();
+  const isStudent = session?.role === 'STUDENT';
+  const mayWrite = can(session?.role, 'courses:write');
+
+  const resource = usePagedResource<CourseSummary>((query, page) =>
+    isStudent ? me.courses(page) : courses.search(query || undefined, page),
+  );
+
+  const [editing, setEditing] = useState<CourseSummary | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<CourseSummary | null>(null);
+
+  const removeAction = useAsyncAction(courses.remove);
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    await removeAction.run(deleting.courseCode);
+    if (!removeAction.error) {
+      setDeleting(null);
+      resource.refetch();
+    }
+  };
+
+  return (
+    <Box>
+      <PageHeader
+        title={isStudent ? 'My courses' : 'Courses'}
+        description={
+          isStudent
+            ? 'The courses you are enrolled in. Select one to see its detail.'
+            : 'Search by course code or name. Select a course to see its detail.'
+        }
+        actions={
+          mayWrite ? (
+            <Button size="sm" onClick={() => setCreating(true)}>
+              Create course
+            </Button>
+          ) : undefined
+        }
+      />
+
+      <ErrorBanner error={resource.error} />
+      <ErrorBanner error={removeAction.error} />
+
+      {!isStudent ? (
+        <SearchInput
+          value={resource.query}
+          onChange={resource.setQuery}
+          placeholder="Search courses…"
+        />
+      ) : null}
+
+      <DataTable<CourseSummary>
+        columns={[
+          {
+            key: 'courseCode',
+            header: 'Code',
+            width: '9rem',
+            cell: (row) => <Code>{row.courseCode}</Code>,
+          },
+          { key: 'name', header: 'Name', cell: (row) => row.name },
+          { key: 'credits', header: 'Credits', width: '6rem', cell: (row) => row.credits },
+          ...(mayWrite
+            ? [
+                {
+                  key: 'actions',
+                  header: '',
+                  width: '10rem',
+                  align: 'end' as const,
+                  cell: (row: CourseSummary) => (
+                    <Stack direction="row" gap="1" justify="flex-end">
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setEditing(row);
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        colorPalette="red"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDeleting(row);
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </Stack>
+                  ),
+                },
+              ]
+            : []),
+        ]}
+        rows={resource.data?.content ?? []}
+        keyOf={(row) => row.courseCode}
+        loading={resource.loading}
+        empty={isStudent ? 'You are not enrolled in any course yet.' : 'No courses match that search.'}
+        onRowClick={(row) => router.push(`/courses/${encodeURIComponent(row.courseCode)}`)}
+      />
+
+      <Pagination data={resource.data} page={resource.page} onPageChange={resource.setPage} />
+
+      <CourseFormDialog
+        open={creating}
+        onClose={() => setCreating(false)}
+        onSaved={() => {
+          setCreating(false);
+          resource.refetch();
+        }}
+      />
+      <CourseFormDialog
+        open={!!editing}
+        course={editing ?? undefined}
+        onClose={() => setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          resource.refetch();
+        }}
+      />
+      <ConfirmDialog
+        open={!!deleting}
+        title="Remove course"
+        message={
+          deleting
+            ? `Remove ${deleting.courseCode} — ${deleting.name}? Every enrollment in it ends; the students themselves are untouched.`
+            : ''
+        }
+        pending={removeAction.pending}
+        onCancel={() => setDeleting(null)}
+        onConfirm={confirmDelete}
+      />
+    </Box>
+  );
+}

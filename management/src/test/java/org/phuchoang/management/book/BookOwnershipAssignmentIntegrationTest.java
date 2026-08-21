@@ -14,7 +14,9 @@ import org.phuchoang.management.book.domain.Book;
 import org.phuchoang.management.book.domain.Isbn;
 import org.phuchoang.management.book.port.BookRepository;
 import org.phuchoang.management.shared.exception.StaleWriteException;
+import org.phuchoang.management.student.StudentCode;
 import org.phuchoang.management.student.StudentId;
+import org.phuchoang.management.student.StudentLookup;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -49,7 +51,16 @@ class BookOwnershipAssignmentIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private BookRepository bookRepository;
 
-  private long registerStudent(String code, String email) throws Exception {
+  // The one test below drives BookRepository directly and therefore needs the surrogate id no
+  // response carries any more -- it resolves it the same way the application does, through the
+  // student module's published StudentLookup.
+  @Autowired private StudentLookup studentLookup;
+
+  private StudentId idOf(String studentCode) {
+    return studentLookup.idOf(new StudentCode(studentCode)).orElseThrow();
+  }
+
+  private String registerStudent(String code, String email) throws Exception {
     String body =
         """
         {"studentCode":"%s","firstName":"Amy","lastName":"Lee","email":"%s","dateOfBirth":"2000-01-01"}
@@ -66,7 +77,7 @@ class BookOwnershipAssignmentIntegrationTest {
             .andExpect(status().isCreated())
             .andReturn();
 
-    return ((Number) JsonPath.read(result.getResponse().getContentAsString(), "$.id")).longValue();
+    return JsonPath.read(result.getResponse().getContentAsString(), "$.studentCode");
   }
 
   private void addBook(String isbn, String title, String author) throws Exception {
@@ -90,17 +101,17 @@ class BookOwnershipAssignmentIntegrationTest {
   void assignsAnUnownedBookToAnExistingStudent() throws Exception {
     // TC-BOOK-006
     addBook("978-0-13-468599-1", "Clean Architecture", "Robert C. Martin");
-    long ownerId = registerStudent("S00206", "amy.lee.206@example.edu");
+    String ownerCode = registerStudent("S00206", "amy.lee.206@example.edu");
 
     mockMvc
         .perform(
             patch("/api/v1/books/978-0-13-468599-1/owner")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d}
-                    """.formatted(ownerId)))
+                    {"studentCode":"%s"}
+                    """.formatted(ownerCode)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.ownerId").value(ownerId));
+        .andExpect(jsonPath("$.ownerStudentCode").value(ownerCode));
   }
 
   @Test
@@ -108,28 +119,28 @@ class BookOwnershipAssignmentIntegrationTest {
   void reassigningAnOwnedBookReplacesThePreviousOwner() throws Exception {
     // TC-BOOK-007
     addBook("978-1-4919-5035-7", "Designing Data-Intensive Applications", "Martin Kleppmann");
-    long firstOwner = registerStudent("S00207A", "amy.lee.207a@example.edu");
-    long secondOwner = registerStudent("S00207B", "amy.lee.207b@example.edu");
+    String firstOwner = registerStudent("S00207A", "amy.lee.207a@example.edu");
+    String secondOwner = registerStudent("S00207B", "amy.lee.207b@example.edu");
 
     mockMvc
         .perform(
             patch("/api/v1/books/978-1-4919-5035-7/owner")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d}
+                    {"studentCode":"%s"}
                     """.formatted(firstOwner)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.ownerId").value(firstOwner));
+        .andExpect(jsonPath("$.ownerStudentCode").value(firstOwner));
 
     mockMvc
         .perform(
             patch("/api/v1/books/978-1-4919-5035-7/owner")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d}
+                    {"studentCode":"%s"}
                     """.formatted(secondOwner)))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.ownerId").value(secondOwner));
+        .andExpect(jsonPath("$.ownerStudentCode").value(secondOwner));
   }
 
   @Test
@@ -143,7 +154,7 @@ class BookOwnershipAssignmentIntegrationTest {
             patch("/api/v1/books/978-0-596-52068-7/owner")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":999999}
+                    {"studentCode":"S00-NOBODY"}
                     """))
         .andExpect(status().isBadRequest());
   }
@@ -152,15 +163,15 @@ class BookOwnershipAssignmentIntegrationTest {
   @WithMockUser(roles = "LIBRARIAN")
   void rejectsAssignmentToAnUnknownBook() throws Exception {
     // TC-BOOK-009
-    long ownerId = registerStudent("S00209", "amy.lee.209@example.edu");
+    String ownerCode = registerStudent("S00209", "amy.lee.209@example.edu");
 
     mockMvc
         .perform(
             patch("/api/v1/books/does-not-exist/owner")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d}
-                    """.formatted(ownerId)))
+                    {"studentCode":"%s"}
+                    """.formatted(ownerCode)))
         .andExpect(status().isNotFound());
   }
 
@@ -172,21 +183,21 @@ class BookOwnershipAssignmentIntegrationTest {
     // one-stale-writer scenario deterministically, mirroring StudentUpdateIntegrationTest's
     // concurrentUpdateOfTheSameStudentReturns409ForTheSecondWriter.
     addBook("978-0-13-235088-4", "Clean Code", "Robert C. Martin");
-    long studentA = registerStudent("S00210A", "amy.lee.210a@example.edu");
-    long studentB = registerStudent("S00210B", "amy.lee.210b@example.edu");
+    StudentId studentA = idOf(registerStudent("S00210A", "amy.lee.210a@example.edu"));
+    StudentId studentB = idOf(registerStudent("S00210B", "amy.lee.210b@example.edu"));
 
     Isbn isbn = new Isbn("978-0-13-235088-4");
     Book clientA = bookRepository.findByIsbn(isbn).orElseThrow();
     Book clientB = bookRepository.findByIsbn(isbn).orElseThrow();
 
-    clientA.assignOwner(new StudentId(studentA));
+    clientA.assignOwner(studentA);
     bookRepository.save(clientA);
 
-    clientB.assignOwner(new StudentId(studentB));
+    clientB.assignOwner(studentB);
     assertThatThrownBy(() -> bookRepository.save(clientB)).isInstanceOf(StaleWriteException.class);
 
     Book stillPersisted = bookRepository.findByIsbn(isbn).orElseThrow();
-    assertThat(stillPersisted.ownerId().value()).isEqualTo(studentA);
+    assertThat(stillPersisted.ownerId()).isEqualTo(studentA);
   }
 
   @Test
@@ -197,7 +208,7 @@ class BookOwnershipAssignmentIntegrationTest {
                 patch("/api/v1/books/978-0-13-468599-1/owner")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
-                        {"studentId":1}
+                        {"studentCode":"S00206"}
                         """))
             .andReturn();
     assertThat(result.getResponse().getStatus()).isIn(401, 403);
@@ -211,7 +222,7 @@ class BookOwnershipAssignmentIntegrationTest {
             patch("/api/v1/books/978-0-13-468599-1/owner")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":1}
+                    {"studentCode":"S00206"}
                     """))
         .andExpect(status().isForbidden());
   }

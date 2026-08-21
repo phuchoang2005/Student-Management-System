@@ -11,22 +11,56 @@ skinparam swimlane {
   TitleBackgroundColor #EEF2FF
 }
 
-|Registrar / Course Admin / Student|
+|Registrar / Course Admin|
 start
-:Select one enrollment entry from a student's\nenrollment list (UC-17) or a course's roster (UC-19);
+:Supply exactly one of\na student code or a course code;
 
 |System|
-if (Selected enrollment still exists?) then (no)
-  :Return not-found result;
-  |Registrar / Course Admin / Student|
-  :Return to the list;
+if (Exactly one code supplied?) then (no)
+  :Reject the request\n(neither would be a\nmeaningful question);
+  |Registrar / Course Admin|
   stop
+else (yes)
 endif
-:Retrieve enrollment for the (student, course) pair;
-:Retrieve linked student summary\nand linked course summary;
-:Display full enrollment detail;
+if (Code matches a real student / course?) then (no)
+  :Report the code as invalid\n(not an empty list, which would\nread as "enrolled in nothing");
+  |Registrar / Course Admin|
+  stop
+else (yes)
+endif
+:Resolve the constant side once\n(the student, or the course);
+:Retrieve one page of matching enrollments;
+:Resolve the other side per row;
+:Return the page --\nstudent summary + course summary\n+ enrolled-at, for each;
 
-|Registrar / Course Admin / Student|
-:View enrollment detail;
+|Registrar / Course Admin|
+:View the enrollments;
+if (Select one entry?) then (yes)
+  |System|
+  if (That enrollment still exists?) then (no)
+    :Return not-found result;
+    |Registrar / Course Admin|
+    :Return to the list;
+    stop
+  else (yes)
+  endif
+  :Display that single enrollment's detail;
+  |Registrar / Course Admin|
+  :View enrollment detail;
+elseif (Select the student side?) then (yes)
+  :Continue at UC-17\n(View Student Detail);
+elseif (Select the course side?) then (yes)
+  :Continue at UC-19\n(View Course Detail);
+else (no)
+endif
 stop
+
+note right
+  A Student is not an actor here.
+  They read their own enrolled
+  courses through UC-16, where the
+  system identifies them from their
+  sign-in rather than from a code
+  they type.
+end note
 @enduml

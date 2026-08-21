@@ -9,4 +9,4 @@ public record BookCreateRequest(
     @NotBlank @Size(max = 255) String title,
     @NotBlank @Size(max = 255) String author,
     LocalDate publishedDate,
-    Long ownerId) {}
+    @Size(max = 20) String ownerStudentCode) {}

@@ -171,7 +171,7 @@ Covers **UC-1** (Register Student), **UC-2** (Update Student Details), **UC-3** 
 - **Related UC / Rule:** UC-3 step 3; req.md §5 "When a student is removed"; Enrollment.4
 - **Priority:** P0 · **Type:** Functional
 - **Test Data:** `student-with-enrollments-01` (enrolled in `course-valid-01`, `course-valid-02`)
-- **Steps:** `DELETE /api/v1/students/{code}`; then `GET /api/v1/courses/{code}` for each formerly-enrolled course, and check its roster.
+- **Steps:** `DELETE /api/v1/students/{code}`; then `GET /api/v1/courses/{code}` for each formerly-enrolled course, and `GET /api/v1/enrollments?courseCode={code}` for its roster.
 - **Expected Result:** Courses still exist unchanged; the removed student no longer appears in either roster.
 
 ### TC-STU-024 — Removing a student removes their user account

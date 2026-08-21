@@ -33,7 +33,7 @@ Every aggregate in this system happens to be a **single-entity aggregate**: the 
 
 | Aggregate root | Identity | Invariants enforced | Why it's its own aggregate |
 | --- | --- | --- | --- |
-| `Student` | `StudentId` (surrogate) / `StudentCode` (business key) | Student.1–4 | The unit Registrar CRUD operates on; referenced by id only from `book`/`enrollment`, never embedded — keeps it small and independently transactable (UC-1/2/3). |
+| `Student` | `StudentId` (surrogate) / `StudentCode` (business key) | Student.1–4 | The unit Registrar CRUD operates on; referenced by id only from `book`/`enrollment`, never embedded — keeps it small and independently transactable (UC-1/2/3). The two identifiers have a strict division of labour: `StudentId` is what the FK columns store, `StudentCode` is what every caller outside the process ever names (api-specification.md §5 decision #9), and `StudentLookup.idOf` is the single translation between them. |
 | `Course` | `CourseId` / `CourseCode` | Course.1–3 | Independently created/updated/removed by Course Administrator (UC-8/9/10); enrollments reference it by code, never hold a `Course` object. |
 | `Book` | `BookId` / `Isbn` | Book.1–5 | Ownership is a single nullable reference (`ownerId: StudentId`), not a collection — this is precisely the DDD rule "reference other aggregates by identity, not by object," already called out for exactly this reason in `02-component-diagram.md` §2.5. |
 | `Enrollment` | `EnrollmentId` (surrogate); conceptual business key `(studentId, courseCode)` | Enrollment.1–4 | Modeled as its own aggregate rather than a child collection under `Student` or `Course` because it has its own lifecycle (create/end, UC-11/12) and a uniqueness invariant that spans *two* other aggregates (Enrollment.1) — a child-entity shape would force one of `Student`/`Course` to own a rule about the other, which neither should. |
@@ -52,7 +52,7 @@ Because every aggregate here is single-entity (§3), the "Entity" list and the "
 | Value Object | Used by | Encodes |
 | --- | --- | --- |
 | `StudentId` | `Student` (self), `Book.ownerId`, `Enrollment.studentId`, `User.studentId` | Cross-aggregate reference target — Student.5, Book.4, Enrollment.3 |
-| `StudentCode` | `Student` | Student.1 (uniqueness enforced via repository, format via the VO's constructor) |
+| `StudentCode` | `Student`; the *input* form of `Book.ownerId` and `Enrollment.studentId` | Student.1 (uniqueness enforced via repository, format via the VO's constructor). **Published Language** — it lives at `student`'s module root beside `StudentId`, not in `domain/`, precisely because `book`, `enrollment`, and every `web/` DTO name a student with it (06-low-level-design.md §4.3). |
 | `Email` | `Student`, source of `Username` for a Student's `User` | Student.2 (format validity is a VO-constructor concern per `05-database-schema.md` §4: "format validation is application-level, not a DB concern") |
 | `DateOfBirth` | `Student` | Student.4 |
 | `CourseId` / `CourseCode` | `Course` (self), `Enrollment.courseCode` | Course.1, Enrollment.2 |
@@ -83,8 +83,8 @@ Each is a **thin orchestrator**: no business rule of its own, only the sequencin
 | --- | --- | --- | --- |
 | `student` | `StudentService` | UC-1, 2, 3, 13, 17 | uniqueness check → `Student.register(...)` → save → `AccountProvisioning.provisionForStudent(...)` (same transaction) → publish `StudentDeleted` on remove |
 | `course` | `CourseService` | UC-8, 9, 10, 15, 19 | uniqueness check → `Course.create(...)` → save → publish `CourseDeleted` on remove |
-| `book` | `BookService` | UC-4, 5, 6, 7, 14, 18 | uniqueness check → `StudentLookup.existsById(...)` (Book.4) → `Book.create(...)`/`changeOwner(...)`/`clearOwner(...)` → save |
-| `enrollment` | `EnrollmentService` | UC-11, 12, 20 | `StudentLookup`/`CourseLookup` existence checks → duplicate check → `Enrollment.create(...)` → save |
+| `book` | `BookService` | UC-4, 5, 6, 7, 14, 18 | uniqueness check → `StudentLookup.idOf(...)` (Book.4 — the existence check and the code→id resolution are one call) → `Book.create(...)`/`assignOwner(...)`/`clearOwner(...)` → save |
+| `enrollment` | `EnrollmentService` | UC-11, 12, 20 | `StudentLookup.idOf(...)`/`CourseLookup.existsByCode(...)` existence checks → duplicate check → `Enrollment.create(...)` → save |
 | `identity` | `IdentityService` | UC-21, 22, 23 (+ provisioning tail of UC-1) | password-policy checks (§5.2 of the auth doc) → `User.changePassword(...)`/factory → save |
 
 None of these classes contains an `if` statement enforcing a business invariant directly — every invariant check either delegates to the aggregate (which throws a domain exception) or to a repository/published-interface boolean the service branches on. This is the Application Service / Domain Model split doing its job: the service is easy to read as a checklist, the aggregate is where the actual rule lives and is unit-testable without Spring or a database (`02-component-diagram.md` §3 already makes this claim about `domain/`; this section is that claim, generalized to all five modules).
@@ -133,7 +133,7 @@ Two design choices worth stating explicitly in tactical terms:
 
 ## 10. Modules as the Tactical "Module" Pattern
 
-Evans lists **Modules** as a tactical pattern in its own right — a way of organizing model elements that itself carries meaning ("things in the same module are conceptually related"). Spring Modulith's five modules already *are* this pattern, enforced at build time (`ApplicationModules.verify()`) rather than left as a naming convention. The one place tactical design touches strategic design is the published-interface boundary — `StudentLookup`, `CourseLookup`, `AccountProvisioning`, `PrincipalStudentResolver` — which is DDD's **Open Host Service with Published Language**: a small, deliberately stable read (or provisioning) API one module exposes so others can integrate without reaching into its aggregate or repository. `02-component-diagram.md` §2.5 already derives this exact pattern from first principles ("`book` doesn't want to own persistence for students, it wants to ask a question of the `student` module"); this document adds only the name.
+Evans lists **Modules** as a tactical pattern in its own right — a way of organizing model elements that itself carries meaning ("things in the same module are conceptually related"). Spring Modulith's five modules already *are* this pattern, enforced at build time (`ApplicationModules.verify()`) rather than left as a naming convention. The one place tactical design touches strategic design is the published-interface boundary — `StudentLookup`, `CourseLookup`, `BookLookup`, `EnrollmentLookup`, `AccountProvisioning` — which is DDD's **Open Host Service with Published Language**: a small, deliberately stable read (or provisioning) API one module exposes so others can integrate without reaching into its aggregate or repository. `02-component-diagram.md` §2.5 already derives this exact pattern from first principles ("`book` doesn't want to own persistence for students, it wants to ask a question of the `student` module"); this document adds only the name.
 
 ## 11. Design Rules Enforced / Anti-Patterns Avoided
 
@@ -153,17 +153,17 @@ A short checklist, each line traceable to a decision already made elsewhere in t
 | Student.2 (unique, valid email) | Repository check + Value Object | `StudentRepository.existsByEmail`; format validity in `Email` VO |
 | Student.3 (mandatory names) | Aggregate factory invariant | `Student.register(...)` |
 | Student.4 (valid DOB) | Value Object | `DateOfBirth` |
-| Student.5 (must exist before book/course association) | Published interface | `StudentLookup.existsById(...)`, called from `BookService`/`EnrollmentService` |
+| Student.5 (must exist before book/course association) | Published interface | `StudentLookup.idOf(...)`, called from `BookService`/`EnrollmentService` — an empty result *is* "does not exist" |
 | Book.1 (unique ISBN) | Repository check | `BookRepository.existsByIsbn` |
 | Book.2/3 (at most one, optional owner) | Aggregate behavior + typed field | `Book.changeOwner(...)`, `Book.clearOwner()`; `ownerId: StudentId?` |
-| Book.4 (owner must exist) | Published interface | `StudentLookup.existsById(...)`, called from `BookService` |
+| Book.4 (owner must exist) | Published interface | `StudentLookup.idOf(...)`, called from `BookService` |
 | Book.5 (unassign ≠ delete) | Aggregate behavior | `Book.clearOwner()` distinct from `BookRepository.deleteByIsbn` |
 | Course.1 (unique code) | Repository check | `CourseRepository.existsByCode` |
 | Course.2 (mandatory name) | Aggregate factory invariant | `Course.create(...)` |
 | Course.3 (positive credits) | Value Object | `Credits` |
 | Enrollment.1 (no duplicate) | Repository check | `EnrollmentRepository.existsByStudentAndCourse` |
-| Enrollment.2 (course must exist) | Published interface | `CourseLookup.existsById(...)` |
-| Enrollment.3 (student must exist) | Published interface | `StudentLookup.existsById(...)` |
+| Enrollment.2 (course must exist) | Published interface | `CourseLookup.existsByCode(...)` |
+| Enrollment.3 (student must exist) | Published interface | `StudentLookup.idOf(...)` |
 | Enrollment.4 (end removes only the link) | Repository scope | `EnrollmentRepository.deleteByStudentAndCourse` never touches `students`/`courses` tables |
 | Identity.1 (auto-created, never manual) | Synchronous published interface, same transaction | `StudentService.register` → `AccountProvisioning.provisionForStudent(...)` |
 | Identity.2 (unique username) | Repository check | `UserRepository.existsByUsername` (never violated for Student accounts since `Email` is already Student.2-unique) |

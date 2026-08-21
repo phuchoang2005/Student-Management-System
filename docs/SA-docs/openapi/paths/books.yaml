@@ -4,8 +4,11 @@ collection:
     tags: [Books]
     summary: Search / list books
     description: |
-      **Roles:** All authenticated roles.
-    x-roles: [REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
+      **Roles:** Librarian, Student. The Registrar and Course Administrator have no book workflow
+      and no longer hold a read grant here (`02-component-diagram.md` §4). Student results are
+      transparently scoped to the caller's own held books — `ownerStudentCode` is silently
+      overridden rather than rejected, per api-specification.md §5 decision #4.
+    x-roles: [LIBRARIAN, STUDENT]
     parameters:
       - $ref: '../components/parameters/common.yaml#/SearchQueryParam'
       - $ref: '../components/parameters/common.yaml#/OwnerFilterParam'
@@ -36,7 +39,7 @@ collection:
     tags: [Books]
     summary: Add a book to the catalog
     description: |
-      **Roles:** Librarian only. An optional `ownerId` assigns the book to a student at
+      **Roles:** Librarian only. An optional `ownerStudentCode` assigns the book to a student at
       creation time; it must reference an existing student.
     x-roles: [LIBRARIAN]
     requestBody:
@@ -77,8 +80,11 @@ item:
     tags: [Books]
     summary: Get book detail
     description: |
-      **Roles:** All authenticated roles.
-    x-roles: [REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT]
+      **Roles:** Librarian, Student. The Registrar and Course Administrator have no book workflow
+      and no longer hold a read grant here (`02-component-diagram.md` §4). Student results are
+      transparently scoped to the caller's own held books — `ownerStudentCode` is silently
+      overridden rather than rejected, per api-specification.md §5 decision #4.
+    x-roles: [LIBRARIAN, STUDENT]
     parameters:
       - $ref: '../components/parameters/common.yaml#/IsbnPathParam'
     responses:
@@ -150,8 +156,8 @@ owner:
     tags: [Books]
     summary: End a book's ownership
     description: |
-      **Roles:** Librarian only. Clears `ownerId`; the book stays in the catalog. Idempotent —
-      calling this on an already-unowned book still returns 200 with `ownerId: null`, since no
+      **Roles:** Librarian only. Clears the holder; the book stays in the catalog. Idempotent —
+      calling this on an already-unowned book still returns 200 with `ownerStudentCode: null`, since no
       other endpoint in this API models an "already in that state" 409.
     x-roles: [LIBRARIAN]
     parameters:

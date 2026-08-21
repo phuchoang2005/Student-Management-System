@@ -105,7 +105,7 @@ As a **course administrator**, I want to remove a course, so that it is no longe
 As a **registrar**, I want to enroll a student in a course, so that their participation is recorded.
 
 **Acceptance Criteria**
-- Given a student and course that both exist and no existing enrollment between them, when I enroll, then the enrollment is created. *(req.md §3 "Student ↔ Course", §4 Enrollment.2-3)*
+- Given a student and course that both exist and no existing enrollment between them, when I enroll by supplying their **student code** and the **course code**, then the enrollment is created. *(req.md §3 "Student ↔ Course", §4 Enrollment.2-3)*
 - Given a student already enrolled in the course, when I try to enroll them again, then the operation is rejected as a duplicate. *(req.md §4 Enrollment.1)*
 - Given a course that does not exist, when I try to enroll a student in it, then the operation is rejected. *(req.md §4 Enrollment.2)*
 - Given a student that does not exist, when I try to enroll them in a course, then the operation is rejected. *(req.md §4 Enrollment.3)*
@@ -114,7 +114,7 @@ As a **registrar**, I want to enroll a student in a course, so that their partic
 As a **registrar**, I want to remove a student's enrollment in a course, so that they are no longer counted as taking it.
 
 **Acceptance Criteria**
-- Given an active enrollment, when it is ended, then only the link between student and course is removed. *(req.md §4 Enrollment.4)*
+- Given an active enrollment, when it is ended — again by student code and course code — then only the link between student and course is removed. *(req.md §4 Enrollment.4)*
 - Neither the student nor the course is deleted or otherwise affected. *(req.md §4 Enrollment.4)*
 
 ---
@@ -128,12 +128,14 @@ As a **registrar**, I want to search for and view a student's details, so that I
 - Given a valid student code or search term, when I look it up, then matching student record(s) are returned. *(req.md §2 Student)*
 - Given no student matches, when I search, then an empty result is returned rather than an error.
 - Given more matching students than fit on one page, when I search, then I can browse to the next page rather than receiving every match at once.
-- Given a list of search results, when I select one student, then the system displays that student's full detail: all student fields, the books they currently own, and the courses they are currently enrolled in. *(req.md §2 Student, §3 "Student ↔ Book", "Student ↔ Course")*
+- Given a list of search results, when I select one student, then the system displays that student's record together with **the courses they are currently enrolled in**. *(req.md §2 Student, §3 "Student ↔ Course")*
+- Given that student also holds books, when I view their detail, then their books are **not** shown to me — book ownership is the Librarian's concern, not mine (US-5.2). *(req.md §3 "Student ↔ Book")*
 - Given a selected student no longer exists (e.g., removed since the search was run), when I try to view their detail, then the system returns a not-found result rather than an error.
+- I never see or supply a database identifier for a student; a student code is what I search on, select, and quote.
 - This is a read-only operation; no data is created, changed, or deleted.
 
-### US-5.2 — Librarian looks up books
-As a **librarian**, I want to search books by title, author, or ISBN and see current ownership, so that I can locate a book or verify who holds it.
+### US-5.2 — Librarian looks up books and who holds them
+As a **librarian**, I want to search books by title, author, or ISBN, and to look up a student and see what they are holding, so that I can locate a book or chase an overdue one.
 
 **Acceptance Criteria**
 - Given a valid ISBN or search term, when I look it up, then matching book record(s) are returned, including current owner if any. *(req.md §2 Book, §3 "Student ↔ Book")*
@@ -141,6 +143,9 @@ As a **librarian**, I want to search books by title, author, or ISBN and see cur
 - Given more matching books than fit on one page, when I search, then I can browse to the next page rather than receiving every match at once.
 - Given a list of search results, when I select one book, then the system displays that book's full detail: all book fields and its current owner's summary information, if owned. *(req.md §2 Book, §3 "Student ↔ Book")*
 - Given a selected book no longer exists (e.g., removed since the search was run), when I try to view its detail, then the system returns a not-found result rather than an error.
+- Given the student roll, when I search it and select one student, then the system displays that student's record together with **the books they are currently holding**. *(req.md §3 "Student ↔ Book")*
+- Given that student is also enrolled in courses, when I view their detail, then their courses are **not** shown to me — enrollment is the Registrar's and Course Administrator's concern, not mine.
+- I identify a student by their student code, never by a database identifier — including when assigning a book to them.
 - This is a read-only operation; no data is created, changed, or deleted.
 
 ### US-5.3 — Course Administrator looks up courses
@@ -151,28 +156,42 @@ As a **course administrator**, I want to browse and search courses, and view a c
 - Given more matching courses than fit on one page, when I search, then I can browse to the next page rather than receiving every match at once.
 - Given a specific course, when I request its roster, then one page of the students currently enrolled in it is returned. *(req.md §3 "Student ↔ Course")*
 - Given a course roster with more enrolled students than fit on one page, when I view it, then I can browse to the next page of the roster.
-- Given a list of search results, when I select one course, then the system displays that course's full detail: all course fields and the full roster of currently enrolled students. *(req.md §2 Course, §3 "Student ↔ Course")*
+- Given a list of search results, when I select one course, then the system displays that course's record, and — because I am responsible for its enrollments — its roster alongside. *(req.md §2 Course, §3 "Student ↔ Course")*
+- Given a roster, when I select one student on it, then the system displays that student's record and the courses they are enrolled in. **This is my only route into a student record**: I do not browse students, because managing them is the Registrar's job.
 - Given a selected course no longer exists (e.g., removed since the search was run), when I try to view its detail, then the system returns a not-found result rather than an error.
+- I never see or supply a database identifier; course codes and student codes are what I work with.
 - This is a read-only operation; no data is created, changed, or deleted.
 
-### US-5.4 — Student views their own books and courses
-As a **student**, I want to view the books I currently own and the courses I am enrolled in, so that I can keep track of my own records.
+### US-5.4 — Student views their own record, books, and courses
+As a **student**, I want to see my own details, the books I hold, and the courses I am enrolled in, so that I can keep track of my own records.
 
 **Acceptance Criteria**
-- Given I own books, when I request "my books", then one page of the books currently owned by me is returned. *(req.md §3 "Student ↔ Book")*
+- Given I am signed in, when I open my details, then **my own record is shown to me directly** — I do not search for myself, and I am not presented with a list to pick myself out of. *(req.md §2 Student)*
+- Given I have never been told my student code, when I open my details, then it is shown there. Everything else in the system is addressed by a code somebody already knows; my own code is the one I have to be told.
+- Given I hold books, when I request "my books", then one page of the books I am currently holding is returned. *(req.md §3 "Student ↔ Book")*
 - Given I have active enrollments, when I request "my courses", then one page of the courses I am currently enrolled in is returned. *(req.md §3 "Student ↔ Course")*
-- Given I own no books or hold no enrollments, when I request this information, then an empty list is returned rather than an error.
-- Given more owned books or enrolled courses than fit on one page, when I view either list, then I can browse to the next page of that list independently of the other.
-- Given my list of owned books or enrolled courses, when I select one entry, then the system displays that book's or course's full detail. *(req.md §2 Book, §2 Course)*
+- Given I hold no books or no enrollments, when I request either, then an empty list is returned rather than an error.
+- Given more books or courses than fit on one page, when I view either list, then I can browse to the next page of that list independently of the other.
+- Given my list of books or courses, when I select one entry, then the system displays that book's or course's detail. *(req.md §2 Book, §2 Course)*
+- Given I open a course I am taking, when it is displayed, then I see the course itself but **not** the list of other students taking it.
+- Given the system identifies me, when it does so, then it uses my sign-in, not anything I type — so there is no code I could supply that would show me somebody else's records.
 - This is a read-only operation; no data is created, changed, or deleted.
 
-### US-5.5 — View enrollment detail
-As a **registrar, course administrator, or student**, I want to select a specific enrollment from a student's course list or a course's roster to view its full detail, so that I can confirm exactly which student is linked to which course.
+### US-5.5 — Look up enrollments
+As a **registrar or course administrator**, I want to ask either "what is this student taking?" or "who is taking this course?", so that I can answer a question about an enrollment from whichever end I happen to be standing at.
 
 **Acceptance Criteria**
-- Given I am viewing a student's list of enrollments (US-5.1, US-5.4) or a course's roster (US-5.3), when I select one entry, then the system displays the full detail of that enrollment: the linked student's summary information and the linked course's summary information. *(req.md §3 "Student ↔ Course")*
+- Given a **student code**, when I look it up, then one page of that student's enrolled courses is returned. As a registrar this is my usual starting point: I know who I am dealing with and want to see their timetable. *(req.md §3 "Student ↔ Course")*
+- Given a **course code**, when I look it up, then one page of the students enrolled in it is returned. As a course administrator this is my usual starting point. *(req.md §3 "Student ↔ Course")*
+- Given I supply neither code, or both, when I make the request, then it is rejected — neither would be a meaningful question to ask.
+- Given I supply a code that matches no student or no course, when I make the request, then I am told the code is invalid, rather than being shown an empty list that would read as "enrolled in nothing."
+- Given more enrollments than fit on one page, when I view them, then I can browse to the next page.
+- Given a list of enrollments, when I select one entry, then the system displays that enrollment's detail: the student's summary and the course's summary. *(req.md §3 "Student ↔ Course")*
 - Given the selected enrollment no longer exists (e.g., it was ended since the list was shown), when I try to view its detail, then the system returns a not-found result rather than an error. *(req.md §4 Enrollment.4)*
+- I supply codes only — a student code, a course code. I never see or type a database identifier for either.
 - This is a read-only operation; no data is created, changed, or deleted.
+
+> A student is not an actor on this story. A student sees their own enrolled courses through US-5.4, where the system knows who they are from their sign-in rather than from a code they type.
 
 ---
 

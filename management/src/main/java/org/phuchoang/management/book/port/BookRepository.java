@@ -1,6 +1,5 @@
 package org.phuchoang.management.book.port;
 
-import java.util.List;
 import java.util.Optional;
 import org.phuchoang.management.book.domain.Book;
 import org.phuchoang.management.book.domain.Isbn;
@@ -18,13 +17,14 @@ public interface BookRepository {
 
   Optional<Book> findByIsbn(Isbn isbn);
 
-  /** UC-14 — matches isbn/title/author, optionally filtered by owner, paged. {@code query} may be blank/{@code null}. */
+  /**
+   * UC-14 — matches isbn/title/author, optionally filtered by owner, paged. {@code query} may be
+   * blank/{@code null}. Typed in {@link StudentId}, not {@code StudentCode}: {@code BookService}
+   * resolves the caller's code to the {@code books.owner_id} value this matches on.
+   */
   Page<Book> search(String query, StudentId ownerFilter, Pageable pageable);
 
-  /** Unpaginated — backs {@code StudentService.getDetail}'s embedded "owned books" list (US-5.1). */
-  List<Book> findByOwnerId(StudentId ownerId);
-
-  /** Paged — backs {@code BookLookup.findByOwner} (US-5.4, {@code GET /api/v1/me/books-and-courses}). */
+  /** Backs {@code BookLookup.findByOwner} (US-5.4, {@code GET /api/v1/me/books}). */
   Page<Book> findByOwnerId(StudentId ownerId, Pageable pageable);
 
   Book save(Book book);

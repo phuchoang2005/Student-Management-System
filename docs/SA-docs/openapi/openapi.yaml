@@ -19,8 +19,17 @@ info:
 
     **Roles:** SYSTEM_ADMINISTRATOR, REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT. Every
     operation states its allowed roles in its description and in the machine-readable `x-roles`
-    extension. Student principals are further scoped to their own records where noted. System
-    Administrator is scoped solely to `/staff-accounts` — it has no access to any domain data.
+    extension. **Read access is granted per resource, not as one blanket "domain read"** — each role
+    reads what its own work needs, so a Registrar cannot read books and a Librarian cannot read
+    courses or enrollments (see `../02-component-diagram.md` §4). Student principals are further
+    scoped to their own records where noted. System Administrator is scoped solely to
+    `/staff-accounts` — it has no access to any domain data.
+
+    **Identifiers:** every path, query parameter, and body field names a record by its business key
+    — `studentCode`, `isbn`, `courseCode`. Surrogate database ids never cross this boundary, and no
+    response carries an id a caller could send back. The single exception is
+    `PATCH /staff-accounts/{id}/status`, whose target has no business key of its own; that id comes
+    from `GET /staff-accounts`.
 
     **must-change-password gate:** while `principal.mustChangePassword = true`, every
     endpoint except `POST /auth/password` responds 403 Forbidden.
@@ -49,7 +58,7 @@ tags:
   - name: Enrollments
     description: Student-course enrollment links.
   - name: Self-Service
-    description: Composite read endpoints scoped to the calling Student principal.
+    description: Read endpoints scoped to the calling Student principal, never to a caller-supplied code.
 paths:
   /auth/login:
     $ref: './paths/auth.yaml#/login'
@@ -79,10 +88,14 @@ paths:
     $ref: './paths/courses.yaml#/item'
   /enrollments:
     $ref: './paths/enrollments.yaml#/collection'
-  '/enrollments/{studentId}/{courseCode}':
+  '/enrollments/{studentCode}/{courseCode}':
     $ref: './paths/enrollments.yaml#/item'
-  /me/books-and-courses:
-    $ref: './paths/me.yaml#/booksAndCourses'
+  /me/profile:
+    $ref: './paths/me.yaml#/profile'
+  /me/courses:
+    $ref: './paths/me.yaml#/courses'
+  /me/books:
+    $ref: './paths/me.yaml#/books'
 components:
   securitySchemes:
     cookieAuth:
@@ -99,8 +112,14 @@ components:
       $ref: './components/schemas/common.yaml#/FieldError'
     ValidationError:
       $ref: './components/schemas/common.yaml#/ValidationError'
-    MeBooksAndCoursesResponse:
-      $ref: './components/schemas/common.yaml#/MeBooksAndCoursesResponse'
+    PageMeta:
+      $ref: './components/schemas/common.yaml#/PageMeta'
+    MeProfile:
+      $ref: './components/schemas/common.yaml#/MeProfile'
+    MeBookPage:
+      $ref: './components/schemas/common.yaml#/MeBookPage'
+    MeCoursePage:
+      $ref: './components/schemas/common.yaml#/MeCoursePage'
     LoginRequest:
       $ref: './components/schemas/auth.yaml#/LoginRequest'
     LoginResponse:
@@ -129,6 +148,8 @@ components:
       $ref: './components/schemas/student.yaml#/StudentSummary'
     StudentDetail:
       $ref: './components/schemas/student.yaml#/StudentDetail'
+    StudentPage:
+      $ref: './components/schemas/student.yaml#/StudentPage'
     InitialPasswordResponse:
       $ref: './components/schemas/student.yaml#/InitialPasswordResponse'
     BookCreateRequest:
@@ -141,6 +162,8 @@ components:
       $ref: './components/schemas/book.yaml#/BookSummary'
     BookDetail:
       $ref: './components/schemas/book.yaml#/BookDetail'
+    BookPage:
+      $ref: './components/schemas/book.yaml#/BookPage'
     CourseCreateRequest:
       $ref: './components/schemas/course.yaml#/CourseCreateRequest'
     CourseUpdateRequest:
@@ -151,12 +174,16 @@ components:
       $ref: './components/schemas/course.yaml#/CourseSummary'
     CourseDetail:
       $ref: './components/schemas/course.yaml#/CourseDetail'
+    CoursePage:
+      $ref: './components/schemas/course.yaml#/CoursePage'
     EnrollmentCreateRequest:
       $ref: './components/schemas/enrollment.yaml#/EnrollmentCreateRequest'
     EnrollmentResponse:
       $ref: './components/schemas/enrollment.yaml#/EnrollmentResponse'
     EnrollmentDetail:
       $ref: './components/schemas/enrollment.yaml#/EnrollmentDetail'
+    EnrollmentPage:
+      $ref: './components/schemas/enrollment.yaml#/EnrollmentPage'
   responses:
     BadRequest:
       $ref: './components/responses/errors.yaml#/BadRequest'
@@ -171,13 +198,21 @@ components:
       $ref: './components/parameters/common.yaml#/SearchQueryParam'
     OwnerFilterParam:
       $ref: './components/parameters/common.yaml#/OwnerFilterParam'
+    StudentCodeFilterParam:
+      $ref: './components/parameters/common.yaml#/StudentCodeFilterParam'
+    CourseCodeFilterParam:
+      $ref: './components/parameters/common.yaml#/CourseCodeFilterParam'
+    PageParam:
+      $ref: './components/parameters/common.yaml#/PageParam'
+    SizeParam:
+      $ref: './components/parameters/common.yaml#/SizeParam'
     StudentCodePathParam:
       $ref: './components/parameters/common.yaml#/StudentCodePathParam'
     CourseCodePathParam:
       $ref: './components/parameters/common.yaml#/CourseCodePathParam'
     IsbnPathParam:
       $ref: './components/parameters/common.yaml#/IsbnPathParam'
-    EnrollmentStudentIdPathParam:
-      $ref: './components/parameters/common.yaml#/EnrollmentStudentIdPathParam'
+    EnrollmentStudentCodePathParam:
+      $ref: './components/parameters/common.yaml#/EnrollmentStudentCodePathParam'
     EnrollmentCourseCodePathParam:
       $ref: './components/parameters/common.yaml#/EnrollmentCourseCodePathParam'

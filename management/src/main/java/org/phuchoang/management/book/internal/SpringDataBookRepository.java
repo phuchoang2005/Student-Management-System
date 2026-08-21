@@ -12,8 +12,6 @@ interface SpringDataBookRepository extends CrudRepository<BookRow, Long> {
 
   Optional<BookRow> findByIsbn(String isbn);
 
-  List<BookRow> findByOwnerId(Long ownerId);
-
   @Query("""
       SELECT * FROM books
       WHERE owner_id = :ownerId

@@ -423,7 +423,7 @@ Per `06-low-level-design.md` §13 (lines 1122/1124), with one correction found d
 3. Cross-student single-record read → 403 — `StudentService`/`BookService`/`EnrollmentService.getDetail` — `OwnRecordsScopingIntegrationTest`
 4. Student search/list transparently scoped, never 403 — `StudentService`/`BookService.search` — `OwnRecordsScopingIntegrationTest`, `RbacMatrixIntegrationTest`
 5. Initial-password 404 collapsing (info-hiding) — `StudentService.viewInitialPassword` — `InitialPasswordViewIntegrationTest`
-6. `/me/books-and-courses` by non-Student → 403 — `SecurityConfig` filter chain — `MeControllerIntegrationTest`
+6. `/me/**` by non-Student → 403 — `SecurityConfig` filter chain — `MeControllerIntegrationTest` *(the endpoint was `/me/books-and-courses` at the time; split into `/me/profile`, `/me/courses`, `/me/books` by PM-022 in Sprint 5)*
 7. Idempotent unassign-owner → 200 — `BookService.unassignOwner`/`Book.clearOwner` — `BookUnassignmentIntegrationTest`, `BookServiceTest`, `BookControllerTest`
 
 The one gap found: item 1's malformed-email path was tested on student *create* (`StudentRegistrationIntegrationTest.rejectsMalformedEmail`) but not on *update* — `StudentUpdateIntegrationTest` only covered the duplicate-email (409) case there. Closed by adding `StudentUpdateIntegrationTest.rejectsMalformedEmailOnUpdate` (400); no production code changes were needed since `Email`'s validation already runs identically on both paths.
@@ -442,7 +442,85 @@ The one gap found: item 1's malformed-email path was tested on student *create* 
 
 ---
 
-## 7. Coverage check
+## 7. Sprint 5 — Role-scoped access rework (34h)
+
+Not part of the original plan. It came out of walking the finished demo UI role by role: with all four domain roles holding read access to everything, each role's screens showed data it had no business with, and two endpoints made the operator handle database ids. See [01-product-backlog.md](./01-product-backlog.md) §8a (Epic H).
+
+Ordering matters here and is deliberate: **PM-020 → PM-021 → PM-019 → PM-022**. Re-keying first means the new list endpoints are born business-key-addressed rather than re-keyed a second time; tightening the grants last means the tests covering those new endpoints already exist when the RBAC matrix changes underneath them.
+
+### PM-020 — Business keys end to end (6h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| Move `StudentCode` from `student/domain/` to the module root (published language, beside `StudentId`); add `StudentLookup.idOf(StudentCode)` as the single code→id translation point, replacing `existsById` in `book`/`enrollment` | Domain, Application | 1.5h |
+| Re-key the enrollment API on `studentCode`: `EnrollmentCreateRequest`, `EnrollStudentCommand`, both path variables, `EnrollmentService.enroll`/`end`/`getDetail` | Web, Application | 1.5h |
+| Re-key the book API: `BookOwnerRequest.studentCode`, `BookCreateRequest.ownerStudentCode`, `GET /books?ownerStudentCode=` | Web, Application | 1h |
+| Remove every surrogate id from every response DTO; `ownerId` → `ownerStudentCode`, resolved per distinct owner rather than per row | Web, Application | 1h |
+| Update the affected tests; re-key the fixtures that read ids out of registration responses to read them from the database instead | Tests | 1h |
+
+**Status:** done. `StudentLookup` is now `{idOf, summaryOf, profileOf}` — `existsById` is gone from the port, the service, and the repository, since resolving a code *is* the existence check. `EnrollmentService` carries two error vocabularies on purpose: an unresolvable code is a `400` when supplied as a reference (`enroll`, `search`) and a `404` when it is part of one enrollment's address (`getDetail`, `end`), so ending an enrollment cannot be used to probe whether a student exists.
+
+### PM-021 — Related data as endpoints, not embedded fields (4h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `GET /api/v1/enrollments?studentCode\|courseCode` — exactly one filter required; both directions return the same row shape | Web, Application | 1.5h |
+| `EnrollmentRepository.findByCourseCode` + its join query and count, mirroring the existing `findByStudentId` pair | Port, Internal | 1h |
+| Delete the `StudentDetail.books`/`.courses` and `CourseDetail.roster` stubs and their view records | Web, Application | 0.5h |
+| Integration coverage for both filter directions, the both/neither `400`, and the unresolvable-code `400` | Tests | 1h |
+
+**Status:** done. The three stubs had returned `List.of()` since Sprint 1 and were documented as backend gaps for the UI to disclose; they are now closed rather than disclosed. Removing the roster also removes `course`'s only outbound module dependency.
+
+### PM-019 — Per-resource read grants (4h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| Split the single four-role `GET` allow-list in `SecurityConfig` into one matcher per resource | Web/security | 1h |
+| Rewrite `RbacMatrixIntegrationTest`'s read slice to assert both directions from one matrix table | Tests | 1.5h |
+| Invert the enrollment cases in `OwnRecordsScopingIntegrationTest`: the grant is withdrawn, not scoped, so even a Student's *own* enrollment is a 403 | Tests | 0.5h |
+| Update the RBAC tables in `02-component-diagram.md` §4, `04-authentication-authorization.md` §6.1, `06-low-level-design.md` §11.1, and `cross-cutting.md` §1 | Docs | 1h |
+
+**Status:** done. Registrar loses books; Librarian loses courses and enrollments; Course Administrator loses books but keeps `GET /students/**` for roster click-through; Student loses enrollments outright. `EnrollmentService.getDetail` consequently lost its `callerStudentId` parameter and its ownership branch — withdrawing the grant removed the comparison rather than defending it.
+
+### PM-022 — Student self-service split (3h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| Replace `GET /me/books-and-courses` with `/me/profile`, `/me/courses`, `/me/books` | Web | 1h |
+| `StudentLookup.profileOf` + the `StudentProfile` read-model, so `me` can serve a full record | Application | 0.5h |
+| Drop `MeController`'s hand-rolled prefixed paging in favour of an ordinary `Pageable` | Web | 0.5h |
+| Rewrite `MeControllerIntegrationTest` against the three endpoints | Tests | 1h |
+
+**Status:** done. `/me/profile` is what lets the Student screen show their own record directly instead of making them search for themselves, and is the only endpoint that tells a Student their own student code — the login response carries just `{role, mustChangePassword}`. Splitting also removed the one endpoint in the API that answered `400` where every other one clamped an oversized page size.
+
+### PM-023 — Frontend rebuild (13h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| Scaffold Next.js 16 + TypeScript + Chakra v3; rewrites replacing the Vite proxy; port `client`/`endpoints`/`types`, `AuthContext`/`RequireAuth`/`permissions`, and the three hooks | Frontend | 5h |
+| Shared components: `DataTable`, `Pagination`, `RecordCard`, the dialogs, `FormField`, `ErrorBanner`, `AppShell` | Frontend | 2h |
+| Per-role screens: students (two shapes), books, courses (two shapes), enrollments (two shapes), staff accounts | Frontend | 5h |
+| Rewrite `UI-UX/01-frontend-strategy.md` around the new stack and the narrowed role model | Docs | 1h |
+
+**Status:** done. `npm run typecheck` and `npm run build` both pass. The type layer carries the PM-020 rule: the response types have no `id` field, so a screen cannot reach for one — `grep -rn "studentId\|ownerId" src` returns nothing outside comments.
+
+### PM-024 — Generated docs HTML (4h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `util/md-to-html.js` + `util/docs-template.js`: mermaid fences, inlined SVG diagrams, the pan/zoom lightbox, doc-nav derivation, `.md`→`.html` link rewriting | Build tooling | 2.5h |
+| Accessibility beyond what the hand-written pages carried: skip link, `<main>`, `scope="col"`, figure semantics, keyboard-operable diagram triggers, a real `role="dialog"` lightbox with focus trap and restore, live-region zoom readout, `prefers-reduced-motion` | Build tooling | 1h |
+| Delete the committed `.html`, gitignore it, add `make docs`/`docs-watch`/`docs-clean` | Build config | 0.5h |
+
+**Status:** done. The twins had already drifted apart — `SA-docs/01-system-overview.html` claimed "Part 1 of 5" where its Markdown source said "Part 1 of 6" — which is the concrete argument for generating them.
+
+**Sprint 5 subtotal: 6 + 4 + 4 + 3 + 13 + 4 = 34h**
+
+**Sprint 5 DoD.** Full suite green: **475 tests, 0 failures, 1 skipped** (the same pre-existing `@Disabled` TC-XC-013 from PM-011) — up from Sprint 4's 449, the difference being the new enrollment-list, `/me`-split, and both-directions RBAC cases. `npm run typecheck` and `npm run build` pass in `management-frontend/`. `npx @redocly/cli lint openapi.yaml` passes. The role matrix was also walked end to end against a running stack, one HTTP call per cell.
+
+---
+
+## 8. Coverage check
 
 | Sprint | Task-hour subtotal (this document) | Scope-hour subtotal (`02-sprint-plan.md`) | Match |
 | --- | --- | --- | --- |
@@ -451,6 +529,7 @@ The one gap found: item 1's malformed-email path was tested on student *create* 
 | Sprint 2 | 34h | 34h | ✓ |
 | Sprint 3 | 40h | 40h | ✓ |
 | Sprint 4 | 34h | 34h | ✓ |
-| **Total** | **163h** | **163h** | ✓ |
+| Sprint 5 | 34h | — (added after the plan) | n/a |
+| **Total** | **197h** | **163h planned + 34h added** | ✓ |
 
-Every one of the 38 items in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears exactly once above, decomposed into 2–6 tasks apiece. If a source document changes (LLD, test cases, or the Product Backlog's estimates), review this set for drift the same way [README.md](./README.md) already flags for the other three PM docs.
+Every one of the 44 items in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears exactly once above, decomposed into 2–6 tasks apiece. Sprint 5 has no counterpart row in [02-sprint-plan.md](./02-sprint-plan.md): that document plans the four sprints scoped up front, and Epic H was added afterwards in response to the demo walkthrough. If a source document changes (LLD, test cases, or the Product Backlog's estimates), review this set for drift the same way [README.md](./README.md) already flags for the other three PM docs.

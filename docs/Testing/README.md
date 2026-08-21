@@ -54,11 +54,11 @@ If a source document changes, the corresponding test cases here should be review
 | UC-13 View/Search Students | [student.md](./03-test-cases/student.md) | ✅ Implemented & tested — `StudentLookupIntegrationTest` |
 | UC-14 View/Search Books | [book.md](./03-test-cases/book.md) | ✅ Implemented & tested — `BookLookupIntegrationTest` |
 | UC-15 View/Search Courses | [course.md](./03-test-cases/course.md) | ✅ Implemented & tested — `CourseLookupIntegrationTest` |
-| UC-16 View Own Books, Courses & Enrollments | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `MeControllerIntegrationTest` |
+| UC-16 View Own Record, Books & Courses | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `MeControllerIntegrationTest` |
 | UC-17 View Student Detail | [student.md](./03-test-cases/student.md) | ✅ Implemented & tested — `StudentLookupIntegrationTest` |
 | UC-18 View Book Detail | [book.md](./03-test-cases/book.md) | ✅ Implemented & tested — `BookLookupIntegrationTest` |
 | UC-19 View Course Detail | [course.md](./03-test-cases/course.md) | ✅ Implemented & tested — `CourseLookupIntegrationTest` |
-| UC-20 View Enrollment Detail | [enrollment.md](./03-test-cases/enrollment.md) | ✅ Implemented & tested — `EnrollmentLookupIntegrationTest` |
+| UC-20 Look Up Enrollments | [enrollment.md](./03-test-cases/enrollment.md) | ✅ Implemented & tested — `EnrollmentLookupIntegrationTest` |
 | UC-21 Login | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `LoginIntegrationTest` |
 | UC-22 Change Password | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `ChangePasswordIntegrationTest` |
 | UC-23 View Student's Initial Password | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `InitialPasswordViewIntegrationTest` |

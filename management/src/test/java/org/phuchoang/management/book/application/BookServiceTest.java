@@ -23,6 +23,7 @@ import org.phuchoang.management.book.port.BookRepository;
 import org.phuchoang.management.shared.exception.DuplicateIsbnException;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.exception.UnknownStudentException;
+import org.phuchoang.management.student.StudentCode;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
 import org.phuchoang.management.student.StudentSummary;
@@ -39,6 +40,9 @@ class BookServiceTest {
   @Mock private StudentLookup studentLookup;
 
   private BookService service;
+
+  private static final StudentCode OWNER_CODE = new StudentCode("S00101");
+  private static final StudentId OWNER_ID = new StudentId(1L);
 
   private final AddBookCommand commandWithoutOwner =
       new AddBookCommand("978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
@@ -57,10 +61,10 @@ class BookServiceTest {
   void addBookRejectsUnknownOwner() {
     service = new BookService(repository, studentLookup);
     when(repository.existsByIsbn(any())).thenReturn(false);
-    when(studentLookup.existsById(new StudentId(99L))).thenReturn(false);
+    when(studentLookup.idOf(new StudentCode("S00999"))).thenReturn(Optional.empty());
     AddBookCommand command =
         new AddBookCommand("978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
-            LocalDate.of(2017, 9, 20), 99L);
+            LocalDate.of(2017, 9, 20), "S00999");
 
     assertThatThrownBy(() -> service.addBook(command)).isInstanceOf(UnknownStudentException.class);
   }
@@ -87,18 +91,17 @@ class BookServiceTest {
 
     BookService.AddedBook result = service.addBook(commandWithoutOwner);
 
-    assertThat(result.id()).isEqualTo(1L);
     assertThat(result.isbn()).isEqualTo("978-0-13-468599-1");
     assertThat(result.title()).isEqualTo("Clean Architecture");
     assertThat(result.author()).isEqualTo("Robert C. Martin");
-    assertThat(result.ownerId()).isNull();
+    assertThat(result.ownerStudentCode()).isNull();
   }
 
   @Test
   void addBookSavesBookWithValidOwner() {
     service = new BookService(repository, studentLookup);
     when(repository.existsByIsbn(any())).thenReturn(false);
-    when(studentLookup.existsById(new StudentId(1L))).thenReturn(true);
+    when(studentLookup.idOf(OWNER_CODE)).thenReturn(Optional.of(OWNER_ID));
     when(repository.save(any(Book.class)))
         .thenAnswer(
             invocation -> {
@@ -116,11 +119,13 @@ class BookServiceTest {
             });
     AddBookCommand command =
         new AddBookCommand("978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
-            LocalDate.of(2017, 9, 20), 1L);
+            LocalDate.of(2017, 9, 20), "S00101");
 
     BookService.AddedBook result = service.addBook(command);
 
-    assertThat(result.ownerId()).isEqualTo(1L);
+    assertThat(result.ownerStudentCode()).isEqualTo("S00101");
+    verify(repository)
+        .save(org.mockito.ArgumentMatchers.argThat(book -> OWNER_ID.equals(book.ownerId())));
   }
 
   private static Book anUnownedBook() {
@@ -143,7 +148,7 @@ class BookServiceTest {
         "Clean Architecture",
         "Robert C. Martin",
         LocalDate.of(2017, 9, 20),
-        new StudentId(1L),
+        OWNER_ID,
         Instant.now(),
         Instant.now(),
         0L);
@@ -155,7 +160,7 @@ class BookServiceTest {
     when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.empty());
 
     assertThatThrownBy(
-            () -> service.assignOwner("978-0-13-468599-1", new AssignBookOwnerCommand(1L)))
+            () -> service.assignOwner("978-0-13-468599-1", new AssignBookOwnerCommand("S00101")))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -163,10 +168,10 @@ class BookServiceTest {
   void assignOwnerRejectsUnknownStudent() {
     service = new BookService(repository, studentLookup);
     when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.of(anUnownedBook()));
-    when(studentLookup.existsById(new StudentId(99L))).thenReturn(false);
+    when(studentLookup.idOf(new StudentCode("S00999"))).thenReturn(Optional.empty());
 
     assertThatThrownBy(
-            () -> service.assignOwner("978-0-13-468599-1", new AssignBookOwnerCommand(99L)))
+            () -> service.assignOwner("978-0-13-468599-1", new AssignBookOwnerCommand("S00999")))
         .isInstanceOf(UnknownStudentException.class);
   }
 
@@ -174,13 +179,13 @@ class BookServiceTest {
   void assignOwnerSetsOwnerAndReplacesAnyPriorOwner() {
     service = new BookService(repository, studentLookup);
     when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.of(anUnownedBook()));
-    when(studentLookup.existsById(new StudentId(1L))).thenReturn(true);
+    when(studentLookup.idOf(OWNER_CODE)).thenReturn(Optional.of(OWNER_ID));
     when(repository.save(any(Book.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
     BookService.AssignedBook result =
-        service.assignOwner("978-0-13-468599-1", new AssignBookOwnerCommand(1L));
+        service.assignOwner("978-0-13-468599-1", new AssignBookOwnerCommand("S00101"));
 
-    assertThat(result.ownerId()).isEqualTo(1L);
+    assertThat(result.ownerStudentCode()).isEqualTo("S00101");
   }
 
   @Test
@@ -237,28 +242,41 @@ class BookServiceTest {
   void searchReturnsMappedSummariesFromRepositoryPage() {
     service = new BookService(repository, studentLookup);
     Pageable pageable = PageRequest.of(0, 20);
-    Page<Book> repoPage = new PageImpl<>(List.of(anOwnedBook()), pageable, 1);
+    Page<Book> repoPage = new PageImpl<>(List.of(anOwnedBook(), anOwnedBook()), pageable, 2);
     when(repository.search("clean", null, pageable)).thenReturn(repoPage);
+    when(studentLookup.summaryOf(OWNER_ID))
+        .thenReturn(new StudentSummary("S00101", "Amy", "Lee", "amy.lee@example.edu"));
 
     Page<BookService.BookSummaryView> result = service.search("clean", null, pageable, null);
 
-    assertThat(result.getTotalElements()).isEqualTo(1);
+    assertThat(result.getTotalElements()).isEqualTo(2);
     BookService.BookSummaryView summary = result.getContent().get(0);
-    assertThat(summary.id()).isEqualTo(1L);
     assertThat(summary.isbn()).isEqualTo("978-0-13-468599-1");
     assertThat(summary.title()).isEqualTo("Clean Architecture");
-    assertThat(summary.ownerId()).isEqualTo(1L);
+    assertThat(summary.ownerStudentCode()).isEqualTo("S00101");
+    // Two rows sharing an owner cost one lookup, not two.
+    verify(studentLookup).summaryOf(OWNER_ID);
   }
 
   @Test
-  void searchAppliesOwnerFilter() {
+  void searchResolvesTheOwnerStudentCodeToTheIdItFiltersOn() {
     service = new BookService(repository, studentLookup);
     Pageable pageable = PageRequest.of(0, 20);
-    when(repository.search(null, new StudentId(1L), pageable)).thenReturn(Page.empty(pageable));
+    when(studentLookup.idOf(OWNER_CODE)).thenReturn(Optional.of(OWNER_ID));
+    when(repository.search(null, OWNER_ID, pageable)).thenReturn(Page.empty(pageable));
 
-    service.search(null, 1L, pageable, null);
+    service.search(null, "S00101", pageable, null);
 
-    verify(repository).search(null, new StudentId(1L), pageable);
+    verify(repository).search(null, OWNER_ID, pageable);
+  }
+
+  @Test
+  void searchRejectsAnUnknownOwnerStudentCode() {
+    service = new BookService(repository, studentLookup);
+    when(studentLookup.idOf(new StudentCode("S00999"))).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.search(null, "S00999", PageRequest.of(0, 20), null))
+        .isInstanceOf(UnknownStudentException.class);
   }
 
   @Test
@@ -278,10 +296,12 @@ class BookServiceTest {
     Pageable pageable = PageRequest.of(0, 20);
     when(repository.search(null, new StudentId(9L), pageable)).thenReturn(Page.empty(pageable));
 
-    // Client asked for owner=1L, but the caller is Student 9L -- the caller wins, silently.
-    service.search(null, 1L, pageable, 9L);
+    // Client asked for S00101's books, but the caller is Student 9 -- the caller wins, silently,
+    // and the supplied code is never even resolved.
+    service.search(null, "S00101", pageable, 9L);
 
     verify(repository).search(null, new StudentId(9L), pageable);
+    verify(studentLookup, org.mockito.Mockito.never()).idOf(any());
   }
 
   @Test
@@ -301,7 +321,7 @@ class BookServiceTest {
     BookService.BookDetailView detail = service.getDetail("978-0-13-468599-1", null);
 
     assertThat(detail.isbn()).isEqualTo("978-0-13-468599-1");
-    assertThat(detail.ownerId()).isNull();
+    assertThat(detail.ownerStudentCode()).isNull();
     assertThat(detail.owner()).isNull();
   }
 
@@ -309,12 +329,12 @@ class BookServiceTest {
   void getDetailEmbedsOwnerSummaryWhenOwned() {
     service = new BookService(repository, studentLookup);
     when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.of(anOwnedBook()));
-    StudentSummary summary = new StudentSummary(1L, "S00101", "Amy", "Lee", "amy.lee@example.edu");
-    when(studentLookup.summaryOf(new StudentId(1L))).thenReturn(summary);
+    StudentSummary summary = new StudentSummary("S00101", "Amy", "Lee", "amy.lee@example.edu");
+    when(studentLookup.summaryOf(OWNER_ID)).thenReturn(summary);
 
     BookService.BookDetailView detail = service.getDetail("978-0-13-468599-1", null);
 
-    assertThat(detail.ownerId()).isEqualTo(1L);
+    assertThat(detail.ownerStudentCode()).isEqualTo("S00101");
     assertThat(detail.owner()).isEqualTo(summary);
   }
 
@@ -322,12 +342,12 @@ class BookServiceTest {
   void getDetailAllowsTheOwningStudentToReadTheirOwnBook() {
     service = new BookService(repository, studentLookup);
     when(repository.findByIsbn(new Isbn("978-0-13-468599-1"))).thenReturn(Optional.of(anOwnedBook()));
-    StudentSummary summary = new StudentSummary(1L, "S00101", "Amy", "Lee", "amy.lee@example.edu");
-    when(studentLookup.summaryOf(new StudentId(1L))).thenReturn(summary);
+    StudentSummary summary = new StudentSummary("S00101", "Amy", "Lee", "amy.lee@example.edu");
+    when(studentLookup.summaryOf(OWNER_ID)).thenReturn(summary);
 
     BookService.BookDetailView detail = service.getDetail("978-0-13-468599-1", 1L);
 
-    assertThat(detail.ownerId()).isEqualTo(1L);
+    assertThat(detail.ownerStudentCode()).isEqualTo("S00101");
   }
 
   @Test
@@ -349,13 +369,15 @@ class BookServiceTest {
   }
 
   @Test
-  void findByOwnerDelegatesToRepository() {
+  void findByOwnerPagesTheOwnersBooksForMe() {
     service = new BookService(repository, studentLookup);
-    when(repository.findByOwnerId(new StudentId(1L))).thenReturn(List.of(anOwnedBook()));
+    Pageable pageable = PageRequest.of(0, 20);
+    when(repository.findByOwnerId(OWNER_ID, pageable))
+        .thenReturn(new PageImpl<>(List.of(anOwnedBook()), pageable, 1));
 
-    List<Book> result = service.findByOwner(new StudentId(1L));
+    var result = service.findByOwner(OWNER_ID, pageable);
 
-    assertThat(result).hasSize(1);
-    verify(repository).findByOwnerId(new StudentId(1L));
+    assertThat(result.getContent()).hasSize(1);
+    assertThat(result.getContent().get(0).isbn()).isEqualTo("978-0-13-468599-1");
   }
 }

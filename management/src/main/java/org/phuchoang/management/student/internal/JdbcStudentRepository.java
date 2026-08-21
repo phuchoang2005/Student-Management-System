@@ -3,11 +3,11 @@ package org.phuchoang.management.student.internal;
 import java.util.List;
 import java.util.Optional;
 import org.phuchoang.management.shared.exception.StaleWriteException;
+import org.phuchoang.management.student.StudentCode;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.domain.DateOfBirth;
 import org.phuchoang.management.student.domain.Email;
 import org.phuchoang.management.student.domain.Student;
-import org.phuchoang.management.student.domain.StudentCode;
 import org.phuchoang.management.student.port.StudentRepository;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
@@ -37,11 +37,6 @@ class JdbcStudentRepository implements StudentRepository {
   @Override
   public boolean existsByCode(StudentCode code) {
     return springRepo.existsByStudentCode(code.value());
-  }
-
-  @Override
-  public boolean existsById(StudentId id) {
-    return springRepo.existsById(id.value());
   }
 
   @Override

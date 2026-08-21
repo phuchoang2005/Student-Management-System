@@ -11,21 +11,39 @@ skinparam swimlane {
   TitleBackgroundColor #EEF2FF
 }
 
-|Registrar|
+|Registrar / Librarian / Course Admin|
 start
-:Select one student from search results\n(UC-13);
+if (Where from?) then (search results)
+  :Select one student\n(UC-13, Registrar or Librarian);
+else (course roster)
+  :Select one name on a roster\n(UC-19, Course Admin -- its only\nroute into a student record);
+endif
 
 |System|
 if (Selected student still exists?) then (no)
   :Return not-found result;
-  |Registrar|
-  :Return to search results;
+  |Registrar / Librarian / Course Admin|
+  :Return to the previous list;
   stop
+else (yes)
 endif
-:Retrieve full student record,\nowned books, and current enrollments;
-:Display full student detail;
+:Retrieve the student's record;
+if (Which actor?) then (Librarian)
+  :Retrieve the books\nthe student holds;
+else (Registrar / Course Admin)
+  :Retrieve the courses\nthe student is enrolled in;
+endif
+:Display the record with that one related list;
 
-|Registrar|
+|Registrar / Librarian / Course Admin|
 :View student detail;
 stop
+
+note right
+  Only one related list, chosen by
+  role. A Librarian has no business
+  seeing a student's timetable, and a
+  Course Administrator none seeing
+  what they have borrowed.
+end note
 @enduml

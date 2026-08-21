@@ -207,40 +207,44 @@ sequenceDiagram
 
 ### 2.5 UC-17: View Student Detail
 
-Registrar selects one student from search results (UC-13) to see the full record, their owned books, and their active enrollments.
+An actor with student read access selects one student to see their record. **Which *related* data they then see depends on their role**, and each side is fetched separately rather than embedded in this response:
+
+| Viewer | Related data | Endpoint |
+| --- | --- | --- |
+| Librarian | the books that student is holding | `GET /api/v1/books?ownerStudentCode={code}` (§3.5) |
+| Registrar, Course Administrator | the courses that student is enrolled in | `GET /api/v1/enrollments?studentCode={code}` (§5.4) |
+
+This is the change from an earlier version of this diagram, which showed `StudentService.getDetail` composing both collections in a `par` block. Embedding them made every reader of a student record a reader of *both* sides of it — a Librarian would receive a course list, a Course Administrator a book list — which `02-component-diagram.md` §4's per-resource read grants explicitly deny. Each collection is also independently paged, which an embedded list cannot be. `student` consequently makes **no** outbound cross-module calls at all (`06-low-level-design.md` §4), which is what its "reference module, no outbound dependencies" description always claimed.
 
 ```mermaid
 sequenceDiagram
-    actor Registrar
+    actor Caller as Registrar / Librarian / Course Administrator
     participant Sec as Spring Security
     participant Ctrl as StudentController
     participant Svc as StudentService
     participant Repo as JdbcStudentRepository
-    participant BookSvc as BookService
-    participant EnrollSvc as EnrollmentService
     participant DB as MySQL
 
-    Registrar->>Sec: GET /api/v1/students/{code}
+    Caller->>Sec: GET /api/v1/students/{code}
     Sec->>Ctrl: forward request (auth gate as in §2.1)
-    Ctrl->>Svc: getDetail(code)
+    Ctrl->>Svc: getDetail(code, callerStudentId)
     Svc->>Repo: findByCode(code)
     Repo->>DB: SELECT
     DB-->>Repo: row
     Repo-->>Svc: result
     alt student no longer exists
         Svc-->>Ctrl: NotFoundException
-        Ctrl-->>Registrar: 404 Not Found
+        Ctrl-->>Caller: 404 Not Found
     else student found
-        par owned books
-            Svc->>BookSvc: findByOwner(code)
-            BookSvc-->>Svc: List<BookSummary>
-        and active enrollments
-            Svc->>EnrollSvc: findByStudent(code)
-            EnrollSvc-->>Svc: List<CourseSummary>
+        alt caller is a Student, and not this one (own-records-only scoping)
+            Svc-->>Ctrl: AccessDeniedException
+            Ctrl-->>Caller: 403 Forbidden
+        else caller may read this record
+            Svc-->>Ctrl: StudentDetail (the record's own fields)
+            Ctrl-->>Caller: 200 OK
         end
-        Svc-->>Ctrl: StudentDetail (fields + books + courses)
-        Ctrl-->>Registrar: 200 OK
     end
+    Note over Caller: related books / courses are separate requests — see the table above
 ```
 
 ---
@@ -275,9 +279,9 @@ sequenceDiagram
         Svc-->>Ctrl: DuplicateIsbnException
         Ctrl-->>Librarian: 409 Conflict
     else ISBN unique
-        opt owner specified
-            Svc->>Lookup: existsById(ownerId)
-            Lookup-->>Svc: exists?
+        opt ownerStudentCode specified
+            Svc->>Lookup: idOf(ownerStudentCode)
+            Lookup-->>Svc: Optional&lt;StudentId&gt;
             alt owner does not exist (Book.4)
                 Svc-->>Ctrl: UnknownStudentException
                 Ctrl-->>Librarian: 400 Bad Request
@@ -309,11 +313,11 @@ sequenceDiagram
     participant Repo as JdbcBookRepository
     participant DB as MySQL
 
-    Librarian->>Sec: PATCH /api/v1/books/{isbn}/owner
+    Librarian->>Sec: PATCH /api/v1/books/{isbn}/owner {studentCode}
     Sec->>Ctrl: forward request (auth gate as in §2.1)
-    Ctrl->>Svc: assign(isbn, studentId)
-    Svc->>Lookup: existsById(studentId)
-    Lookup-->>Svc: exists?
+    Ctrl->>Svc: assignOwner(isbn, studentCode)
+    Svc->>Lookup: idOf(studentCode)
+    Lookup-->>Svc: Optional&lt;StudentId&gt;
     alt target student does not exist (Book.4)
         Svc-->>Ctrl: UnknownStudentException
         Ctrl-->>Librarian: 400 Bad Request
@@ -599,21 +603,22 @@ sequenceDiagram
 
 ### 4.5 UC-19: View Course Detail
 
-Actor (Course Administrator, or a Student via UC-16) selects one course to see its full record and current roster.
+Registrar, Course Administrator, or a Student (via UC-16) selects one course to see its record.
+
+**The roster is not part of this response.** It is its own read — `GET /api/v1/enrollments?courseCode={code}` (§5.4) — granted to the Registrar and Course Administrator but not to a Student browsing the catalogue. Embedding it, as an earlier version of this diagram did, would have handed a Student the names and email addresses of everyone else taking a course as a side effect of opening it. Removing the composition also removes `course`'s only outbound module dependency: `course` now calls nothing.
 
 ```mermaid
 sequenceDiagram
-    actor Caller as Course Administrator / Student
+    actor Caller as Registrar / Course Administrator / Student
     participant Sec as Spring Security
     participant Ctrl as CourseController
     participant Svc as CourseService
     participant Repo as JdbcCourseRepository
-    participant EnrollSvc as EnrollmentService
     participant DB as MySQL
 
-    Caller->>Sec: GET /api/v1/courses/{code}?page=0&size=20
+    Caller->>Sec: GET /api/v1/courses/{code}
     Sec->>Ctrl: forward request (auth gate as in §2.1)
-    Ctrl->>Svc: getDetail(code, rosterPageable)
+    Ctrl->>Svc: getDetail(code)
     Svc->>Repo: findByCode(code)
     Repo->>DB: SELECT
     DB-->>Repo: result
@@ -623,11 +628,10 @@ sequenceDiagram
         Ctrl-->>Caller: 404 Not Found
     else course found
         Repo-->>Svc: Course
-        Svc->>EnrollSvc: findRosterByCourse(code, rosterPageable)
-        EnrollSvc-->>Svc: Page<StudentSummary>
-        Svc-->>Ctrl: CourseDetail (fields + paged roster)
+        Svc-->>Ctrl: CourseDetail (the record's own fields)
         Ctrl-->>Caller: 200 OK
     end
+    Note over Caller: the roster is a separate request, and only for staff — §5.4
 ```
 
 ---
@@ -638,7 +642,7 @@ Owns UC-11, UC-12, UC-20.
 
 ### 5.1 UC-11: Enroll Student in Course
 
-Registrar enrolls a student in a course. Student self-service enrollment is out of scope. Both cross-module existence checks run before the duplicate-enrollment check.
+Registrar enrolls a student in a course, naming them by **student code** — the surrogate `students.id` is never supplied by a caller (`api-specification.md` §5 decision #9). `StudentLookup.idOf` does double duty here: resolving the code to the id the `enrollments.student_id` FK needs *is* the Enrollment.3 existence check, so the ordering below is unchanged from when this step was a bare existence test. Student self-service enrollment is out of scope. Both cross-module existence checks run before the duplicate-enrollment check.
 
 ```mermaid
 sequenceDiagram
@@ -654,14 +658,14 @@ sequenceDiagram
 
     Caller->>Sec: POST /api/v1/enrollments
     Sec->>Ctrl: forward request (auth gate as in §2.1)
-    Ctrl->>Svc: enroll(studentId, courseCode)
-    Svc->>SLookup: existsById(studentId)
-    SLookup-->>Svc: exists?
+    Ctrl->>Svc: enroll(studentCode, courseCode)
+    Svc->>SLookup: idOf(studentCode)
+    SLookup-->>Svc: Optional&lt;StudentId&gt;
     alt student does not exist (Enrollment.3)
         Svc-->>Ctrl: UnknownStudentException
         Ctrl-->>Caller: 400 Bad Request
     else student exists
-        Svc->>CLookup: existsById(courseCode)
+        Svc->>CLookup: existsByCode(courseCode)
         CLookup-->>Svc: exists?
         alt course does not exist (Enrollment.2)
             Svc-->>Ctrl: UnknownCourseException
@@ -690,7 +694,9 @@ sequenceDiagram
 
 ### 5.2 UC-12: End Enrollment
 
-Registrar withdraws a student from a course. Student self-service withdrawal is out of scope. Only the enrollment link is removed — both the student and course records are unaffected.
+Registrar withdraws a student from a course, again by student code. Student self-service withdrawal is out of scope. Only the enrollment link is removed — both the student and course records are unaffected.
+
+Note the status choice: an unresolvable `studentCode` is a **404** here, not the 400 §5.1 raises. The caller is addressing one specific enrollment, and an enrollment whose student does not exist cannot exist either — the same answer a real student with no such enrollment gets, so no student-existence signal leaks through a differently-shaped error.
 
 ```mermaid
 sequenceDiagram
@@ -698,28 +704,36 @@ sequenceDiagram
     participant Sec as Spring Security
     participant Ctrl as EnrollmentController
     participant Svc as EnrollmentService
+    participant SLookup as StudentLookup
     participant Repo as JdbcEnrollmentRepository
     participant DB as MySQL
 
-    Caller->>Sec: DELETE /api/v1/enrollments/{studentId}/{courseCode}
+    Caller->>Sec: DELETE /api/v1/enrollments/{studentCode}/{courseCode}
     Sec->>Ctrl: forward request (auth gate as in §2.1)
-    Ctrl->>Svc: end(studentId, courseCode)
-    Svc->>Repo: deleteByStudentAndCourse(studentId, courseCode)
-    Repo->>DB: DELETE FROM enrollments WHERE ...
-    DB-->>Repo: OK
-    Repo-->>Svc: deleted
-    Svc-->>Ctrl: confirmation
-    Ctrl-->>Caller: 204 No Content
+    Ctrl->>Svc: end(studentCode, courseCode)
+    Svc->>SLookup: idOf(studentCode)
+    SLookup-->>Svc: Optional&lt;StudentId&gt;
+    alt no such student, or no such enrollment
+        Svc-->>Ctrl: NotFoundException
+        Ctrl-->>Caller: 404 Not Found
+    else enrollment exists
+        Svc->>Repo: deleteByStudentAndCourse(studentId, courseCode)
+        Repo->>DB: DELETE FROM enrollments WHERE ...
+        DB-->>Repo: OK
+        Repo-->>Svc: deleted
+        Svc-->>Ctrl: confirmation
+        Ctrl-->>Caller: 204 No Content
+    end
     Note over Svc: Enrollment.4 — only the link is removed
 ```
 
 ### 5.3 UC-20: View Enrollment Detail
 
-Actor (Registrar, Course Administrator, or Student) selects one enrollment from a student's list or a course roster to see both sides' summary info.
+Registrar or Course Administrator selects one enrollment from a student's list or a course roster to see both sides' summary info. **A Student is not an actor here**: `SecurityConfig` grants no role-STUDENT access to `/api/v1/enrollments/**` at all (`04-authentication-authorization.md` §6.1), because a Student's enrolled courses come from `GET /api/v1/me/courses`, scoped by the session principal rather than by a code the caller types.
 
 ```mermaid
 sequenceDiagram
-    actor Caller as Registrar / Course Administrator / Student
+    actor Caller as Registrar / Course Administrator
     participant Sec as Spring Security
     participant Ctrl as EnrollmentController
     participant Svc as EnrollmentService
@@ -728,9 +742,11 @@ sequenceDiagram
     participant CLookup as CourseLookup
     participant DB as MySQL
 
-    Caller->>Sec: GET /api/v1/enrollments/{studentId}/{courseCode}
+    Caller->>Sec: GET /api/v1/enrollments/{studentCode}/{courseCode}
     Sec->>Ctrl: forward request (auth gate as in §2.1)
-    Ctrl->>Svc: getDetail(studentId, courseCode)
+    Ctrl->>Svc: getDetail(studentCode, courseCode)
+    Svc->>SLookup: idOf(studentCode)
+    SLookup-->>Svc: Optional&lt;StudentId&gt; (empty → the same 404 below)
     Svc->>Repo: findByStudentAndCourse(studentId, courseCode)
     Repo->>DB: SELECT
     DB-->>Repo: result
@@ -749,6 +765,81 @@ sequenceDiagram
         end
         Svc-->>Ctrl: EnrollmentDetail (student summary + course summary)
         Ctrl-->>Caller: 200 OK
+    end
+```
+
+### 5.4 UC-11 / UC-20 list view: enrollments by student, or by course
+
+The list both of the above are *reached from*. One endpoint, filtered from either end:
+
+| Filter | Answers | Used by |
+| --- | --- | --- |
+| `?studentCode={code}` | the courses that student is enrolled in | Registrar's Enrollments tab; the enrolled-courses section of UC-17 |
+| `?courseCode={code}` | the students enrolled in that course | the roster section of UC-19; Course Administrator's Enrollments tab |
+
+**Exactly one filter is required.** With neither, this would enumerate every enrollment in the system, which no use case asks for; with both, the answer is a single enrollment that §5.3 already addresses directly. Either mistake is a `400` with both field names reported, not a silently broad result.
+
+Both directions return the **same row shape** (`EnrollmentDetail`: student summary + course summary + `enrolledAt`), because they are the same rows viewed from different ends. That is what lets one client render "this student's courses" and another "this course's roster" against one schema. The redundant side is constant across a page, so it is resolved **once**, outside the per-row mapping — a page of 20 costs one lookup for that side, not 20 identical ones.
+
+```mermaid
+sequenceDiagram
+    actor Caller as Registrar / Course Administrator
+    participant Sec as Spring Security
+    participant Ctrl as EnrollmentController
+    participant Svc as EnrollmentService
+    participant SLookup as StudentLookup
+    participant CLookup as CourseLookup
+    participant Repo as JdbcEnrollmentRepository
+    participant DB as MySQL
+
+    Caller->>Sec: GET /api/v1/enrollments?studentCode=… | courseCode=…
+    Sec->>Ctrl: forward request (auth gate as in §2.1)
+    Ctrl->>Svc: search(studentCode, courseCode, pageable)
+    alt neither filter, or both
+        Svc-->>Ctrl: DomainValidationException
+        Ctrl-->>Caller: 400 Bad Request
+    else filtered by studentCode
+        Svc->>SLookup: idOf(studentCode)
+        SLookup-->>Svc: Optional&lt;StudentId&gt;
+        alt no such student
+            Svc-->>Ctrl: UnknownStudentException
+            Ctrl-->>Caller: 400 Bad Request
+        else student exists
+            Svc->>SLookup: summaryOf(studentId)
+            Note over Svc,SLookup: resolved once — the student is constant across the page
+            SLookup-->>Svc: StudentSummary
+            Svc->>Repo: findByStudentId(studentId, pageable)
+            Repo->>DB: SELECT ... LIMIT/OFFSET + COUNT
+            DB-->>Repo: rows
+            Repo-->>Svc: Page&lt;Enrollment&gt;
+            loop per row
+                Svc->>CLookup: summaryOf(courseCode)
+                CLookup-->>Svc: CourseSummary
+            end
+            Svc-->>Ctrl: Page&lt;EnrollmentDetail&gt;
+            Ctrl-->>Caller: 200 OK
+        end
+    else filtered by courseCode
+        Svc->>CLookup: existsByCode(courseCode)
+        CLookup-->>Svc: exists?
+        alt no such course
+            Svc-->>Ctrl: UnknownCourseException
+            Ctrl-->>Caller: 400 Bad Request
+        else course exists
+            Svc->>CLookup: summaryOf(courseCode)
+            Note over Svc,CLookup: resolved once — the course is constant across the page
+            CLookup-->>Svc: CourseSummary
+            Svc->>Repo: findByCourseCode(courseCode, pageable)
+            Repo->>DB: SELECT ... JOIN courses ... LIMIT/OFFSET + COUNT
+            DB-->>Repo: rows
+            Repo-->>Svc: Page&lt;Enrollment&gt;
+            loop per row
+                Svc->>SLookup: summaryOf(studentId)
+                SLookup-->>Svc: StudentSummary
+            end
+            Svc-->>Ctrl: Page&lt;EnrollmentDetail&gt;
+            Ctrl-->>Caller: 200 OK
+        end
     end
 ```
 
@@ -807,49 +898,63 @@ sequenceDiagram
 
 Owned by no single module (`02-component-diagram.md` §2.4).
 
-### 7.1 UC-16: View Own Books, Courses & Enrollments
+### 7.1 UC-16: View Own Record, Books & Courses
 
-A Student views their own owned books and active enrollments in one request. The composing endpoint name below is illustrative — the SA docs describe this only as "a thin composing endpoint (or 3 scoped client calls)," without naming it — but either shape reads `book`, `enrollment`, and `student` independently, with no new write dependency.
+A Student's whole self-service surface, and the only place a Student learns their own `studentCode` — the login response carries just `{role, mustChangePassword}`, and this API has no session-probe endpoint.
+
+**Three endpoints, not one composed response.** The single `GET /me/books-and-courses` this replaces had to hand-roll `booksPage`/`coursesPage`-prefixed paging parameters, because Spring Data's `PageableHandlerMethodArgumentResolver` resolves only one `page`/`size` pair per request. Splitting the collections apart lets each take an ordinary `Pageable` like every other list endpoint, and lets a Student paging their book list stop refetching their course list to do it. Each is still scoped to `principal.studentId`, never to anything the caller supplies.
+
+| Endpoint | Answers | Backed by |
+| --- | --- | --- |
+| `GET /api/v1/me/profile` | the caller's own record | `StudentLookup.profileOf` |
+| `GET /api/v1/me/courses` | the courses they are enrolled in | `EnrollmentLookup.findByStudent` |
+| `GET /api/v1/me/books` | the books they are holding | `BookLookup.findByOwner` |
 
 ```mermaid
 sequenceDiagram
     actor Student
     participant Sec as Spring Security
-    participant Ctrl as MeController (composition)
+    participant Ctrl as MeController
+    participant SLookup as StudentLookup
     participant BookSvc as BookService
-    participant BookRepo as JdbcBookRepository
     participant EnrollSvc as EnrollmentService
-    participant EnrollRepo as JdbcEnrollmentRepository
     participant DB as MySQL
 
-    Student->>Sec: GET /api/v1/me/books-and-courses?booksPage=0&booksSize=20&coursesPage=0&coursesSize=20
-    Sec->>Ctrl: forward request (auth gate as in §2.1, scoped to principal.studentId)
-    par owned books
-        Ctrl->>BookSvc: findByOwner(studentId, booksPageable)
-        BookSvc->>BookRepo: findByOwnerId(studentId, booksPageable)
-        BookRepo->>DB: SELECT ... LIMIT/OFFSET (+ COUNT)
-        DB-->>BookRepo: rows + count
-        BookRepo-->>BookSvc: Page<Book>
-        alt no owned books / page past the end
-            BookSvc-->>Ctrl: empty page
-        else owned books exist
-            BookSvc-->>Ctrl: Page<BookSummary>
-        end
-    and active enrollments
-        Ctrl->>EnrollSvc: findByStudent(studentId, coursesPageable)
-        EnrollSvc->>EnrollRepo: findByStudentId(studentId, coursesPageable)
-        EnrollRepo->>DB: SELECT ... LIMIT/OFFSET (+ COUNT)
-        DB-->>EnrollRepo: rows + count
-        EnrollRepo-->>EnrollSvc: Page<Enrollment>
-        alt no active enrollments / page past the end
-            EnrollSvc-->>Ctrl: empty page
-        else active enrollments exist
-            EnrollSvc-->>Ctrl: Page<CourseSummary>
-        end
+    Note over Sec: /api/v1/me/** is hasRole("STUDENT"), so studentId is guaranteed non-null
+
+    Student->>Sec: GET /api/v1/me/profile
+    Sec->>Ctrl: forward (scoped to principal.studentId)
+    Ctrl->>SLookup: profileOf(studentId)
+    SLookup->>DB: SELECT
+    DB-->>SLookup: row
+    alt the record was removed mid-session
+        SLookup-->>Ctrl: empty
+        Ctrl-->>Student: 404 Not Found
+    else record exists
+        SLookup-->>Ctrl: StudentProfile
+        Ctrl-->>Student: 200 OK
     end
-    Ctrl-->>Student: 200 OK (books: page, courses: page)
+
+    Student->>Sec: GET /api/v1/me/courses?page=0&size=20
+    Sec->>Ctrl: forward (scoped to principal.studentId)
+    Ctrl->>EnrollSvc: findByStudent(studentId, pageable)
+    EnrollSvc->>DB: SELECT ... LIMIT/OFFSET (+ COUNT)
+    DB-->>EnrollSvc: rows + count
+    EnrollSvc-->>Ctrl: Page&lt;CourseSummary&gt; (empty page if none, never an error)
+    Ctrl-->>Student: 200 OK
+
+    Student->>Sec: GET /api/v1/me/books?page=0&size=20
+    Sec->>Ctrl: forward (scoped to principal.studentId)
+    Ctrl->>BookSvc: findByOwner(studentId, pageable)
+    BookSvc->>DB: SELECT ... LIMIT/OFFSET (+ COUNT)
+    DB-->>BookSvc: rows + count
+    BookSvc-->>Ctrl: Page&lt;BookSummary&gt; (empty page if none, never an error)
+    Ctrl-->>Student: 200 OK
+
     Note over Student: Selecting a book → UC-18 (§3.6), selecting a course → UC-19 (§4.5)
 ```
+
+**Why a Student has no enrollment endpoint of their own.** `/me/courses` answers "what am I taking" from the session principal. `/api/v1/enrollments/**` answers the same question from a caller-supplied student code — which is a code a Student could substitute. Rather than scope that surface, the grant is withdrawn: `SecurityConfig` gives role STUDENT no access to it at all (`04-authentication-authorization.md` §6.1). There is no id to probe with and no ownership comparison left to get wrong.
 
 ---
 

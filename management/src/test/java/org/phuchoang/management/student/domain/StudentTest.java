@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.phuchoang.management.shared.exception.DomainValidationException;
+import org.phuchoang.management.student.StudentCode;
 
 class StudentTest {
 

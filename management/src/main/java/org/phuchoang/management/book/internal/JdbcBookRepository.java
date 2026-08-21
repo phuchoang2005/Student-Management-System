@@ -45,11 +45,6 @@ class JdbcBookRepository implements BookRepository {
   }
 
   @Override
-  public List<Book> findByOwnerId(StudentId ownerId) {
-    return springRepo.findByOwnerId(ownerId.value()).stream().map(this::toDomain).toList();
-  }
-
-  @Override
   public Page<Book> findByOwnerId(StudentId ownerId, Pageable pageable) {
     List<Book> content =
         springRepo.findByOwnerId(ownerId.value(), pageable.getPageSize(), pageable.getOffset()).stream()

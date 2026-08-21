@@ -11,12 +11,24 @@ skinparam actor {
 }
 
 actor Registrar
+actor "Course Administrator" as CourseAdmin
 
 rectangle "Enrollment Management" {
   usecase "UC-11\nEnroll Student in Course" as UC11
   usecase "UC-12\nEnd Enrollment" as UC12
+  usecase "UC-20\nLook Up Enrollments" as UC20
 }
 
 Registrar --> UC11
 Registrar --> UC12
+Registrar --> UC20
+CourseAdmin --> UC20
+
+note bottom of UC20
+  Reads only. Filtered by a
+  student code or a course code,
+  never both and never neither.
+  A Student is not an actor here
+  -- see UC-16.
+end note
 @enduml

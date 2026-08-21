@@ -43,7 +43,7 @@ class BookUnassignmentIntegrationTest {
 
   @Autowired private MockMvc mockMvc;
 
-  private long registerStudent(String code, String email) throws Exception {
+  private String registerStudent(String code, String email) throws Exception {
     String body =
         """
         {"studentCode":"%s","firstName":"Amy","lastName":"Lee","email":"%s","dateOfBirth":"2000-01-01"}
@@ -60,7 +60,7 @@ class BookUnassignmentIntegrationTest {
             .andExpect(status().isCreated())
             .andReturn();
 
-    return ((Number) JsonPath.read(result.getResponse().getContentAsString(), "$.id")).longValue();
+    return JsonPath.read(result.getResponse().getContentAsString(), "$.studentCode");
   }
 
   private void addBook(String isbn, String title, String author) throws Exception {
@@ -84,20 +84,20 @@ class BookUnassignmentIntegrationTest {
   void unassignsAnOwnedBook() throws Exception {
     // TC-BOOK-010
     addBook("978-0-13-468599-1", "Clean Architecture", "Robert C. Martin");
-    long ownerId = registerStudent("S00210", "amy.lee.210@example.edu");
+    String ownerCode = registerStudent("S00210", "amy.lee.210@example.edu");
     mockMvc
         .perform(
             patch("/api/v1/books/978-0-13-468599-1/owner")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d}
-                    """.formatted(ownerId)))
+                    {"studentCode":"%s"}
+                    """.formatted(ownerCode)))
         .andExpect(status().isOk());
 
     mockMvc
         .perform(delete("/api/v1/books/978-0-13-468599-1/owner"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.ownerId").doesNotExist())
+        .andExpect(jsonPath("$.ownerStudentCode").doesNotExist())
         .andExpect(jsonPath("$.isbn").value("978-0-13-468599-1"));
   }
 
@@ -110,7 +110,7 @@ class BookUnassignmentIntegrationTest {
     mockMvc
         .perform(delete("/api/v1/books/978-0-596-52068-7/owner"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.ownerId").doesNotExist());
+        .andExpect(jsonPath("$.ownerStudentCode").doesNotExist());
   }
 
   @Test

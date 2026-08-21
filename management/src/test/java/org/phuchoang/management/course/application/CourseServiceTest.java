@@ -100,7 +100,6 @@ class CourseServiceTest {
 
     CourseService.CreatedCourse result = service.create(command);
 
-    assertThat(result.id()).isEqualTo(1L);
     assertThat(result.courseCode()).isEqualTo("CS101");
     assertThat(result.name()).isEqualTo("Intro to CS");
     assertThat(result.description()).isEqualTo("Basics");
@@ -182,7 +181,6 @@ class CourseServiceTest {
 
     assertThat(result.getTotalElements()).isEqualTo(1);
     CourseService.CourseSummaryView summary = result.getContent().get(0);
-    assertThat(summary.id()).isEqualTo(1L);
     assertThat(summary.courseCode()).isEqualTo("CS101");
     assertThat(summary.name()).isEqualTo("Intro to CS");
     assertThat(summary.credits()).isEqualTo(3);
@@ -208,7 +206,7 @@ class CourseServiceTest {
   }
 
   @Test
-  void getDetailReturnsCourseFieldsWithEmptyRosterStub() {
+  void getDetailReturnsCourseFields() {
     service = new CourseService(repository, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingCourse));
 
@@ -216,7 +214,8 @@ class CourseServiceTest {
 
     assertThat(detail.courseCode()).isEqualTo("CS101");
     assertThat(detail.name()).isEqualTo("Intro to CS");
-    assertThat(detail.roster()).isEmpty();
+    assertThat(detail.description()).isEqualTo("Basics");
+    assertThat(detail.credits()).isEqualTo(3);
   }
 
   @Test
@@ -235,6 +234,6 @@ class CourseServiceTest {
 
     CourseSummary summary = service.summaryOf(existingCode);
 
-    assertThat(summary).isEqualTo(new CourseSummary(1L, "CS101", "Intro to CS", 3));
+    assertThat(summary).isEqualTo(new CourseSummary("CS101", "Intro to CS", 3));
   }
 }

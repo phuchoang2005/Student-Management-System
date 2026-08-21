@@ -23,10 +23,11 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Full-stack coverage of US-5.4 ({@code GET /api/v1/me/books-and-courses}) against a real MySQL 8
- * instance, mirroring {@code EnrollmentLookupIntegrationTest}. Every session is a real logged-in
- * Student — {@code @WithMockUser} can't carry a real {@code studentId}, and this endpoint's whole
- * point is scoping to {@code principal.studentId}.
+ * Full-stack coverage of US-5.4 ({@code GET /api/v1/me/profile}, {@code /me/books}, {@code
+ * /me/courses}) against a real MySQL 8 instance, mirroring {@code
+ * EnrollmentLookupIntegrationTest}. Every session is a real logged-in Student —
+ * {@code @WithMockUser} can't carry a real {@code studentId}, and these endpoints' whole point is
+ * scoping to {@code principal.studentId}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -44,7 +45,7 @@ class MeControllerIntegrationTest {
 
   @Autowired private MockMvc mockMvc;
 
-  private record Student(long id, String studentCode, MockHttpSession session) {}
+  private record Student(String studentCode, String email, MockHttpSession session) {}
 
   /** Registers, logs in, and clears the must-change-password gate so the session can call anything. */
   private Student aStudent(String code, String email) throws Exception {
@@ -64,7 +65,6 @@ class MeControllerIntegrationTest {
             .andExpect(status().isCreated())
             .andReturn();
     String registrationBody = registration.getResponse().getContentAsString();
-    long studentId = ((Number) JsonPath.read(registrationBody, "$.id")).longValue();
     String initialPassword = JsonPath.read(registrationBody, "$.initialPassword");
 
     MvcResult login =
@@ -89,10 +89,10 @@ class MeControllerIntegrationTest {
                         .formatted(initialPassword)))
         .andExpect(status().isOk());
 
-    return new Student(studentId, code, session);
+    return new Student(code, email, session);
   }
 
-  private String addBook(String isbn, long ownerId) throws Exception {
+  private void addBook(String isbn, String ownerStudentCode) throws Exception {
     mockMvc
         .perform(
             post("/api/v1/books")
@@ -100,11 +100,10 @@ class MeControllerIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
-                    {"isbn":"%s","title":"Book %s","author":"Some Author","ownerId":%d}
+                    {"isbn":"%s","title":"Book %s","author":"Some Author","ownerStudentCode":"%s"}
                     """
-                        .formatted(isbn, isbn, ownerId)))
+                        .formatted(isbn, isbn, ownerStudentCode)))
         .andExpect(status().isCreated());
-    return isbn;
   }
 
   private void createCourse(String code) throws Exception {
@@ -119,53 +118,72 @@ class MeControllerIntegrationTest {
         .andExpect(status().isCreated());
   }
 
-  private void enroll(long studentId, String courseCode) throws Exception {
+  private void enroll(String studentCode, String courseCode) throws Exception {
     mockMvc
         .perform(
             post("/api/v1/enrollments")
                 .with(user("registrar").roles("REGISTRAR"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d,"courseCode":"%s"}
-                    """.formatted(studentId, courseCode)))
+                    {"studentCode":"%s","courseCode":"%s"}
+                    """.formatted(studentCode, courseCode)))
         .andExpect(status().isCreated());
   }
 
   @Test
-  void ownsNoBooksAndHoldsNoEnrollmentsReturnsEmptyListsRatherThanAnError() throws Exception {
+  void profileReturnsTheCallersOwnRecordIncludingTheStudentCodeLoginNeverRevealed() throws Exception {
+    Student student = aStudent("S00700", "me.700@example.edu");
+
+    mockMvc
+        .perform(get("/api/v1/me/profile").session(student.session()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.studentCode").value("S00700"))
+        .andExpect(jsonPath("$.firstName").value("Amy"))
+        .andExpect(jsonPath("$.email").value("me.700@example.edu"))
+        .andExpect(jsonPath("$.dateOfBirth").value("2000-01-01"))
+        .andExpect(jsonPath("$.id").doesNotExist());
+  }
+
+  @Test
+  void ownsNoBooksAndHoldsNoEnrollmentsReturnsEmptyPagesRatherThanAnError() throws Exception {
     // TC-IDN-020
     Student student = aStudent("S00701", "me.701@example.edu");
 
     mockMvc
-        .perform(get("/api/v1/me/books-and-courses").session(student.session()))
+        .perform(get("/api/v1/me/books").session(student.session()))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.books.content").isEmpty())
-        .andExpect(jsonPath("$.books.totalElements").value(0))
-        .andExpect(jsonPath("$.courses.content").isEmpty())
-        .andExpect(jsonPath("$.courses.totalElements").value(0));
+        .andExpect(jsonPath("$.content").isEmpty())
+        .andExpect(jsonPath("$.totalElements").value(0));
+    mockMvc
+        .perform(get("/api/v1/me/courses").session(student.session()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content").isEmpty())
+        .andExpect(jsonPath("$.totalElements").value(0));
   }
 
   @Test
-  void myBooksAndCoursesReturnsOwnedBooksAndActiveEnrollmentsAndEachSelectsIntoItsOwnDetail()
+  void myBooksAndCoursesReturnOwnedBooksAndActiveEnrollmentsAndEachSelectsIntoItsOwnDetail()
       throws Exception {
     // TC-IDN-019 — "exactly the books owned by and courses enrolled in by this student, never another student's"
     Student student = aStudent("S00702", "me.702@example.edu");
     Student otherStudent = aStudent("S00799", "me.799@example.edu");
-    addBook("ISBN-702", student.id());
-    addBook("ISBN-799", otherStudent.id());
+    addBook("ISBN-702", student.studentCode());
+    addBook("ISBN-799", otherStudent.studentCode());
     createCourse("CS702");
     createCourse("CS799");
-    enroll(student.id(), "CS702");
-    enroll(otherStudent.id(), "CS799");
+    enroll(student.studentCode(), "CS702");
+    enroll(otherStudent.studentCode(), "CS799");
 
     mockMvc
-        .perform(get("/api/v1/me/books-and-courses").session(student.session()))
+        .perform(get("/api/v1/me/books").session(student.session()))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.books.content.length()").value(1))
-        .andExpect(jsonPath("$.books.content[0].isbn").value("ISBN-702"))
-        .andExpect(jsonPath("$.books.content[0].ownerId").value(student.id()))
-        .andExpect(jsonPath("$.courses.content.length()").value(1))
-        .andExpect(jsonPath("$.courses.content[0].courseCode").value("CS702"));
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].isbn").value("ISBN-702"));
+    mockMvc
+        .perform(get("/api/v1/me/courses").session(student.session()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.content[0].courseCode").value("CS702"));
 
     // "when I select one entry, then the system displays that book's/course's full detail"
     mockMvc
@@ -180,75 +198,54 @@ class MeControllerIntegrationTest {
 
   @Test
   void booksAndCoursesPageIndependentlyOfEachOther() throws Exception {
-    // TC-IDN-022
+    // TC-IDN-022 — trivially true now that each collection is its own request with its own
+    // page/size, which is the reason the composed endpoint was split.
     Student student = aStudent("S00703", "me.703@example.edu");
-    addBook("ISBN-703-A", student.id());
-    addBook("ISBN-703-B", student.id());
-    addBook("ISBN-703-C", student.id());
+    addBook("ISBN-703-A", student.studentCode());
+    addBook("ISBN-703-B", student.studentCode());
+    addBook("ISBN-703-C", student.studentCode());
     createCourse("CS703A");
     createCourse("CS703B");
-    enroll(student.id(), "CS703A");
-    enroll(student.id(), "CS703B");
+    enroll(student.studentCode(), "CS703A");
+    enroll(student.studentCode(), "CS703B");
 
     mockMvc
-        .perform(
-            get("/api/v1/me/books-and-courses")
-                .session(student.session())
-                .param("booksSize", "2")
-                .param("coursesSize", "1"))
+        .perform(get("/api/v1/me/books").session(student.session()).param("size", "2"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.books.content.length()").value(2))
-        .andExpect(jsonPath("$.books.totalElements").value(3))
-        .andExpect(jsonPath("$.books.totalPages").value(2))
-        .andExpect(jsonPath("$.courses.content.length()").value(1))
-        .andExpect(jsonPath("$.courses.totalElements").value(2))
-        .andExpect(jsonPath("$.courses.totalPages").value(2));
+        .andExpect(jsonPath("$.content.length()").value(2))
+        .andExpect(jsonPath("$.totalElements").value(3))
+        .andExpect(jsonPath("$.totalPages").value(2));
 
-    // Browsing to the books' second page must not disturb the courses' first page, and vice versa.
     mockMvc
-        .perform(
-            get("/api/v1/me/books-and-courses")
-                .session(student.session())
-                .param("booksPage", "1")
-                .param("booksSize", "2")
-                .param("coursesSize", "1"))
+        .perform(get("/api/v1/me/books").session(student.session()).param("page", "1").param("size", "2"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.books.content.length()").value(1))
-        .andExpect(jsonPath("$.courses.content.length()").value(1));
-  }
-
-  @Test
-  void aNegativePageIsRejectedWith400() throws Exception {
-    Student student = aStudent("S00704", "me.704@example.edu");
+        .andExpect(jsonPath("$.content.length()").value(1));
 
     mockMvc
-        .perform(get("/api/v1/me/books-and-courses").session(student.session()).param("booksPage", "-1"))
-        .andExpect(status().isBadRequest());
-  }
-
-  @Test
-  void aSizeOutsideOneToOneHundredIsRejectedWith400() throws Exception {
-    Student student = aStudent("S00705", "me.705@example.edu");
-
-    mockMvc
-        .perform(get("/api/v1/me/books-and-courses").session(student.session()).param("coursesSize", "0"))
-        .andExpect(status().isBadRequest());
-    mockMvc
-        .perform(get("/api/v1/me/books-and-courses").session(student.session()).param("coursesSize", "101"))
-        .andExpect(status().isBadRequest());
+        .perform(get("/api/v1/me/courses").session(student.session()).param("size", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.totalElements").value(2))
+        .andExpect(jsonPath("$.totalPages").value(2));
   }
 
   @Test
   void nonStudentRoleIsForbiddenEvenThoughItCanReadEverythingViaOtherEndpoints() throws Exception {
     // TC-IDN-021
     mockMvc
-        .perform(get("/api/v1/me/books-and-courses").with(user("registrar").roles("REGISTRAR")))
+        .perform(get("/api/v1/me/profile").with(user("registrar").roles("REGISTRAR")))
+        .andExpect(status().isForbidden());
+    mockMvc
+        .perform(get("/api/v1/me/books").with(user("librarian").roles("LIBRARIAN")))
+        .andExpect(status().isForbidden());
+    mockMvc
+        .perform(get("/api/v1/me/courses").with(user("admin").roles("COURSE_ADMINISTRATOR")))
         .andExpect(status().isForbidden());
   }
 
   @Test
   void unauthenticatedRequestIsRejected() throws Exception {
-    MvcResult result = mockMvc.perform(get("/api/v1/me/books-and-courses")).andReturn();
+    MvcResult result = mockMvc.perform(get("/api/v1/me/profile")).andReturn();
     assertThat(result.getResponse().getStatus()).isIn(401, 403);
   }
 }

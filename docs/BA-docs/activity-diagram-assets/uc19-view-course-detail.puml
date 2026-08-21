@@ -11,21 +11,38 @@ skinparam swimlane {
   TitleBackgroundColor #EEF2FF
 }
 
-|Course Administrator / Student|
+|Course Admin / Registrar / Student|
 start
 :Select one course from results\n(search UC-15, or "my courses" UC-16);
 
 |System|
 if (Selected course still exists?) then (no)
   :Return not-found result;
-  |Course Administrator / Student|
+  |Course Admin / Registrar / Student|
   :Return to results list;
   stop
+else (yes)
 endif
-:Retrieve full course record\nand full enrolled-student roster;
-:Display full course detail;
+:Retrieve the course record;
+if (Actor responsible for enrollments?) then (Course Admin / Registrar)
+  :Retrieve one page of the\nenrolled-student roster;
+  :Display the course with its roster;
+else (Student)
+  :Display the course record alone;
+endif
 
-|Course Administrator / Student|
+|Course Admin / Registrar / Student|
 :View course detail;
+if (Select a student on the roster?) then (yes, staff only)
+  :Continue at UC-17\n(View Student Detail);
+else (no)
+endif
 stop
+
+note right
+  The roster is withheld from a
+  Student: browsing a course they
+  are taking must not reveal who
+  else is taking it.
+end note
 @enduml
