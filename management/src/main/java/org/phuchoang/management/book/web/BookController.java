@@ -38,12 +38,12 @@ public class BookController {
   @GetMapping
   public PageResponse<BookSummaryDto> searchBooks(
       @RequestParam(required = false) String query,
-      @RequestParam(required = false) Long owner,
+      @RequestParam(required = false) String ownerStudentCode,
       Pageable pageable,
       Authentication authentication) {
     Long callerStudentId = AuthenticatedPrincipal.studentIdOf(authentication);
     return PageResponse.from(
-        bookService.search(query, owner, pageable, callerStudentId).map(mapper::toSummaryDto));
+        bookService.search(query, ownerStudentCode, pageable, callerStudentId).map(mapper::toSummaryDto));
   }
 
   @GetMapping("/{isbn}")

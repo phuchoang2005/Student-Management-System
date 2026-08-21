@@ -13,9 +13,15 @@ skinparam swimlane {
 
 |Registrar|
 start
-:Select the student's enrollment in a course;
+:Supply the student code and the course code\nof the enrollment to end;
 
 |System|
+if (An active enrollment exists for that pair?) then (no)
+  :Report not found\n(the same answer whether the student\nis unknown or simply not enrolled);
+  |Registrar|
+  stop
+else (yes)
+endif
 :Remove the enrollment link only;
 :Confirm removal;
 

@@ -13,7 +13,7 @@ This is planning documentation only — no code is included here.
 3. **[03-scrum-artifacts.md](./03-scrum-artifacts.md)** — roles (solo PO/SM/Dev), ceremonies, Definition of Ready/Done, risk register, and the v1.0 release plan.
 4. **[04-sprint-backlog.md](./04-sprint-backlog.md)** — every backlog item decomposed into concrete implementation sub-tasks (Domain/Port-Internal/Application/Web/Tests), sourced from `SA-docs/06-low-level-design.md`'s class/method definitions, across all 5 sprints.
 
-Each of the four numbered documents has a styled HTML twin (`.html`) matching the house style already used in [SA-docs/](../SA-docs/) and [Testing/](../Testing/).
+Every document under `docs/` compiles to a styled HTML page via `make docs` (`util/md-to-html.js`). The HTML is generated and gitignored — the Markdown here is the source.
 
 ## Relationship to `BA-docs` / `SA-docs` / `Testing`
 

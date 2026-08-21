@@ -72,9 +72,18 @@ class CascadeLifecycleIntegrationTest {
             .andReturn();
 
     String responseBody = result.getResponse().getContentAsString();
-    long id = ((Number) JsonPath.read(responseBody, "$.id")).longValue();
     String initialPassword = JsonPath.read(responseBody, "$.initialPassword");
-    return new RegisteredStudent(id, code, email, initialPassword);
+    // The surrogate id is no longer in any response (api-specification.md §5 decision #9), but the
+    // raw-SQL assertions below match on it -- so it comes from the database, the one place it lives.
+    return new RegisteredStudent(studentIdOf(code), code, email, initialPassword);
+  }
+
+  /** The surrogate id the raw-SQL assertions match on, read from the one place it still lives. */
+  private long studentIdOf(String code) {
+    Long id =
+        jdbcTemplate.queryForObject(
+            "SELECT id FROM students WHERE student_code = ?", Long.class, code);
+    return id == null ? -1L : id;
   }
 
   private void createCourse(String code, String name) throws Exception {
@@ -91,15 +100,15 @@ class CascadeLifecycleIntegrationTest {
         .andExpect(status().isCreated());
   }
 
-  private void enroll(long studentId, String courseCode) throws Exception {
+  private void enroll(String studentCode, String courseCode) throws Exception {
     mockMvc
         .perform(
             post("/api/v1/enrollments")
                 .with(user("registrar").roles("REGISTRAR"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d,"courseCode":"%s"}
-                    """.formatted(studentId, courseCode)))
+                    {"studentCode":"%s","courseCode":"%s"}
+                    """.formatted(studentCode, courseCode)))
         .andExpect(status().isCreated());
   }
 
@@ -117,15 +126,15 @@ class CascadeLifecycleIntegrationTest {
         .andExpect(status().isCreated());
   }
 
-  private void assignBookOwner(String isbn, long studentId) throws Exception {
+  private void assignBookOwner(String isbn, String studentCode) throws Exception {
     mockMvc
         .perform(
             patch("/api/v1/books/" + isbn + "/owner")
                 .with(user("librarian").roles("LIBRARIAN"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d}
-                    """.formatted(studentId)))
+                    {"studentCode":"%s"}
+                    """.formatted(studentCode)))
         .andExpect(status().isOk());
   }
 
@@ -147,9 +156,9 @@ class CascadeLifecycleIntegrationTest {
     // TC-XC-020 -- combines TC-STU-022-025 into one end-to-end run against the real API.
     RegisteredStudent student = registerStudent("S00701", "cascade.701@example.edu");
     addBook("978-0-13-110362-7", "The C Programming Language", "Kernighan & Ritchie");
-    assignBookOwner("978-0-13-110362-7", student.id());
+    assignBookOwner("978-0-13-110362-7", student.code());
     createCourse("CS701", "Cascade Course");
-    enroll(student.id(), "CS701");
+    enroll(student.code(), "CS701");
 
     mockMvc
         .perform(
@@ -186,9 +195,9 @@ class CascadeLifecycleIntegrationTest {
     // independent of @ApplicationModuleListener.
     RegisteredStudent student = registerStudent("S00702", "cascade.702@example.edu");
     addBook("978-0-201-63361-0", "Design Patterns", "Gang of Four");
-    assignBookOwner("978-0-201-63361-0", student.id());
+    assignBookOwner("978-0-201-63361-0", student.code());
     createCourse("CS702", "Cascade Course");
-    enroll(student.id(), "CS702");
+    enroll(student.code(), "CS702");
 
     jdbcTemplate.update("DELETE FROM students WHERE id = ?", student.id());
 
@@ -216,7 +225,7 @@ class CascadeLifecycleIntegrationTest {
     // effect via the actual enrollment lookup endpoint (US-5.5), per the spec's literal steps.
     RegisteredStudent student = registerStudent("S00703", "cascade.703@example.edu");
     createCourse("CS703", "Cascade Course");
-    enroll(student.id(), "CS703");
+    enroll(student.code(), "CS703");
 
     mockMvc
         .perform(delete("/api/v1/courses/CS703").with(user("admin").roles("COURSE_ADMINISTRATOR")))
@@ -228,7 +237,7 @@ class CascadeLifecycleIntegrationTest {
             () ->
                 mockMvc
                     .perform(
-                        get("/api/v1/enrollments/" + student.id() + "/CS703")
+                        get("/api/v1/enrollments/" + student.code() + "/CS703")
                             .with(user("registrar").roles("REGISTRAR")))
                     .andExpect(status().isNotFound()));
   }
@@ -240,7 +249,7 @@ class CascadeLifecycleIntegrationTest {
     // TC-XC-023 -- raw SQL DELETE on courses, bypassing the application layer.
     RegisteredStudent student = registerStudent("S00704", "cascade.704@example.edu");
     createCourse("CS704", "Cascade Course");
-    enroll(student.id(), "CS704");
+    enroll(student.code(), "CS704");
 
     jdbcTemplate.update("DELETE FROM courses WHERE course_code = ?", "CS704");
 
@@ -258,7 +267,7 @@ class CascadeLifecycleIntegrationTest {
     // a book has no dependents (05-database-schema.md §5), so removing it touches nothing else.
     RegisteredStudent student = registerStudent("S00705", "cascade.705@example.edu");
     addBook("978-0-596-00712-6", "Head First Design Patterns", "Freeman & Freeman");
-    assignBookOwner("978-0-596-00712-6", student.id());
+    assignBookOwner("978-0-596-00712-6", student.code());
 
     jdbcTemplate.update("DELETE FROM books WHERE isbn = ?", "978-0-596-00712-6");
 

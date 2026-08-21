@@ -1,3 +1,4 @@
 package org.phuchoang.management.book.web.dto;
 
-public record BookSummaryDto(Long id, String isbn, String title, String author, Long ownerId) {}
+/** {@code ownerStudentCode} is {@code null} when the book is unowned. */
+public record BookSummaryDto(String isbn, String title, String author, String ownerStudentCode) {}

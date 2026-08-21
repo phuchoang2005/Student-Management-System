@@ -60,7 +60,7 @@ One representative, fully-valid record per aggregate, used as the default "happy
 | `book-valid-01` | ISBN `978-0-13-468599-1`, title `Clean Architecture`, author `Robert C. Martin`, published `2017-09-20`, no owner |
 | `book-valid-02` | ISBN `978-1-4919-5035-7`, title `Designing Data-Intensive Applications`, author `Martin Kleppmann`, published `2017-03-16`, no owner |
 | `course-valid-01` | code `CS-101`, name `Introduction to Computer Science`, description non-blank, credits `3` |
-| `course-valid-02` | code `CS-201`, name `Data Structures`, description non-blank, credits `4` — used where a course with an empty roster is needed |
+| `course-valid-02` | code `CS-201`, name `Data Structures`, description non-blank, credits `4` — used where a course with no enrollments is needed |
 
 ### 2.1 Composite/relationship fixtures (built from the baseline fixtures above)
 
@@ -114,7 +114,7 @@ Used to trigger the uniqueness-constraint (`409`) test cases. Each pairs a pre-s
 | `student-dup-email` | `student-valid-01` | `email` (same email, different code) | TC-STU-003 |
 | `book-dup-isbn` | `book-valid-01` | `isbn` | TC-BOOK-003 |
 | `course-dup-code` | `course-valid-01` | `courseCode` | TC-CRS-002 |
-| `enrollment-dup-pair` | An existing active enrollment | `(studentId, courseCode)` pair | TC-ENR-002 |
+| `enrollment-dup-pair` | An existing active enrollment | `(studentCode, courseCode)` pair | TC-ENR-002 |
 
 ---
 

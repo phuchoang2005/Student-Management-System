@@ -117,4 +117,12 @@ gantt
 
 ## Backlog coverage check
 
-Every item in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears in exactly one sprint above; no item is dropped or duplicated. Total scoped: 163h across 5 sprints (10 weeks) against a 200h capacity budget (5 × 40h), leaving ~18.5% aggregate slack for the estimation risk inherent in sizing 38 items against a spec that has never been implemented before — down from the original plan's ~26%, first because Sprint 3 absorbed the 13h staff-account/demo-account addition with no other sprint's scope changing, then because Sprint 4 absorbed PM-018's 3h the same way.
+Every item in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list **that existed when this plan was written** appears in exactly one sprint above; no item is dropped or duplicated. Total scoped: 163h across 5 sprints (10 weeks) against a 200h capacity budget (5 × 40h), leaving ~18.5% aggregate slack for the estimation risk inherent in sizing 38 items against a spec that has never been implemented before — down from the original plan's ~26%, first because Sprint 3 absorbed the 13h staff-account/demo-account addition with no other sprint's scope changing, then because Sprint 4 absorbed PM-018's 3h the same way.
+
+---
+
+## Addendum — Sprint 5 (unplanned)
+
+Epic H (PM-019–024, 34h) was added after this plan was written and after v1.0 shipped, in response to walking the finished demo UI role by role. It is scoped and decomposed in [01-product-backlog.md](./01-product-backlog.md) §8a and [04-sprint-backlog.md](./04-sprint-backlog.md) §7 rather than being retrofitted into the timeline above — the four sprints here were planned against the specification as it stood, and rewriting them to include work that came out of using the product would misrepresent what was known when.
+
+What the walkthrough surfaced, and reading the specification had not: every domain role could read every domain resource, so each role's screens showed data it had no reason to see; and two endpoints made the operator handle database ids. Both are narrowings of existing use cases rather than new ones, which is why Epic H adds no UC.

@@ -314,6 +314,32 @@ Extends `02-component-diagram.md` §4's role/access table with the `identity`-sp
 | Course Administrator | Yes | Yes | No | No |
 | Student | Yes | Yes | No | No |
 
+### 6.1 Domain read access, per resource
+
+`02-component-diagram.md` §4 states this in module terms; here it is as the endpoint allow-lists the
+filter chain actually carries (06-low-level-design.md §11.1). Each row is an explicit grant — a role
+absent from a row receives `403`, not an empty result:
+
+| `GET` | Registrar | Librarian | Course Admin | Student | System Admin |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| `/api/v1/students/**` | Yes | Yes | Yes¹ | Yes² | No |
+| `/api/v1/books/**` | No | Yes | No | Yes² | No |
+| `/api/v1/courses/**` | Yes | No | Yes | Yes | No |
+| `/api/v1/enrollments/**` | Yes | No | Yes | No | No |
+| `/api/v1/me/**` | No | No | No | Yes | No |
+
+¹ Course Administrator holds this grant only to open a student's profile from a course roster; the
+role has no student-browsing workflow, and its UI offers no Students destination.
+
+² Transparently scoped server-side to the caller's own records (§2 of `api-specification.md`'s
+decision list) — a Student searching students gets 0 or 1 rows, and another student's detail is a
+`403`. Not blocked, scoped.
+
+A Student's own enrolled courses come from `GET /api/v1/me/courses`, scoped by the session principal
+rather than by a student code the caller types — which is why the Student row on
+`/api/v1/enrollments/**` is a flat No rather than a scoped Yes. There is nothing on that surface for
+a Student to read that `/me` does not answer more safely.
+
 No role may view or change another principal's *changed* password — that is never possible for anyone, by construction (§2.2, §5.1). The System Administrator's own account is never created or deactivated through the application (§3a) — that column has no entry for its own row by construction, not by omission.
 
 ## 8. Demo accounts for development/testing

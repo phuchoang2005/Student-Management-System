@@ -1,15 +1,18 @@
 package org.phuchoang.management.course.web.dto;
 
 import java.time.Instant;
-import java.util.List;
 
-/** {@code roster} is always {@code []} until US-5.5 wires the real composition in (CourseService.getDetail's Javadoc). */
+/**
+ * The course record alone. The enrolled-student roster is deliberately <em>not</em> embedded: it is
+ * a separately paged, separately authorized read ({@code GET /api/v1/enrollments?courseCode=},
+ * open to the Registrar and Course Administrator but not to a Student browsing the catalogue), and
+ * folding it in here would hand every reader of a course record the names of everyone taking it.
+ * This replaces the {@code roster} field that was always {@code []}.
+ */
 public record CourseDetailDto(
-    Long id,
     String courseCode,
     String name,
     String description,
     int credits,
     Instant createdAt,
-    Instant updatedAt,
-    List<Object> roster) {}
+    Instant updatedAt) {}

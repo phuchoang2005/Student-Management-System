@@ -1,4 +1,58 @@
 collection:
+  get:
+    operationId: searchEnrollments
+    tags: [Enrollments]
+    summary: List enrollments, by student or by course
+    description: |
+      **Roles:** Registrar, Course Administrator. A Student cannot reach this endpoint — their own
+      enrolled courses come from `GET /me/courses`, scoped by the session principal rather than by a
+      student code the caller supplies (`04-authentication-authorization.md` §6.1).
+
+      **Exactly one of `studentCode` or `courseCode` is required.** With neither, this would
+      enumerate every enrollment in the system, which no use case asks for; with both, the answer is
+      a single enrollment that `GET /enrollments/{studentCode}/{courseCode}` already addresses.
+      Either mistake is a `400` naming both fields.
+
+      Both directions return the same row shape, because they are the same rows viewed from
+      different ends — filtering by `studentCode` answers "the courses this student is taking",
+      filtering by `courseCode` answers "the students taking this course".
+    x-roles: [REGISTRAR, COURSE_ADMINISTRATOR]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/StudentCodeFilterParam'
+      - $ref: '../components/parameters/common.yaml#/CourseCodeFilterParam'
+      - $ref: '../components/parameters/common.yaml#/PageParam'
+      - $ref: '../components/parameters/common.yaml#/SizeParam'
+    responses:
+      '200':
+        description: A page of enrollments. An empty page when the filter matches nothing.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/enrollment.yaml#/EnrollmentPage'
+      '400':
+        description: |
+          Neither filter supplied, both supplied, or the supplied code references no such
+          student/course.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/ValidationError'
+            example:
+              timestamp: '2026-01-15T09:24:00Z'
+              status: 400
+              error: Bad Request
+              message: Supply exactly one of 'studentCode' or 'courseCode'.
+              path: /api/v1/enrollments
+              errors:
+                - field: studentCode
+                  message: Supply exactly one of 'studentCode' or 'courseCode'.
+                - field: courseCode
+                  message: Supply exactly one of 'studentCode' or 'courseCode'.
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+
   post:
     operationId: createEnrollment
     tags: [Enrollments]
@@ -6,8 +60,10 @@ collection:
     description: |
       **Roles:** Registrar. Student self-service enrollment is out of scope.
 
-      Both `studentId` and `courseCode` are validated to exist before the duplicate-enrollment
-      check runs.
+      Both `studentCode` and `courseCode` are validated to exist before the duplicate-enrollment
+      check runs. Resolving `studentCode` to the surrogate id the `enrollments.student_id` FK needs
+      *is* that existence check, so an unknown student is a `400` like any other unresolvable
+      reference (api-specification.md §5 decision #2).
     x-roles: [REGISTRAR]
     requestBody:
       required: true
@@ -38,7 +94,7 @@ collection:
               timestamp: '2026-01-15T09:24:00Z'
               status: 409
               error: Conflict
-              message: Student 42 is already enrolled in course 'CS101'.
+              message: Student 'S00123' is already enrolled in course 'CS101'.
               path: /api/v1/enrollments
 
 item:
@@ -47,10 +103,14 @@ item:
     tags: [Enrollments]
     summary: Get enrollment detail
     description: |
-      **Roles:** Registrar, Course Administrator, or the enrolled Student themself.
-    x-roles: [REGISTRAR, COURSE_ADMINISTRATOR, STUDENT]
+      **Roles:** Registrar, Course Administrator. Not the enrolled Student: role STUDENT holds no
+      grant on `/enrollments/**` at all.
+
+      An unresolvable `studentCode` is a `404` here, not the `400` a reference gets — see that
+      parameter's own description for why.
+    x-roles: [REGISTRAR, COURSE_ADMINISTRATOR]
     parameters:
-      - $ref: '../components/parameters/common.yaml#/EnrollmentStudentIdPathParam'
+      - $ref: '../components/parameters/common.yaml#/EnrollmentStudentCodePathParam'
       - $ref: '../components/parameters/common.yaml#/EnrollmentCourseCodePathParam'
     responses:
       '200':
@@ -75,7 +135,7 @@ item:
       the student–course link; neither the student nor the course record is affected.
     x-roles: [REGISTRAR]
     parameters:
-      - $ref: '../components/parameters/common.yaml#/EnrollmentStudentIdPathParam'
+      - $ref: '../components/parameters/common.yaml#/EnrollmentStudentCodePathParam'
       - $ref: '../components/parameters/common.yaml#/EnrollmentCourseCodePathParam'
     responses:
       '204':

@@ -88,13 +88,28 @@ public class SecurityConfig {
             // .anyRequest().authenticated() and let every logged-in role enumerate staff.
             .requestMatchers(HttpMethod.GET, "/api/v1/staff-accounts/**").hasRole("SYSTEM_ADMINISTRATOR")
             .requestMatchers(HttpMethod.GET, "/api/v1/me/**").hasRole("STUDENT")
-            // Explicit allow-list, not just an absent grant: without this, adding
-            // SYSTEM_ADMINISTRATOR as a 5th authenticated role would let it fall through to
-            // .anyRequest().authenticated() below on every domain GET, even though it's granted
-            // zero domain read access (06-low-level-design.md §11.1, TC-XC-040).
-            .requestMatchers(HttpMethod.GET, "/api/v1/students/**", "/api/v1/books/**", "/api/v1/courses/**",
-                    "/api/v1/enrollments/**")
+            // Read access is granted per resource, not as one undifferentiated "domain read": each
+            // role reads only what its own work needs (02-component-diagram.md §4). These are
+            // explicit allow-lists, not just absent grants -- without them a role would fall
+            // through to .anyRequest().authenticated() below and read everything
+            // (06-low-level-design.md §11.1, TC-XC-040).
+            //
+            // Every Student rule below is additionally scoped server-side to the caller's own
+            // records inside the service (StudentService/BookService's callerStudentId), so the
+            // grant is "your own row", not "every row".
+            .requestMatchers(HttpMethod.GET, "/api/v1/students/**")
                 .hasAnyRole("REGISTRAR", "LIBRARIAN", "COURSE_ADMINISTRATOR", "STUDENT")
+            // Course Administrator is on that list without a Students tab in the UI: it reaches a
+            // student record only by clicking through a course roster, which is a detail read, not
+            // a browse.
+            .requestMatchers(HttpMethod.GET, "/api/v1/books/**").hasAnyRole("LIBRARIAN", "STUDENT")
+            .requestMatchers(HttpMethod.GET, "/api/v1/courses/**")
+                .hasAnyRole("REGISTRAR", "COURSE_ADMINISTRATOR", "STUDENT")
+            // No STUDENT: a Student's enrolled courses come from GET /api/v1/me/courses, which is
+            // scoped by the session principal rather than by a caller-supplied student code, so
+            // there is nothing here for one to read that /me doesn't already answer.
+            .requestMatchers(HttpMethod.GET, "/api/v1/enrollments/**")
+                .hasAnyRole("REGISTRAR", "COURSE_ADMINISTRATOR")
             .anyRequest().authenticated())
         .addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(mustChangePasswordFilter, AuthorizationFilter.class);

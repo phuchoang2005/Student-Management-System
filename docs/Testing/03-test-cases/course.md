@@ -149,19 +149,19 @@ Covers **UC-8** (Create Course), **UC-9** (Update Course), **UC-10** (Remove Cou
 
 ## UC-19: View Course Detail
 
-### TC-CRS-020 — View full detail including enrolled-student roster
-- **Related UC / Rule:** UC-19 main flow
+### TC-CRS-020 — View full detail; the roster is a separate request
+- **Related UC / Rule:** UC-19 main flow; `api-specification.md` §5 decision #10
 - **Priority:** P1 · **Type:** Functional
 - **Test Data:** `course-with-enrollments-01`
-- **Steps:** `GET /api/v1/courses/{code}`.
-- **Expected Result:** `200 OK`; response includes all course fields and the full roster of currently enrolled students.
+- **Steps:** `GET /api/v1/courses/{code}`, then `GET /api/v1/enrollments?courseCode={code}`.
+- **Expected Result:** the first call is `200 OK` with all course fields and **no `roster` field and no `id` field**; the second returns the enrolled students as a page. The roster was moved out of the course response deliberately: it is granted to the Registrar and Course Administrator but not to a Student browsing the catalogue, and embedding it would have handed every reader of a course record the names and email addresses of everyone taking it.
 
-### TC-CRS-021 — View detail of a course with an empty roster
-- **Related UC / Rule:** UC-19 main flow
-- **Priority:** P2 · **Type:** Functional
-- **Test Data:** `course-valid-02`
-- **Steps:** `GET /api/v1/courses/{code}`.
-- **Expected Result:** `200 OK`; roster is an empty array, not an error.
+### TC-CRS-021 — A Student may open a course but never receives its roster
+- **Related UC / Rule:** UC-19; `04-authentication-authorization.md` §6.1
+- **Priority:** P0 · **Type:** Security-RBAC
+- **Test Data:** `course-with-enrollments-01`
+- **Steps:** As a real logged-in Student: `GET /api/v1/courses/{code}`, then `GET /api/v1/enrollments?courseCode={code}`.
+- **Expected Result:** `200 OK` for the course record (the catalogue is not personal data); `403 Forbidden` for the roster.
 
 ### TC-CRS-022 — View detail for a course removed since the search ran
 - **Related UC / Rule:** UC-19 flow 2a
@@ -196,19 +196,21 @@ Covers **UC-8** (Create Course), **UC-9** (Update Course), **UC-10** (Remove Cou
 
 ## UC-19: View Course Detail — Roster Pagination
 
-### TC-CRS-026 — Course roster spanning multiple pages is sliced correctly
-- **Related UC / Rule:** UC-19 flow 2b
-- **Priority:** P2 · **Type:** Functional
-- **Test Data:** `course-with-enrollments-01` extended to at least 3 enrolled students
-- **Steps:** `GET /api/v1/courses/{code}?page=0&size=2`, then `GET /api/v1/courses/{code}?page=1&size=2`.
-- **Expected Result:** `200 OK` on both; `roster.content` has at most 2 entries per call; `roster.totalElements`/`totalPages` are consistent across both calls; no student appears in both pages' `roster.content`.
+The roster is now its own endpoint, so its pagination cases live with it: see [enrollment.md](./enrollment.md) TC-ENR-017 and TC-ENR-020. The two cases below are what remains specific to the course side.
 
-### TC-CRS-027 — A roster page past the last page returns empty content, not `404`
-- **Related UC / Rule:** UC-19 flow 2b (boundary)
-- **Priority:** P2 · **Type:** Boundary
+### TC-CRS-026 — Course detail takes no paging parameters
+- **Related UC / Rule:** UC-19; `api-specification.md` §5 decision #10
+- **Priority:** P2 · **Type:** Functional
 - **Test Data:** `course-with-enrollments-01`
-- **Steps:** `GET /api/v1/courses/{code}?page=99&size=20`.
-- **Expected Result:** `200 OK`; the course's own fields are still returned; `roster.content` is an empty array — not `404`, since the course itself still exists.
+- **Steps:** `GET /api/v1/courses/{code}?page=1&size=2`.
+- **Expected Result:** `200 OK` with the course record; the paging parameters are simply ignored, because this response has no paginated field left. They previously paged the embedded `roster`.
+
+### TC-CRS-027 — A course with no enrollments has an empty roster, not an error
+- **Related UC / Rule:** UC-19 (boundary)
+- **Priority:** P2 · **Type:** Boundary
+- **Test Data:** `course-valid-02`
+- **Steps:** `GET /api/v1/courses/{code}`, then `GET /api/v1/enrollments?courseCode={code}`.
+- **Expected Result:** `200 OK` for both; the second returns `content: []` with `totalElements: 0` — not `404`, since the course itself exists.
 
 ---
 

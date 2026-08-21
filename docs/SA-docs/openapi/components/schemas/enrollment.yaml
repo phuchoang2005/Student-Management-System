@@ -1,34 +1,48 @@
 EnrollmentCreateRequest:
   type: object
-  required: [studentId, courseCode]
+  description: |
+    Both sides are business keys. The surrogate `students.id` behind `enrollments.student_id` is
+    resolved server-side and never supplied by a caller (api-specification.md §5 decision #9).
+  required: [studentCode, courseCode]
   properties:
-    studentId:
-      type: integer
-      format: int64
+    studentCode:
+      type: string
+      maxLength: 20
+      example: S00123
       description: Must reference an existing student, or the request is rejected with 400.
     courseCode:
       type: string
       maxLength: 20
+      example: CS101
       description: Must reference an existing course, or the request is rejected with 400.
 
 EnrollmentResponse:
   type: object
-  required: [id, studentId, courseCode, enrolledAt]
+  description: |
+    Keyed by the `studentCode`/`courseCode` pair the caller supplied, with no surrogate id: the pair
+    is what `GET`/`DELETE /enrollments/{studentCode}/{courseCode}` address, so an enrollment id would
+    be a value no endpoint accepts back.
+  required: [studentCode, courseCode, enrolledAt]
   properties:
-    id:
-      type: integer
-      format: int64
-    studentId:
-      type: integer
-      format: int64
+    studentCode:
+      type: string
+      example: S00123
     courseCode:
       type: string
+      example: CS101
     enrolledAt:
       type: string
       format: date-time
 
 EnrollmentDetail:
   type: object
+  description: |
+    One enrollment, both sides resolved. Also the row type of
+    `GET /enrollments?studentCode=|courseCode=`: filtering by either side yields the same rows viewed
+    from a different end, so one schema serves both rather than two endpoints with divergent shapes.
+    The redundant side is constant across a page — every row shares a `student` when filtering by
+    `studentCode`, a `course` when filtering by `courseCode` — which is what lets one client render
+    "this student's courses" and another "this course's roster" off the same response.
   required: [student, course, enrolledAt]
   properties:
     student:
@@ -38,3 +52,15 @@ EnrollmentDetail:
     enrolledAt:
       type: string
       format: date-time
+
+EnrollmentPage:
+  description: A page of enrollments, filtered by exactly one of `studentCode` or `courseCode`.
+  allOf:
+    - $ref: './common.yaml#/PageMeta'
+    - type: object
+      required: [content]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/EnrollmentDetail'

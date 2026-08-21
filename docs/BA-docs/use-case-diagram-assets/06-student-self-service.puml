@@ -12,24 +12,25 @@ skinparam actor {
   BorderColor #3730A3
 }
 
-actor Registrar
-actor "Course Administrator" as CourseAdmin
 actor Student
 
 rectangle "Student Self-Service" {
-  usecase "UC-16\nView Own Books, Courses\n& Enrollments" as UC16
-  usecase "UC-20\nView Enrollment Detail" as UC20
+  usecase "UC-16\nView Own Record,\nBooks & Courses" as UC16
 }
 
-usecase "UC-17\nView Student Detail\n(see Student Management)" as UC17ext #line.dashed
+usecase "UC-18\nView Book Detail\n(see Book Management)" as UC18ext #line.dashed
 usecase "UC-19\nView Course Detail\n(see Course Management)" as UC19ext #line.dashed
 
 Student --> UC16
-Student --> UC20
-Registrar --> UC20
-CourseAdmin --> UC20
 
-UC20 ..> UC16 : <<extend>>
-UC20 ..> UC17ext : <<extend>>
-UC20 ..> UC19ext : <<extend>>
+UC16 ..> UC18ext : <<extend>>
+UC16 ..> UC19ext : <<extend>>
+
+note bottom of UC16
+  The one lookup with no
+  caller-supplied key: the system
+  identifies the Student from the
+  session. UC-20's enrollment
+  lookups are not reachable here.
+end note
 @enduml

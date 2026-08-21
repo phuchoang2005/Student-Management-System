@@ -2,7 +2,7 @@
 
 Derived from [use-cases.md](./use-cases.md), which remains the authoritative source (actors, flows, business-rule traceability). This document is the visual companion: a system-wide **Overview** diagram followed by one **detail diagram per functional area**, so that no single diagram has to carry all 25 use cases at once. See also [req.md](./req.md) and [user-stories.md](./user-stories.md), and the [Activity Diagrams](./activity-diagram.md) for how each use case's request flow — validations, decisions, branches — actually plays out.
 
-Diagrams are drawn in standard UML use-case notation (stick-figure actors, oval use cases, a system-boundary rectangle) using [PlantUML](https://plantuml.com/use-case-diagram). Each `.svg` below is generated from the matching `.puml` source in [use-case-diagram-assets/](./use-case-diagram-assets/) — edit the `.puml` file and re-render with `plantuml -tsvg *.puml` to update a diagram. The [HTML version](./use-case-diagram.html) of this document embeds the same SVGs with click-to-zoom and drag-to-pan.
+Diagrams are drawn in standard UML use-case notation (stick-figure actors, oval use cases, a system-boundary rectangle) using [PlantUML](https://plantuml.com/use-case-diagram). Each `.svg` below is generated from the matching `.puml` source in [use-case-diagram-assets/](./use-case-diagram-assets/) — edit the `.puml` file and re-render with `plantuml -tsvg *.puml` to update a diagram. Running `make docs` compiles this document to HTML with the same SVGs inlined, click-to-zoom and drag-to-pan, and keyboard access to the same viewer.
 
 ---
 
@@ -24,15 +24,15 @@ The six functional areas group the 25 use cases as follows:
 | Student Management | UC-1, UC-2, UC-3, UC-13, UC-17 |
 | Book Management | UC-4, UC-5, UC-6, UC-7, UC-14, UC-18 |
 | Course Management | UC-8, UC-9, UC-10, UC-15, UC-19 |
-| Enrollment Management | UC-11, UC-12 |
-| Student Self-Service | UC-16, UC-20 |
+| Enrollment Management | UC-11, UC-12, UC-20 |
+| Student Self-Service | UC-16 |
 | Identity & Access | UC-21, UC-22, UC-23, UC-24, UC-25 |
 
 ---
 
 ## 1. System Overview
 
-Shows which functional areas each actor touches. The Student's reach into Book Management and Course Management is indirect — only through UC-16 ("my books / my courses") — so it's drawn as a dashed line rather than a direct association. The System Administrator only touches Identity & Access — it has no reach into any domain data.
+Shows which functional areas each actor touches. Solid lines are an actor's own work; dashed lines are **read-only reach into somebody else's area**, and each is labelled with why it exists — a Registrar reads courses in order to enroll into them, a Librarian reads one student to see who is holding a book, a Course Administrator reads one student by clicking through a roster. Those three are deliberately narrow: no actor has blanket read access across the system. The Student touches only Self-Service (their record, books, and courses all arrive there, identified by their sign-in), and the System Administrator only Identity & Access — it has no reach into any domain data.
 
 ![System Overview](./use-case-diagram-assets/01-overview.svg)
 

@@ -1,106 +1,88 @@
-# Student Management Frontend
+# Management Frontend
 
-Demo-grade React UI over the backend in [`management/`](../management/). Built to the plan in
-[docs/UI-UX/01-frontend-strategy.md](../docs/UI-UX/01-frontend-strategy.md).
+Demo UI for the [Student Management System](../management/). Next.js 16 (App Router) · TypeScript ·
+React 19 · Chakra UI v3.
 
-It introduces no new business rules, roles, or endpoints: every screen maps onto a use case in
-[BA-docs/use-cases.md](../docs/BA-docs/use-cases.md) and an endpoint already implemented and tested.
-
-## Stack
-
-React 19 · Vite 7 · react-router-dom 7 · plain JavaScript (no TypeScript) · hand-written CSS3.
-Three runtime dependencies, two dev. No UI kit, no state library, no data-fetching library.
+Its purpose is to make the finished backend demonstrable: sit down, log in as each of the five roles
+in turn, and walk the use cases end to end in a browser. See
+[`docs/UI-UX/01-frontend-strategy.md`](../docs/UI-UX/01-frontend-strategy.md) for the full strategy
+— stack rationale, screen map, error handling, and the demo script.
 
 ## Running it
 
-Three terminals, from the repo root:
-
 ```bash
-make up                                    # MySQL (colima + docker compose)
-cd management && ./mvnw spring-boot:run     # :8080 — seeds the 4 staff demo accounts
-cd management-frontend && npm install && npm run dev   # :5173
+make up                                    # MySQL, from the repo root
+cd management && ./mvnw spring-boot:run    # :8080, seeds the 4 staff demo accounts
+cd management-frontend && npm install && npm run dev   # :3000
 ```
 
-Then open <http://localhost:5173>.
+Then open <http://localhost:3000>. The login page lists the seeded demo accounts live.
 
-`make reset` gives a fresh database between demo runs. Demo-account seeding is idempotent, so a
-restart never resets a password that was changed mid-demo.
+`BACKEND_ORIGIN` overrides the proxy target if the API is not on `localhost:8080`.
 
-### Why the Vite proxy matters
+## Two constraints that shape the whole app
 
-Auth is a `JSESSIONID` session cookie and the backend registers **no CORS configuration** at all. A
-browser on `:5173` calling `:8080` directly would have its preflight rejected and its cookie dropped.
-`vite.config.js` proxies `/api` and `/logout` to `:8080` so every request is same-origin from the
-browser's point of view. All API paths in the code are relative for this reason.
+**Same-origin or nothing.** Auth is a `JSESSIONID` session cookie and `SecurityConfig` registers no
+CORS configuration at all. A browser on `:3000` calling `:8080` directly would have its preflight
+rejected and its cookie dropped, so `next.config.ts` rewrites `/api/*` and `/logout` to the backend
+and every request stays same-origin. Adding CORS to the backend for a demo's sake was the rejected
+alternative.
+
+**`403` is ambiguous.** Anonymous, wrong-role, and must-change-password all produce a `403`, and two
+of the three carry no body — the client cannot ask the server "who am I?". So `AuthContext` stores
+the login response in `sessionStorage`, `permissions.ts` mirrors the server's rules, and a `403` is
+resolved against local state rather than decoded.
+
+## Business keys, not ids
+
+No screen here holds a numeric id. A student is a `studentCode`, a book an `isbn`, a course a
+`courseCode` — that is what the API accepts and what it returns. The one exception is the staff
+account `id` on `/staff-accounts`, which addresses an `identity` record that has no business key of
+its own; it comes from the listing and is never typed.
 
 ## Layout
 
 ```
 src/
-├── api/         client.js (fetch wrapper + ApiError) · endpoints.js (one fn per operation)
-├── auth/        AuthContext · RequireAuth · permissions.js (the RBAC matrix as code)
-├── hooks/       usePagedResource · useAsyncAction
-├── components/  AppShell, DataTable, Pagination, Modal, Field, ErrorBanner, Toast, Badge, …
-├── pages/       login, change-password, students, books, courses, enrollments, me, staff
-└── styles/      tokens.css (custom properties) · base.css (reset + component classes)
+├── app/
+│   ├── layout.tsx  providers.tsx  page.tsx     # shell, client providers, per-role landing redirect
+│   ├── login/  (app)/change-password/
+│   └── (app)/                                  # everything behind RequireAuth + AppShell
+│       ├── students/  students/[code]/
+│       ├── books/     books/[isbn]/
+│       ├── courses/   courses/[code]/
+│       ├── enrollments/
+│       └── staff-accounts/
+├── components/                                 # DataTable, Pagination, dialogs, form field, shell
+├── lib/api/     { client, endpoints, types }   # the contract, in one place
+├── lib/auth/    { AuthContext, RequireAuth, permissions }
+├── lib/hooks/   { usePagedResource, useAsyncAction, useResource }
+└── theme/system.ts
 ```
 
-`endpoints.js` is the client-side copy of the API contract — when the backend changes, that is the
-one file that moves.
+`lib/api/endpoints.ts` *is* the client-side copy of the contract — when the backend changes, exactly
+that file moves.
 
-## Three things about this backend that shaped the code
+## What each role sees
 
-**`403` is ambiguous.** Not-logged-in, wrong-role, and must-change-password all return `403`, and two
-of the three carry no body — there is no session-probe endpoint, so the client cannot ask "who am I?".
-Instead, the login response is stored in `AuthContext` (mirrored to `sessionStorage`) and
-`permissions.js` mirrors `SecurityConfig`'s rules so nav items and buttons are hidden *before* any
-request is made. A `403` becomes an edge case rather than the normal path.
+| | Students | Books | Courses | Enrollments |
+| --- | --- | --- | --- | --- |
+| **Registrar** | roll + CRUD; a student shows their enrolled courses | — | catalogue; a course shows its roster | look up by student code; enroll / end |
+| **Librarian** | roll with search + pagination; a student shows their books on loan | full CRUD, assign / release | — | — |
+| **Course Administrator** | no tab — reached only through a roster | — | catalogue + CRUD; a course shows its roster | course → roster → student profile |
+| **Student** | own record, shown directly | own books | enrolled courses only | — |
+| **System Administrator** | — | — | — | — (staff accounts only) |
 
-**Logout is not part of the API.** `logout()` POSTs `/logout`, ignores any failure, then clears local
-state. Client state is authoritative; the server session is best-effort.
+The sidebar is rendered from the same list the route guards consult, so what a role can see and
+what it can reach never drift apart. The server enforces all of it independently.
 
-**Wrong `currentPassword` returns `401`, not `400`.** The only use of `401` outside login. The
-change-password form renders it inline on the field — treating it as an expired session would trap a
-first-login user in a redirect loop, since that page is the only one they can reach.
+## Checks
 
-## Backend gaps this UI surfaces rather than hides
+```bash
+npm run typecheck   # tsc --noEmit
+npm run build       # production build
+```
 
-Three stubs remain in the shipped backend. The UI shows them as gaps, so an empty table is never
-mistaken for real data:
-
-| Gap | Treatment |
-| --- | --- |
-| `StudentDetail.books` always `[]` | **Compensated** — the student detail page calls `GET /books?owner={id}` and shows the real result |
-| `StudentDetail.courses` always `[]` | **Disclosed** — a muted note; no staff-facing endpoint exists to compensate with |
-| `CourseDetail.roster` always `[]` | **Disclosed** — same |
-
-One more worth knowing during a demo: `GET /auth/demo-accounts` advertises five accounts, but the
-seeder skips the `STUDENT` one (a student-role account needs a real `students` row to satisfy the FK
-co-invariant). The login page marks that chip as unseeded — reach the student role by registering a
-real student instead, as the demo script does.
-
-## Demo script
-
-The run-through that exercises all five roles, from §11 of the strategy doc:
-
-| # | Role | Action |
-| --- | --- | --- |
-| 1 | — | Open `/login`; the seeded accounts are listed live |
-| 2 | `demo.registrar` | Register a student — the one-time initial password is shown; re-read it from the detail page |
-| 3 | `demo.courseadmin` | Create course `CS101` |
-| 4 | `demo.registrar` | Enroll the new student in `CS101` (needs their numeric id, shown on the detail page) |
-| 5 | `demo.librarian` | Add a book, then assign it to the student |
-| 6 | **the new student** | Log in (username = their email) → **forced** to `/change-password` → then `/me` shows the book and the course |
-| 7 | `demo.sysadmin` | Create a staff account, then deactivate it from the list |
-| 8 | `demo.sysadmin` | Note the nav shows only Staff Accounts — a domain read returns `403` |
-
-All demo accounts use the password `Demo#12345`.
-
-Steps 2→6 are the spine: a student created by one role, given a course by a second and a book by a
-third, then logging in as themselves and seeing both.
-
-## Not included
-
-Deliberately, per the strategy doc: TypeScript, a component library, automated frontend tests (the
-backend carries the test burden), a production build target, responsive/mobile layout, i18n, and
-dark mode. This is a demo UI, and it trades polish for use-case coverage.
+There are no automated frontend tests: the backend carries the test burden
+([`docs/Testing/`](../docs/Testing/)), and duplicating it here buys nothing for a demo. The
+verification checklist in the frontend strategy doc is the manual counterpart.

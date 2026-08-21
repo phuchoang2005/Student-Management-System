@@ -107,7 +107,7 @@ class CourseLookupIntegrationTest {
 
   @Test
   @WithMockUser(roles = "COURSE_ADMINISTRATOR")
-  void getCourseReturnsFullDetailWithEmptyRoster() throws Exception {
+  void getCourseReturnsFullDetail() throws Exception {
     mockMvc
         .perform(
             post("/api/v1/courses")
@@ -121,8 +121,9 @@ class CourseLookupIntegrationTest {
         .andExpect(jsonPath("$.courseCode").value("CS305"))
         .andExpect(jsonPath("$.name").value("Full Detail Course"))
         .andExpect(jsonPath("$.credits").value(3))
-        .andExpect(jsonPath("$.roster").isArray())
-        .andExpect(jsonPath("$.roster").isEmpty());
+        // The roster lives on GET /api/v1/enrollments?courseCode= now, not on this response.
+        .andExpect(jsonPath("$.roster").doesNotExist())
+        .andExpect(jsonPath("$.id").doesNotExist());
   }
 
   @Test

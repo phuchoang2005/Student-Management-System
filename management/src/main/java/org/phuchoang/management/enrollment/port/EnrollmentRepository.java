@@ -8,8 +8,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 /**
- * Scoped to what US-4.1 (enroll), US-4.2 (end, incl. the cascade listeners), and US-5.5 (detail
- * view) need.
+ * Scoped to what US-4.1 (enroll), US-4.2 (end, incl. the cascade listeners), and US-5.5 (detail and
+ * list views) need. Typed in {@link StudentId} rather than {@code StudentCode}: the code→id
+ * translation happens once in {@code EnrollmentService}, above this port, because {@code
+ * enrollments.student_id} is the column these methods actually match on.
  */
 public interface EnrollmentRepository {
 
@@ -18,8 +20,14 @@ public interface EnrollmentRepository {
   /** Backs {@code EnrollmentService.getDetail} (06-low-level-design.md §7, UC-20). */
   Optional<Enrollment> findByStudentAndCourse(StudentId studentId, CourseCode courseCode);
 
-  /** Backs {@code EnrollmentLookup.findByStudent} (US-5.4, {@code GET /api/v1/me/books-and-courses}). */
+  /**
+   * Backs {@code EnrollmentLookup.findByStudent} ({@code GET /api/v1/me/courses}) and the {@code
+   * studentCode} half of {@code EnrollmentService.search}.
+   */
   Page<Enrollment> findByStudentId(StudentId studentId, Pageable pageable);
+
+  /** Backs the {@code courseCode} half of {@code EnrollmentService.search} — a course's roster. */
+  Page<Enrollment> findByCourseCode(CourseCode courseCode, Pageable pageable);
 
   Enrollment save(Enrollment enrollment);
 

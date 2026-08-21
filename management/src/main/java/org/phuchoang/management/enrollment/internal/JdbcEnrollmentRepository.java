@@ -51,6 +51,16 @@ class JdbcEnrollmentRepository implements EnrollmentRepository {
   }
 
   @Override
+  public Page<Enrollment> findByCourseCode(CourseCode courseCode, Pageable pageable) {
+    List<Enrollment> content =
+        springRepo.findByCourseCode(courseCode.value(), pageable.getPageSize(), pageable.getOffset()).stream()
+            .map(row -> toDomain(row, courseCode))
+            .toList();
+    long total = springRepo.countByCourseCode(courseCode.value());
+    return new PageImpl<>(content, pageable, total);
+  }
+
+  @Override
   public void deleteByStudentAndCourse(StudentId studentId, CourseCode courseCode) {
     springRepo.deleteByStudentIdAndCourseCode(studentId.value(), courseCode.value());
   }

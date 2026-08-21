@@ -106,23 +106,13 @@ class BookRemovalIntegrationTest {
     // TC-BOOK-013
     addBook("978-1-4919-5035-7", "Designing Data-Intensive Applications", "Martin Kleppmann");
     String ownerCode = registerStudent("S00213", "amy.lee.213@example.edu");
-    long ownerId =
-        ((Number)
-                JsonPath.read(
-                    mockMvc
-                        .perform(get("/api/v1/students/" + ownerCode))
-                        .andReturn()
-                        .getResponse()
-                        .getContentAsString(),
-                    "$.id"))
-            .longValue();
     mockMvc
         .perform(
             patch("/api/v1/books/978-1-4919-5035-7/owner")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d}
-                    """.formatted(ownerId)))
+                    {"studentCode":"%s"}
+                    """.formatted(ownerCode)))
         .andExpect(status().isOk());
 
     mockMvc.perform(delete("/api/v1/books/978-1-4919-5035-7")).andExpect(status().isNoContent());

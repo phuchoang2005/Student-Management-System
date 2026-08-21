@@ -57,7 +57,7 @@ class EventPublicationRegistryIntegrationTest {
   @Autowired private EventPublicationRegistry registry;
   @Autowired private IncompleteEventPublications incompletePublications;
 
-  private long registerStudent(String code, String email) throws Exception {
+  private String registerStudent(String code, String email) throws Exception {
     String body =
         """
         {"studentCode":"%s","firstName":"Amy","lastName":"Lee","email":"%s","dateOfBirth":"2000-01-01"}
@@ -74,7 +74,7 @@ class EventPublicationRegistryIntegrationTest {
             .andExpect(status().isCreated())
             .andReturn();
 
-    return ((Number) JsonPath.read(result.getResponse().getContentAsString(), "$.id")).longValue();
+    return code;
   }
 
   private void addBook(String isbn, String title, String author) throws Exception {
@@ -90,15 +90,15 @@ class EventPublicationRegistryIntegrationTest {
         .andExpect(status().isCreated());
   }
 
-  private void assignBookOwner(String isbn, long studentId) throws Exception {
+  private void assignBookOwner(String isbn, String studentCode) throws Exception {
     mockMvc
         .perform(
             patch("/api/v1/books/" + isbn + "/owner")
                 .with(user("librarian").roles("LIBRARIAN"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d}
-                    """.formatted(studentId)))
+                    {"studentCode":"%s"}
+                    """.formatted(studentCode)))
         .andExpect(status().isOk());
   }
 
@@ -114,15 +114,15 @@ class EventPublicationRegistryIntegrationTest {
         .andExpect(status().isCreated());
   }
 
-  private void enroll(long studentId, String courseCode) throws Exception {
+  private void enroll(String studentCode, String courseCode) throws Exception {
     mockMvc
         .perform(
             post("/api/v1/enrollments")
                 .with(user("registrar").roles("REGISTRAR"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d,"courseCode":"%s"}
-                    """.formatted(studentId, courseCode)))
+                    {"studentCode":"%s","courseCode":"%s"}
+                    """.formatted(studentCode, courseCode)))
         .andExpect(status().isCreated());
   }
 
@@ -145,13 +145,13 @@ class EventPublicationRegistryIntegrationTest {
 
   @Test
   void studentDeletedIsDurablyTrackedAndCompletedForBothCascadeListeners() throws Exception {
-    long studentId = registerStudent("S00801", "registry.801@example.edu");
+    String studentCode = registerStudent("S00801", "registry.801@example.edu");
     // A book owned by the student and a course enrollment give both cascade listeners
     // (BookService.onStudentDeleted, EnrollmentService.onStudentDeleted) something to react to.
     addBook("978-0-262-03384-8", "Introduction to Algorithms", "CLRS");
-    assignBookOwner("978-0-262-03384-8", studentId);
+    assignBookOwner("978-0-262-03384-8", studentCode);
     createCourse("CS801", "Registry Course");
-    enroll(studentId, "CS801");
+    enroll(studentCode, "CS801");
 
     Instant since = Instant.now();
     mockMvc
@@ -176,9 +176,9 @@ class EventPublicationRegistryIntegrationTest {
 
   @Test
   void anIncompletePublicationIsRedeliveredAndCompletedOnResubmission() throws Exception {
-    long studentId = registerStudent("S00802", "registry.802@example.edu");
+    String studentCode = registerStudent("S00802", "registry.802@example.edu");
     addBook("978-0-13-468599-2", "Clean Architecture II", "Uncle Bob");
-    assignBookOwner("978-0-13-468599-2", studentId);
+    assignBookOwner("978-0-13-468599-2", studentCode);
 
     Instant since = Instant.now();
     mockMvc

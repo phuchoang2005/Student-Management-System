@@ -1,5 +1,6 @@
 package org.phuchoang.management.book.web.dto;
 
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
-public record BookOwnerRequest(@NotNull Long studentId) {}
+public record BookOwnerRequest(@NotBlank @Size(max = 20) String studentCode) {}

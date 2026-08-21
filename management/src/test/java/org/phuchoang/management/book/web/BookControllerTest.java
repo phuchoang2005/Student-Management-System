@@ -54,7 +54,7 @@ class BookControllerTest {
   private static BookService.AddedBook anAddedBook() {
     Instant now = Instant.now();
     return new BookService.AddedBook(
-        1L, "978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
+        "978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
         LocalDate.of(2017, 9, 20), null, now, now);
   }
 
@@ -73,7 +73,7 @@ class BookControllerTest {
         .andExpect(jsonPath("$.isbn").value("978-0-13-468599-1"))
         .andExpect(jsonPath("$.title").value("Clean Architecture"))
         .andExpect(jsonPath("$.author").value("Robert C. Martin"))
-        .andExpect(jsonPath("$.ownerId").doesNotExist());
+        .andExpect(jsonPath("$.ownerStudentCode").doesNotExist());
   }
 
   @Test
@@ -93,7 +93,7 @@ class BookControllerTest {
 
     String body =
         """
-        {"isbn":"978-0-13-468599-1","title":"Clean Architecture","author":"Robert C. Martin","ownerId":99}
+        {"isbn":"978-0-13-468599-1","title":"Clean Architecture","author":"Robert C. Martin","ownerStudentCode":"S00999"}
         """;
 
     mockMvc
@@ -128,8 +128,8 @@ class BookControllerTest {
   private static BookService.AssignedBook anAssignedBook() {
     Instant now = Instant.now();
     return new BookService.AssignedBook(
-        1L, "978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
-        LocalDate.of(2017, 9, 20), 1L, now, now);
+        "978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
+        LocalDate.of(2017, 9, 20), "S00101", now, now);
   }
 
   @Test
@@ -141,10 +141,10 @@ class BookControllerTest {
             patch("/api/v1/books/978-0-13-468599-1/owner")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":1}
+                    {"studentCode":"S00101"}
                     """))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.ownerId").value(1));
+        .andExpect(jsonPath("$.ownerStudentCode").value("S00101"));
   }
 
   @Test
@@ -157,7 +157,7 @@ class BookControllerTest {
             patch("/api/v1/books/978-0-13-468599-1/owner")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":1}
+                    {"studentCode":"S00101"}
                     """))
         .andExpect(status().isNotFound());
   }
@@ -172,7 +172,7 @@ class BookControllerTest {
             patch("/api/v1/books/978-0-13-468599-1/owner")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":99}
+                    {"studentCode":"S00999"}
                     """))
         .andExpect(status().isBadRequest());
   }
@@ -190,7 +190,7 @@ class BookControllerTest {
   private static BookService.UnassignedBook anUnassignedBook() {
     Instant now = Instant.now();
     return new BookService.UnassignedBook(
-        1L, "978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
+        "978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
         LocalDate.of(2017, 9, 20), now, now);
   }
 
@@ -201,7 +201,7 @@ class BookControllerTest {
     mockMvc
         .perform(delete("/api/v1/books/978-0-13-468599-1/owner"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.ownerId").doesNotExist());
+        .andExpect(jsonPath("$.ownerStudentCode").doesNotExist());
   }
 
   @Test
@@ -231,7 +231,8 @@ class BookControllerTest {
   }
 
   private static final BookService.BookSummaryView A_SUMMARY =
-      new BookService.BookSummaryView(1L, "978-0-13-468599-1", "Clean Architecture", "Robert C. Martin", 1L);
+      new BookService.BookSummaryView(
+          "978-0-13-468599-1", "Clean Architecture", "Robert C. Martin", "S00101");
 
   @Test
   void searchBooksReturnsPagedSummaries() throws Exception {
@@ -244,7 +245,7 @@ class BookControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.totalElements").value(1))
         .andExpect(jsonPath("$.content[0].isbn").value("978-0-13-468599-1"))
-        .andExpect(jsonPath("$.content[0].ownerId").value(1));
+        .andExpect(jsonPath("$.content[0].ownerStudentCode").value("S00101"));
   }
 
   @Test
@@ -262,16 +263,16 @@ class BookControllerTest {
   private static BookService.BookDetailView anUnownedBookDetail() {
     Instant now = Instant.now();
     return new BookService.BookDetailView(
-        1L, "978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
+        "978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
         LocalDate.of(2017, 9, 20), null, now, now, null);
   }
 
   private static BookService.BookDetailView anOwnedBookDetail() {
     Instant now = Instant.now();
-    StudentSummary owner = new StudentSummary(1L, "S00101", "Amy", "Lee", "amy.lee@example.edu");
+    StudentSummary owner = new StudentSummary("S00101", "Amy", "Lee", "amy.lee@example.edu");
     return new BookService.BookDetailView(
-        1L, "978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
-        LocalDate.of(2017, 9, 20), 1L, now, now, owner);
+        "978-0-13-468599-1", "Clean Architecture", "Robert C. Martin",
+        LocalDate.of(2017, 9, 20), "S00101", now, now, owner);
   }
 
   @Test

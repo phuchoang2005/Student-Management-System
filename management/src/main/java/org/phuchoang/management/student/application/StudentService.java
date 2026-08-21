@@ -2,7 +2,7 @@ package org.phuchoang.management.student.application;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.List;
+import java.util.Optional;
 import org.phuchoang.management.identity.AccountProvisioning;
 import org.phuchoang.management.identity.InitialPasswordLookup;
 import org.phuchoang.management.identity.InitialPasswordView;
@@ -11,16 +11,17 @@ import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.DuplicateEmailException;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.exception.PasswordNoLongerAvailableException;
+import org.phuchoang.management.student.StudentCode;
 import org.phuchoang.management.student.StudentDeleted;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
+import org.phuchoang.management.student.StudentProfile;
 import org.phuchoang.management.student.StudentSummary;
 import org.phuchoang.management.student.application.command.RegisterStudentCommand;
 import org.phuchoang.management.student.application.command.UpdateStudentCommand;
 import org.phuchoang.management.student.domain.DateOfBirth;
 import org.phuchoang.management.student.domain.Email;
 import org.phuchoang.management.student.domain.Student;
-import org.phuchoang.management.student.domain.StudentCode;
 import org.phuchoang.management.student.port.StudentRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -74,7 +75,6 @@ public class StudentService implements StudentLookup {
         accountProvisioning.provisionForStudent(student.id().value(), student.email().value());
 
     return new ProvisionedStudent(
-        student.id().value(),
         student.code().value(),
         student.firstName(),
         student.lastName(),
@@ -121,7 +121,6 @@ public class StudentService implements StudentLookup {
     }
 
     return new UpdatedStudent(
-        student.id().value(),
         student.code().value(),
         student.firstName(),
         student.lastName(),
@@ -162,10 +161,13 @@ public class StudentService implements StudentLookup {
   }
 
   /**
-   * findByCode (404 if absent), then composes the student's owned books and active enrollments.
-   * {@code ownedBooks}/{@code activeCourses} are stubbed empty here — {@code BookService.findByOwner}/
-   * {@code EnrollmentService.findByStudent} don't exist until `book`/`enrollment` ship in Sprint
-   * 2/3, and US-5.5 wires the real calls in (04-sprint-backlog.md §1, §3).
+   * findByCode (404 if absent) — the record itself, nothing composed. A student's owned books and
+   * active enrollments are <em>not</em> embedded here: they are separately paged, separately
+   * authorized reads ({@code GET /api/v1/books?ownerStudentCode=} for the Librarian, {@code GET
+   * /api/v1/enrollments?studentCode=} for the Registrar and Course Administrator), and folding
+   * either into this response would hand every reader of a student record data their role may not
+   * see. This replaces the two hardcoded empty lists that stood in for the composition US-5.5
+   * originally scoped here.
    *
    * <p>{@code callerStudentId} is non-null only for a STUDENT caller; a mismatch against the
    * resolved student's id is a 403, not a 404 — the resource exists and the request is
@@ -184,16 +186,13 @@ public class StudentService implements StudentLookup {
     }
 
     return new StudentDetailView(
-        student.id().value(),
         student.code().value(),
         student.firstName(),
         student.lastName(),
         student.email().value(),
         student.dateOfBirth().value(),
         student.createdAt(),
-        student.updatedAt(),
-        List.of(),
-        List.of());
+        student.updatedAt());
   }
 
   /**
@@ -219,9 +218,15 @@ public class StudentService implements StudentLookup {
     return new InitialPassword(view.username(), view.initialPassword());
   }
 
+  /**
+   * findByCode → the student's surrogate id, or empty when no such student exists. Reuses {@code
+   * findByCode} rather than adding a projection query: {@link #viewInitialPassword} already reads a
+   * whole row for one field the same way, and the callers ({@code BookService}, {@code
+   * EnrollmentService}) run this once per write, not per row.
+   */
   @Override
-  public boolean existsById(StudentId id) {
-    return repository.existsById(id);
+  public Optional<StudentId> idOf(StudentCode code) {
+    return repository.findByCode(code).map(Student::id);
   }
 
   /**
@@ -236,16 +241,31 @@ public class StudentService implements StudentLookup {
             .orElseThrow(() -> new NotFoundException("Student '" + id.value() + "' does not exist."));
 
     return new StudentSummary(
-        student.id().value(),
         student.code().value(),
         student.firstName(),
         student.lastName(),
         student.email().value());
   }
 
+  /**
+   * findById → the caller's own full record. Optional rather than a 404 throw, unlike {@link
+   * #summaryOf}: {@code me}'s id comes from the session principal, which outlives a student row a
+   * Registrar deleted mid-session, and that case is the caller's to render.
+   */
+  @Override
+  public Optional<StudentProfile> profileOf(StudentId id) {
+    return repository
+        .findById(id)
+        .map(student -> new StudentProfile(
+            student.code().value(),
+            student.firstName(),
+            student.lastName(),
+            student.email().value(),
+            student.dateOfBirth().value()));
+  }
+
   private StudentSummaryView toSummaryView(Student student) {
     return new StudentSummaryView(
-        student.id().value(),
         student.code().value(),
         student.firstName(),
         student.lastName(),
@@ -258,7 +278,6 @@ public class StudentService implements StudentLookup {
    * Application layer may.
    */
   public record ProvisionedStudent(
-      Long id,
       String studentCode,
       String firstName,
       String lastName,
@@ -271,7 +290,6 @@ public class StudentService implements StudentLookup {
 
   /** Same VO-unwrapping rationale as {@link ProvisionedStudent}, for {@link #update}'s result. */
   public record UpdatedStudent(
-      Long id,
       String studentCode,
       String firstName,
       String lastName,
@@ -285,18 +303,15 @@ public class StudentService implements StudentLookup {
 
   /** Same VO-unwrapping rationale as {@link ProvisionedStudent}, for one {@link #search} result. */
   public record StudentSummaryView(
-      Long id, String studentCode, String firstName, String lastName, String email) {}
+      String studentCode, String firstName, String lastName, String email) {}
 
   /** Same VO-unwrapping rationale as {@link ProvisionedStudent}, for {@link #getDetail}'s result. */
   public record StudentDetailView(
-      Long id,
       String studentCode,
       String firstName,
       String lastName,
       String email,
       LocalDate dateOfBirth,
       Instant createdAt,
-      Instant updatedAt,
-      List<Object> ownedBooks,
-      List<Object> activeCourses) {}
+      Instant updatedAt) {}
 }

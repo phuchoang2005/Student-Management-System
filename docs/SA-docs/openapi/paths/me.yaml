@@ -1,28 +1,77 @@
-booksAndCourses:
+profile:
   get:
-    operationId: getMyBooksAndCourses
+    operationId: getMyProfile
     tags: [Self-Service]
-    summary: View my own books and courses
+    summary: View my own record
     description: |
-      **Roles:** Student only. Composes the caller's owned books and active course
-      enrollments in one call, scoped to `principal.studentId`. A non-Student caller
-      receives 403. `books` and `courses` page independently via the `books*`/`courses*`
-      params.
+      **Roles:** Student only; a non-Student caller receives 403. Scoped to
+      `principal.studentId` — there is no parameter to substitute.
+
+      This is the only way a Student learns their own `studentCode`: the login response carries just
+      `{role, mustChangePassword}`, and this API has no session-probe endpoint. `404` when the record
+      was removed mid-session, since the session principal outlives the row.
     x-roles: [STUDENT]
-    parameters:
-      - $ref: '../components/parameters/common.yaml#/BooksPageParam'
-      - $ref: '../components/parameters/common.yaml#/BooksSizeParam'
-      - $ref: '../components/parameters/common.yaml#/CoursesPageParam'
-      - $ref: '../components/parameters/common.yaml#/CoursesSizeParam'
     responses:
       '200':
-        description: The caller's own books and courses, each as its own page.
+        description: The caller's own student record.
         content:
           application/json:
             schema:
-              $ref: '../components/schemas/common.yaml#/MeBooksAndCoursesResponse'
-      '400':
-        $ref: '../components/responses/errors.yaml#/BadRequest'
+              $ref: '../components/schemas/common.yaml#/MeProfile'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '404':
+        $ref: '../components/responses/errors.yaml#/NotFound'
+
+courses:
+  get:
+    operationId: getMyCourses
+    tags: [Self-Service]
+    summary: View my own enrolled courses
+    description: |
+      **Roles:** Student only; a non-Student caller receives 403. Scoped to `principal.studentId`.
+
+      This replaces the Student's use of `/enrollments`: the answer is the same, but it is derived
+      from the session rather than from a student code the caller types, so there is nothing to
+      substitute and no ownership check to get wrong. An empty page when the caller is enrolled in
+      nothing — never an error.
+    x-roles: [STUDENT]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/PageParam'
+      - $ref: '../components/parameters/common.yaml#/SizeParam'
+    responses:
+      '200':
+        description: A page of the caller's own enrolled courses.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/MeCoursePage'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+
+books:
+  get:
+    operationId: getMyBooks
+    tags: [Self-Service]
+    summary: View my own held books
+    description: |
+      **Roles:** Student only; a non-Student caller receives 403. Scoped to `principal.studentId`.
+      An empty page when the caller holds nothing — never an error.
+    x-roles: [STUDENT]
+    parameters:
+      - $ref: '../components/parameters/common.yaml#/PageParam'
+      - $ref: '../components/parameters/common.yaml#/SizeParam'
+    responses:
+      '200':
+        description: A page of the caller's own held books.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/MeBookPage'
       '401':
         $ref: '../components/responses/errors.yaml#/Unauthorized'
       '403':

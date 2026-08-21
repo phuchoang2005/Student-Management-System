@@ -12,14 +12,14 @@ Covers **UC-4** (Add Book), **UC-5** (Assign Book to Student), **UC-6** (Unassig
 - **Related UC / Rule:** UC-4 main flow; Book.1, Book.3
 - **Priority:** P0 · **Type:** Functional
 - **Test Data:** `book-valid-01` (no owner)
-- **Steps:** `POST /api/v1/books` with valid `isbn`, `title`, `author`, `publishedDate`, no `ownerId`.
+- **Steps:** `POST /api/v1/books` with valid `isbn`, `title`, `author`, `publishedDate`, no `ownerStudentCode`.
 - **Expected Result:** `201 Created`; book exists with `owner: null`.
 
 ### TC-BOOK-002 — Add a book with a valid owner specified
 - **Related UC / Rule:** UC-4 main flow; Book.4
 - **Priority:** P1 · **Type:** Functional
 - **Test Data:** `book-valid-02`, owner = `student-valid-01`
-- **Steps:** `POST /api/v1/books` with `ownerId = student-valid-01.id`.
+- **Steps:** `POST /api/v1/books` with `ownerStudentCode = student-valid-01.code`.
 - **Expected Result:** `201 Created`; book's owner is the specified student.
 
 ### TC-BOOK-003 — Add rejected: duplicate ISBN
@@ -32,7 +32,7 @@ Covers **UC-4** (Add Book), **UC-5** (Assign Book to Student), **UC-6** (Unassig
 ### TC-BOOK-004 — Add rejected: specified owner does not exist
 - **Related UC / Rule:** UC-4 flow 3a; Book.4
 - **Priority:** P0 · **Type:** Negative
-- **Steps:** `POST /api/v1/books` with `ownerId = <non-existent student id>`.
+- **Steps:** `POST /api/v1/books` with `ownerStudentCode = <non-existent student code>`.
 - **Expected Result:** `400 Bad Request` (`UnknownStudentException`) — per `api-specification.md` §5.2, an unknown FK reference is malformed input, not a conflict.
 
 ### TC-BOOK-005 — `isbn` at the `VARCHAR(20)` boundary is accepted
@@ -50,26 +50,26 @@ Covers **UC-4** (Add Book), **UC-5** (Assign Book to Student), **UC-6** (Unassig
 - **Related UC / Rule:** UC-5 main flow; req.md §3 "Student ↔ Book"
 - **Priority:** P0 · **Type:** Functional
 - **Test Data:** `book-valid-01` (unowned), `student-valid-01`
-- **Steps:** `PATCH /api/v1/books/{isbn}/owner` with `ownerId = student-valid-01.id`.
+- **Steps:** `PATCH /api/v1/books/{isbn}/owner` with `ownerStudentCode = student-valid-01.code`.
 - **Expected Result:** `200 OK`; book's owner is now `student-valid-01`.
 
 ### TC-BOOK-007 — Reassigning an already-owned book replaces the previous owner
 - **Related UC / Rule:** UC-5 main flow; Book.2
 - **Priority:** P0 · **Type:** Functional
 - **Test Data:** `book-owned-by-student-01` (currently owned by `student-valid-01`), reassign to `student-valid-02`
-- **Steps:** `PATCH /api/v1/books/{isbn}/owner` with `ownerId = student-valid-02.id`.
+- **Steps:** `PATCH /api/v1/books/{isbn}/owner` with `ownerStudentCode = student-valid-02.code`.
 - **Expected Result:** `200 OK`; book's owner is now `student-valid-02`; `student-valid-01` no longer shows this book under "my books" ([identity-auth.md](./identity-auth.md) / UC-16 flows, not duplicated here). A book has at most one owner at any time — never both simultaneously.
 
 ### TC-BOOK-008 — Assign rejected: target student does not exist
 - **Related UC / Rule:** UC-5 flow 2a; Book.4
 - **Priority:** P0 · **Type:** Negative
-- **Steps:** `PATCH /api/v1/books/{isbn}/owner` with `ownerId = <non-existent student id>`.
+- **Steps:** `PATCH /api/v1/books/{isbn}/owner` with `ownerStudentCode = <non-existent student code>`.
 - **Expected Result:** `400 Bad Request` (`UnknownStudentException`).
 
 ### TC-BOOK-009 — Assign rejected: book does not exist
 - **Related UC / Rule:** UC-5 preconditions
 - **Priority:** P1 · **Type:** Negative
-- **Steps:** `PATCH /api/v1/books/does-not-exist/owner` with a valid `ownerId`.
+- **Steps:** `PATCH /api/v1/books/does-not-exist/owner` with a valid `ownerStudentCode`.
 - **Expected Result:** `404 Not Found`.
 
 ---
@@ -129,7 +129,7 @@ Covers **UC-4** (Add Book), **UC-5** (Assign Book to Student), **UC-6** (Unassig
 - **Related UC / Rule:** UC-14 main flow
 - **Priority:** P2 · **Type:** Functional
 - **Test Data:** `book-search-set-01`
-- **Steps:** `GET /api/v1/books?q={term}&ownerId={id}`.
+- **Steps:** `GET /api/v1/books?query={term}&ownerStudentCode={code}`.
 - **Expected Result:** `200 OK`; only books matching both the term and the owner filter are returned.
 
 ### TC-BOOK-017 — Search with no match returns an empty list

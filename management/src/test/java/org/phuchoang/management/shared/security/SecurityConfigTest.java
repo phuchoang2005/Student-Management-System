@@ -59,7 +59,7 @@ class SecurityConfigTest {
     mockMvc.perform(get("/api/v1/students")).andExpect(status().isForbidden());
     mockMvc.perform(get("/api/v1/books")).andExpect(status().isForbidden());
     mockMvc.perform(get("/api/v1/courses")).andExpect(status().isForbidden());
-    mockMvc.perform(get("/api/v1/enrollments/1/CS101")).andExpect(status().isForbidden());
+    mockMvc.perform(get("/api/v1/enrollments/S00001/CS101")).andExpect(status().isForbidden());
   }
 
   /** PM-016 (TC-XC-039): the four pre-existing domain roles keep zero access to staff-accounts. */
@@ -109,6 +109,6 @@ class SecurityConfigTest {
   @Test
   @WithMockUser(roles = "REGISTRAR")
   void meEndpointIsForbiddenToNonStudents() throws Exception {
-    mockMvc.perform(get("/api/v1/me/books-and-courses")).andExpect(status().isForbidden());
+    mockMvc.perform(get("/api/v1/me/profile")).andExpect(status().isForbidden());
   }
 }

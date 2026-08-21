@@ -128,8 +128,8 @@ classDiagram
 | `DuplicateEmailException` | 409 | `StudentService.register`/`update` | Student.2 |
 | `DuplicateEnrollmentException` | 409 | `EnrollmentService.enroll` | Enrollment.1 |
 | `StaleWriteException` | 409 | Any `*Service` write method (`update`, `assign`/`unassign`, `changePassword`) that calls `repository.save(...)` on a `Student`/`Course`/`Book`/`User` loaded with a `version` that no longer matches the row — see §10 | New in this document — closes the optimistic-locking gap `tactical-ddd-design.md` §13 left open |
-| `UnknownStudentException` | 400 | `BookService` (owner ref), `EnrollmentService` (student ref) via `StudentLookup.existsById` | Book.4, Enrollment.3 |
-| `UnknownCourseException` | 400 | `EnrollmentService` (course ref) via `CourseLookup.existsById` | Enrollment.2 |
+| `UnknownStudentException` | 400 | `BookService` (owner ref), `EnrollmentService` (student ref) via `StudentLookup.idOf` returning empty | Book.4, Enrollment.3 |
+| `UnknownCourseException` | 400 | `EnrollmentService` (course ref) via `CourseLookup.existsByCode` | Enrollment.2 |
 | `InvalidCredentialsException` | 401 | Login (Spring Security `AuthenticationFailureHandler`), `IdentityService.changePassword` (current-password mismatch) | UC-21, UC-22 |
 | `PasswordNoLongerAvailableException` | 404 | `IdentityService.viewInitialPassword` when `mustChangePassword = false` | Identity.4/5, UC-23 |
 | `DuplicateUsernameException` | 409 | `IdentityService.provisionStaff` | Identity.2, Identity.6, UC-24 |
@@ -231,7 +231,7 @@ classDiagram
     }
     class StudentLookup {
         <<interface>>
-        +existsById(StudentId id) boolean
+        +idOf(StudentCode code) Optional~StudentId~
         +summaryOf(StudentId id) StudentSummary
     }
 
@@ -255,6 +255,13 @@ classDiagram
 | `StudentCode(String value)` | `value` | non-blank, matches the registrar-supplied code format | `DomainValidationException` | Student.1 (format; uniqueness is `StudentRepository.existsByCode`) |
 | `Email(String value)` | `value` | non-blank, RFC-5322-shaped (Jakarta `@Email`-equivalent regex) | `InvalidEmailException` | Student.2 (format; uniqueness is `StudentRepository.existsByEmail`) |
 | `DateOfBirth(LocalDate value)` | `value` | non-null, not in the future, within a plausible human age range | `DomainValidationException` | Student.4 |
+
+**`StudentCode` lives at the module root, not in `domain/`**, unlike the three VOs beside it in this
+table. It is the Student's *published language* — the same status `course.CourseCode` already has —
+because it is the only student identifier that crosses a module or process boundary: `book` and
+`enrollment` both key their APIs on it, and every `web/` DTO carries it. §2.1's layering rule
+forbids the Web layer from touching a Domain-layer type, so a `domain/` placement would have made
+that impossible. `StudentId` sits at the root for the same reason and has since the start.
 
 ### 4.4 `Student` aggregate
 
@@ -290,7 +297,7 @@ Uniqueness (Student.1/2) is deliberately **not** checked here — `StudentServic
 | `update` | `StudentCode code, UpdateStudentCommand command` | `Student` | `DuplicateEmailException`, `InvalidEmailException`, `DomainValidationException` | §2.2: findByCode → (if email changed) existsByEmailExcludingCode → `applyChanges(...)` → save |
 | `remove` | `StudentCode code` | `void` | — | §2.3: deleteByCode → publish `StudentDeleted` (async, after commit) |
 | `search` | `String query, Pageable pageable` | `Page<Student>` | — | §2.4 |
-| `getDetail` | `StudentCode code` | `StudentDetailView` (`record StudentDetailView(Student student, List<BookSummary> ownedBooks, List<CourseSummary> activeCourses)`) | `NotFoundException` | §2.5: findByCode, then `par` `BookService.findByOwner` / `EnrollmentService.findByStudent` |
+| `getDetail` | `StudentCode code` | `StudentDetailView` — the record alone, nothing composed | `NotFoundException` | findByCode. Owned books and enrolled courses are **not** embedded: each is a separately paged, separately authorized read (`GET /api/v1/books?ownerStudentCode=` for the Librarian, `GET /api/v1/enrollments?studentCode=` for the Registrar and Course Administrator), and folding either in would hand every reader of a student record data their role may not see (§11.1) |
 
 `viewStudentInitialPassword` (`GET /api/v1/students/{code}/initial-password`, UC-23) is **not** a `StudentController`/`StudentService` method despite its URL path — `04-authentication-authorization.md` §5.3's sequence lifeline shows it handled by `AuthController` → `IdentityService.viewInitialPassword`. The path lives under `/students` for REST-resource readability, but the handling class belongs to `identity` (§8).
 
@@ -312,8 +319,22 @@ Each method: `StudentMapper` converts the incoming DTO to a `*Command`, calls `S
 
 | Method | Parameters | Returns | Consumed by |
 | --- | --- | --- | --- |
-| `existsById` | `StudentId id` | `boolean` | `BookService` (Book.4), `EnrollmentService` (Enrollment.3) |
-| `summaryOf` | `StudentId id` | `StudentSummary` | `BookService.getDetail`, `EnrollmentService.getDetail` |
+| `idOf` | `StudentCode code` | `Optional<StudentId>` | `BookService` (Book.4), `EnrollmentService` (Enrollment.3) |
+| `summaryOf` | `StudentId id` | `StudentSummary` | `BookService.getDetail`, `EnrollmentService.getDetail`/`search` |
+| `profileOf` | `StudentId id` | `Optional<StudentProfile>` | `MeController` (US-5.4, `GET /api/v1/me/profile`) |
+
+`idOf` is **the single `StudentCode` → `StudentId` translation point in the system**. Every API input
+names a student by its business key, while `books.owner_id` and `enrollments.student_id` are keyed on
+the surrogate id — `book` and `enrollment` resolve one to the other here rather than reaching into
+`student`'s repository. It replaces the `existsById` check those modules used while the API was
+still keyed on ids, folding the existence check and the resolution into one call: an empty result
+*is* "no such student", which both callers turn into `UnknownStudentException`.
+
+`profileOf` returns `Optional` rather than throwing, unlike `summaryOf`: `me` resolves its id from
+the session principal, which outlives a student row a Registrar deleted mid-session, and rendering
+that case is the caller's job. `StudentProfile` is a root-level read-model carrying
+`(studentCode, firstName, lastName, email, dateOfBirth)` — distinct from `StudentSummary` because
+`/me/profile` shows the full record, where a summary is only ever an embedded reference.
 
 `StudentService` implements `StudentLookup` directly (`02-component-diagram.md` §2.1: "exposes"); no separate façade class, since the read path needs no logic beyond delegating to `StudentRepository`.
 
@@ -328,7 +349,7 @@ classDiagram
     class CourseController {
         +searchCourses(String query, Pageable pageable) Page~CourseSummaryDto~
         +createCourse(CourseCreateRequest request) CourseResponse
-        +getCourse(String code, Pageable rosterPageable) CourseDetailDto
+        +getCourse(String code) CourseDetailDto
         +updateCourse(String code, CourseUpdateRequest request) CourseResponse
         +removeCourse(String code) void
     }
@@ -340,7 +361,7 @@ classDiagram
         +update(CourseCode code, UpdateCourseCommand command) Course
         +remove(CourseCode code) void
         +search(String query, Pageable pageable) Page~Course~
-        +getDetail(CourseCode code, Pageable rosterPageable) CourseDetailView
+        +getDetail(CourseCode code) CourseDetailView
     }
     class Course {
         -CourseId id
@@ -364,8 +385,8 @@ classDiagram
     }
     class CourseLookup {
         <<interface>>
-        +existsById(CourseId id) boolean
-        +summaryOf(CourseId id) CourseSummary
+        +existsByCode(CourseCode code) boolean
+        +summaryOf(CourseCode code) CourseSummary
     }
     CourseController --> CourseService
     CourseService --> Course
@@ -380,7 +401,7 @@ classDiagram
 | --- | --- |
 | Value Objects | `CourseId`, `CourseCode` (mirror `StudentId`/`StudentCode`); `Credits(int value)` — compact constructor throws `DomainValidationException` if `value <= 0` (Course.3). `name`/`description` stay plain `String` fields — no VO, since neither has a format invariant beyond `name`'s non-blank check, which lives in `Course.create`/`applyChanges` directly |
 | `createdAt`/`updatedAt`/`version` | Same addition and same reasoning as `Student` (§4.4) — `CourseResponse` requires the timestamps, `courses` carries `version` per §10 |
-| Read composition | `CourseService.getDetail(CourseCode code, Pageable rosterPageable)` calls `EnrollmentService.findRosterByCourse(CourseCode code, Pageable pageable): Page<Enrollment>` (UC-19, `03-sequence-diagrams.md` §4.5), mapped to `Page<StudentSummary>` via `StudentLookup` inside `EnrollmentService` |
+| No read composition | `CourseService.getDetail` returns the course record alone. The enrolled-student roster is its own read — `GET /api/v1/enrollments?courseCode=`, open to the Registrar and Course Administrator but not to a Student browsing the catalogue (§11.1) — so a Student never receives the names and email addresses of everyone else taking a course as a side effect of opening it. This also removes `course`'s only outbound dependency on `enrollment`, which was the one edge that would have inverted the module graph |
 | No `initial-password`-style routing quirk | `CourseController` owns all 5 of its endpoints directly, unlike `student`'s UC-23 |
 | Event published | `CourseDeleted(CourseCode courseCode)`, published from `remove(...)` the same way `StudentDeleted` is |
 
@@ -393,7 +414,7 @@ No public API of its own (nothing depends on `book`); it is a **consumer** of `s
 ```mermaid
 classDiagram
     class BookController {
-        +searchBooks(String query, Long ownerId, Pageable pageable) Page~BookSummaryDto~
+        +searchBooks(String query, String ownerStudentCode, Pageable pageable) Page~BookSummaryDto~
         +addBook(BookCreateRequest request) BookResponse
         +getBook(String isbn) BookDetailDto
         +assignBookOwner(String isbn, BookOwnerRequest request) BookResponse
@@ -404,13 +425,12 @@ classDiagram
         -BookRepository repository
         -StudentLookup studentLookup
         +addBook(AddBookCommand command) Book
-        +assign(Isbn isbn, StudentId ownerId) Book
+        +assignOwner(String isbn, AssignBookOwnerCommand command) AssignedBook
         +unassign(Isbn isbn) Book
         +remove(Isbn isbn) void
         +search(String query, StudentId ownerFilter, Pageable pageable) Page~Book~
         +getDetail(Isbn isbn) BookDetailView
-        +findByOwner(StudentId ownerId) List~Book~
-        +findByOwner(StudentId ownerId, Pageable pageable) Page~Book~
+        +findByOwner(StudentId ownerId, Pageable pageable) Page~BookSummary~
     }
     class Book {
         -BookId id
@@ -430,7 +450,6 @@ classDiagram
         <<interface>>
         +findByIsbn(Isbn isbn) Optional~Book~
         +existsByIsbn(Isbn isbn) boolean
-        +findByOwnerId(StudentId ownerId) List~Book~
         +findByOwnerId(StudentId ownerId, Pageable pageable) Page~Book~
         +clearOwnerByStudentId(StudentId studentId) void
         +search(String query, StudentId ownerFilter, Pageable pageable) Page~Book~
@@ -448,16 +467,16 @@ classDiagram
 
 | Difference from `student` | Detail |
 | --- | --- |
-| Value Objects | `BookId`, `Isbn(String value)` — compact constructor throws `DomainValidationException` on malformed ISBN-10/13 (Book.1 format; uniqueness is `existsByIsbn`). `ownerId` is typed `StudentId` — `book`'s domain layer imports `student.domain.StudentId`'s public counterpart *from the module root* (`student.StudentId` would need to be public API too — see note below) |
+| Value Objects | `BookId`, `Isbn(String value)` — compact constructor throws `DomainValidationException` on malformed ISBN-10/13 (Book.1 format; uniqueness is `existsByIsbn`). `ownerId` is typed `StudentId`, taken from `student`'s module root (see the note below); the *code* the API accepts is `student.StudentCode`, resolved to that id in `BookService` |
 | `createdAt`/`updatedAt`/`version` | Same addition and same reasoning as `Student` (§4.4) — `BookResponse` requires the timestamps, `books` carries `version` per §10 (owner reassignment is exactly the kind of concurrent-write race optimistic locking guards against — two librarians assigning the same book to different students at once) |
-| Cross-module dependency | `BookService` constructor-injects `StudentLookup`; `addBook` and `assign` both call `existsById(ownerId)` before touching the aggregate (Book.4) — throws `UnknownStudentException` |
+| Cross-module dependency | `BookService` constructor-injects `StudentLookup`; `addBook` and `assignOwner` both call `idOf(ownerStudentCode)` before touching the aggregate (Book.4) — an empty result throws `UnknownStudentException`. The owner is named by `StudentCode` on the way in and rendered as `ownerStudentCode` on the way out; `books.owner_id` never appears in a request or a response (api-specification.md §5 decision #9) |
 | No update method | Book has no `update` use case — only `assign`/`unassign`/`remove`; `title`/`author`/`publishedDate` are set once at `create` and never changed by any UC |
 | No `BookLookup` public API | `book` is a pure consumer in this design — nothing currently needs to ask `book` a question the way `book` asks `student`/`course` |
-| Two `findByOwner` overloads | `findByOwner(StudentId)` (unpaginated) stays as the call `StudentService.getDetail` makes for UC-17's embedded "owned books" list — out of scope for pagination. `findByOwner(StudentId, Pageable)` is the new overload `/me/books-and-courses` (UC-16) calls instead, since that endpoint's `books` field is now a page. Same split on `BookRepository.findByOwnerId` |
+| One `findByOwner` | `findByOwner(StudentId, Pageable)`, backing `GET /api/v1/me/books` (UC-16). The unpaginated overload that fed `StudentService.getDetail`'s embedded "owned books" list is gone with that list: a Librarian reads a student's loans through `GET /api/v1/books?ownerStudentCode=`, which is paged like every other search. Same simplification on `BookRepository.findByOwnerId` |
 | No event published | `remove(Isbn isbn)` does **not** publish an event — removing a book never cascades (`03-sequence-diagrams.md` §3.4) |
 | Event listener | `onStudentDeleted(StudentDeleted event)` → `repository.clearOwnerByStudentId(event.studentId())` — see §13 |
 
-**Note on `StudentId` reuse across modules:** `tactical-ddd-design.md` §4 lists `StudentId` as used by `Book.ownerId`, `Enrollment.studentId`, and `User.studentId` — i.e. it is conceptually a *shared* value type, not `student`-internal. This document places the canonical `StudentId` definition at `student`'s module root (public, not `internal/`) precisely so `book`, `enrollment`, and `identity` can depend on the type itself while still only calling `student`'s behavior through `StudentLookup` — the type crossing the boundary is data, not logic, the same exemption domain events get in §2.2's table. The equivalent applies to `course.CourseCode` used by `Enrollment.courseCode`.
+**Note on `StudentId` reuse across modules:** `tactical-ddd-design.md` §4 lists `StudentId` as used by `Book.ownerId`, `Enrollment.studentId`, and `User.studentId` — i.e. it is conceptually a *shared* value type, not `student`-internal. This document places the canonical `StudentId` definition at `student`'s module root (public, not `internal/`) precisely so `book`, `enrollment`, and `identity` can depend on the type itself while still only calling `student`'s behavior through `StudentLookup` — the type crossing the boundary is data, not logic, the same exemption domain events get in §2.2's table. The equivalent applies to `course.CourseCode` used by `Enrollment.courseCode`, and to `student.StudentCode`, which sits at the same root for the same reason (§4.3) — it is what `book` and `enrollment` accept from callers before resolving it to an id.
 
 ---
 
@@ -468,20 +487,20 @@ Consumes **both** `StudentLookup` and `CourseLookup`; owns no update use case (o
 ```mermaid
 classDiagram
     class EnrollmentController {
+        +searchEnrollments(String studentCode, String courseCode, Pageable pageable) PageResponse~EnrollmentDetailDto~
         +createEnrollment(EnrollmentCreateRequest request) EnrollmentResponse
-        +getEnrollment(Long studentId, String courseCode) EnrollmentDetailDto
-        +endEnrollment(Long studentId, String courseCode) void
+        +getEnrollment(String studentCode, String courseCode) EnrollmentDetailDto
+        +endEnrollment(String studentCode, String courseCode) void
     }
     class EnrollmentService {
         -EnrollmentRepository repository
         -StudentLookup studentLookup
         -CourseLookup courseLookup
-        +enroll(EnrollStudentCommand command) Enrollment
-        +end(StudentId studentId, CourseCode courseCode) void
-        +getDetail(StudentId studentId, CourseCode courseCode) EnrollmentDetailView
-        +findByStudent(StudentId studentId) List~Enrollment~
-        +findByStudent(StudentId studentId, Pageable pageable) Page~Enrollment~
-        +findRosterByCourse(CourseCode courseCode, Pageable pageable) Page~Enrollment~
+        +enroll(EnrollStudentCommand command) CreatedEnrollment
+        +end(String studentCode, String courseCode) void
+        +getDetail(String studentCode, String courseCode) EnrollmentDetailView
+        +search(String studentCode, String courseCode, Pageable pageable) Page~EnrollmentDetailView~
+        +findByStudent(StudentId studentId, Pageable pageable) Page~CourseSummary~
     }
     class Enrollment {
         -EnrollmentId id
@@ -494,7 +513,6 @@ classDiagram
         <<interface>>
         +existsByStudentAndCourse(StudentId studentId, CourseCode courseCode) boolean
         +findByStudentAndCourse(StudentId studentId, CourseCode courseCode) Optional~Enrollment~
-        +findByStudentId(StudentId studentId) List~Enrollment~
         +findByStudentId(StudentId studentId, Pageable pageable) Page~Enrollment~
         +findByCourseCode(CourseCode courseCode, Pageable pageable) Page~Enrollment~
         +save(Enrollment enrollment) Enrollment
@@ -516,9 +534,13 @@ classDiagram
 | --- | --- |
 | Value Objects | `EnrollmentId` only — `studentId`/`courseCode` reuse `student.StudentId`/`course.CourseCode` directly (§6's reuse note); no `Enrollment`-owned VO wraps a format invariant of its own, since Enrollment.1–4 are all cross-aggregate existence/uniqueness rules, not format rules |
 | `enrolledAt` | Same class of gap as `Student`/`Course`/`Book`'s `createdAt`/`updatedAt` (§4.4): `EnrollmentResponse`/`EnrollmentDetail` require it, `enrollments.enrolled_at` exists in `05-database-schema.md` §3.4, but the aggregate had no field for it. `create(...)` sets it once to `Instant.now()`; there is no `updatedAt` counterpart because, per the "no update" row below, nothing about an `Enrollment` ever changes after creation |
-| Two published-interface dependencies | `enroll(...)` calls `studentLookup.existsById` **then** `courseLookup.existsById` **then** `repository.existsByStudentAndCourse` — that exact order, per `03-sequence-diagrams.md` §5.1 |
-| `findByStudent`/`findRosterByCourse` | Read-side composition methods (§7 of `03-sequence-diagrams.md`); each resolves the *other* side's summary via the relevant `Lookup` before returning. `findRosterByCourse` is fully paginated — its only caller, `CourseService.getDetail` (UC-19), always needs a page. `findByStudent` keeps both an unpaginated overload, called by `StudentService.getDetail` (UC-17, out of scope for pagination), and a paginated one, called by `/me/books-and-courses` (UC-16) — same split as `BookService.findByOwner` (§6) |
+| Two published-interface dependencies | `enroll(...)` calls `studentLookup.idOf` **then** `courseLookup.existsByCode` **then** `repository.existsByStudentAndCourse` — that exact order, per `03-sequence-diagrams.md` §5.1. `idOf` does double duty: it is the Enrollment.3 student-exists check *and* the `StudentCode` → `StudentId` resolution the FK needs, so the ordering is unchanged from when this step was a bare `existsById` |
+| Addressed by business key | Every method on the controller and the service names a student by `StudentCode`, never `StudentId` (api-specification.md §5 decision #9). The surrogate id is resolved once per call and never leaves `EnrollmentService`; the repository port stays typed in `StudentId`, because `enrollments.student_id` is the column it actually matches on |
+| `search` | UC-11/UC-20's list view: every enrollment of one student, or every enrollment in one course, paged. Exactly one filter is required — with neither this would enumerate every enrollment in the system, which no use case asks for; with both, the answer is a single enrollment that `getDetail` already addresses. Both directions return the same `EnrollmentDetailView` shape, so one client renders "this student's courses" and another "this course's roster" off one schema. The **constant** side of a page is resolved once, outside the per-row mapping, so a page of 20 costs one lookup for that side rather than 20 identical ones |
+| `findByStudent` | The one `EnrollmentLookup` method, backing `GET /api/v1/me/courses` (US-5.4). Takes a `StudentId` rather than a code, because its caller already holds one from the session principal and needs no resolution |
 | No `update` | Enrollment.4 — "end removes only the link" — there is no field on `Enrollment` any UC ever changes after creation |
+| No caller-scoping parameter | `getDetail` used to take a `callerStudentId` and 403 a Student reading someone else's enrollment. `SecurityConfig` now keeps Students off `/api/v1/enrollments/**` entirely (§11.1), so that branch is unreachable and has been removed — withdrawing the grant is strictly safer than scoping it, because there is no comparison left to get wrong |
+| Two error vocabularies for one missing code | An unresolvable `studentCode` means different things depending on what the caller is addressing, and the two produce different statuses on purpose. Supplied as a **reference** (`enroll`, `search`) it is malformed input — `400`, matching every other unknown-FK case (api-specification.md §5 decision #2). Supplied as part of the **address** of one enrollment (`getDetail`, `end`) it makes that enrollment unaddressable — `404`, identical to a valid student with no such enrollment, so no student-existence signal leaks through a differently-shaped error |
 | Two event listeners | `onStudentDeleted` → `deleteByStudentId`; `onCourseDeleted` → `deleteByCourseCode` — see §13 |
 
 ---
@@ -749,7 +771,7 @@ public record EnrollmentRow(
 ) {}
 ```
 
-**`EnrollmentRow.courseId` vs. `Enrollment.courseCode` — a translation the repository port already implied but never spelled out:** `enrollments.course_id` is the DB's surrogate FK (`05-database-schema.md` §3.4), but `EnrollmentRepository`'s port methods (§7) are typed in `CourseCode`, matching the aggregate. `JdbcEnrollmentRepository` (`internal/`) resolves the difference with a SQL join against `courses` in its `@Query` methods — e.g. `findByCourseCode` becomes `SELECT e.* FROM enrollments e JOIN courses c ON c.id = e.course_id WHERE c.course_code = :courseCode`, and `save` first resolves `courseCode` to `courseId` (a one-row `SELECT id FROM courses WHERE course_code = :courseCode`, already guaranteed to exist because `EnrollmentService.enroll` validated it via `CourseLookup.existsById` beforehand) before writing the `EnrollmentRow`. This is a plain SQL join, not a Java import across the module boundary — `ApplicationModules.verify()` (§2.1) only forbids the latter — so it doesn't violate the module boundary it looks like it might cross.
+**`EnrollmentRow.courseId` vs. `Enrollment.courseCode` — a translation the repository port already implied but never spelled out:** `enrollments.course_id` is the DB's surrogate FK (`05-database-schema.md` §3.4), but `EnrollmentRepository`'s port methods (§7) are typed in `CourseCode`, matching the aggregate. `JdbcEnrollmentRepository` (`internal/`) resolves the difference with a SQL join against `courses` in its `@Query` methods — e.g. `findByCourseCode` becomes `SELECT e.* FROM enrollments e JOIN courses c ON c.id = e.course_id WHERE c.course_code = :courseCode`, and `save` first resolves `courseCode` to `courseId` (a one-row `SELECT id FROM courses WHERE course_code = :courseCode`, already guaranteed to exist because `EnrollmentService.enroll` validated it via `CourseLookup.existsByCode` beforehand) before writing the `EnrollmentRow`. This is a plain SQL join, not a Java import across the module boundary — `ApplicationModules.verify()` (§2.1) only forbids the latter — so it doesn't violate the module boundary it looks like it might cross.
 
 ### 9.2 Flyway migration DDL
 
@@ -893,9 +915,14 @@ public SecurityFilterChain filterChain(HttpSecurity http, AuthenticationManager 
             .requestMatchers(HttpMethod.POST, "/api/v1/books/**").hasRole("LIBRARIAN")
             .requestMatchers(HttpMethod.PUT, "/api/v1/books/**").hasRole("LIBRARIAN")
             .requestMatchers(HttpMethod.DELETE, "/api/v1/books/**").hasRole("LIBRARIAN")
-            .requestMatchers(HttpMethod.GET, "/api/v1/students/**", "/api/v1/books/**",
-                    "/api/v1/courses/**", "/api/v1/enrollments/**", "/api/v1/me/**")
+            .requestMatchers(HttpMethod.GET, "/api/v1/me/**").hasRole("STUDENT")
+            .requestMatchers(HttpMethod.GET, "/api/v1/students/**")
                 .hasAnyRole("REGISTRAR", "LIBRARIAN", "COURSE_ADMINISTRATOR", "STUDENT")
+            .requestMatchers(HttpMethod.GET, "/api/v1/books/**").hasAnyRole("LIBRARIAN", "STUDENT")
+            .requestMatchers(HttpMethod.GET, "/api/v1/courses/**")
+                .hasAnyRole("REGISTRAR", "COURSE_ADMINISTRATOR", "STUDENT")
+            .requestMatchers(HttpMethod.GET, "/api/v1/enrollments/**")
+                .hasAnyRole("REGISTRAR", "COURSE_ADMINISTRATOR")
             .anyRequest().authenticated())
         .addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(mustChangePasswordFilter, AuthorizationFilter.class);
@@ -919,7 +946,30 @@ Summarized, the same rules read as:
 | `POST/PUT/DELETE /api/v1/books/**` | `LIBRARIAN` |
 | `POST/PATCH /api/v1/staff-accounts/**` | `SYSTEM_ADMINISTRATOR` |
 | `GET /api/v1/auth/demo-accounts` | none (public) — only reachable at all when `app.demo-accounts.enabled=true`, §11.4 |
-| `GET /api/v1/students/**`, `/books/**`, `/courses/**`, `/enrollments/**`, `/me/**` | `REGISTRAR`, `LIBRARIAN`, `COURSE_ADMINISTRATOR`, or `STUDENT` — scoping for `STUDENT` happens in the Application Service |
+| `GET /api/v1/students/**` | `REGISTRAR`, `LIBRARIAN`, `COURSE_ADMINISTRATOR`, or `STUDENT` — scoping for `STUDENT` happens in the Application Service |
+| `GET /api/v1/books/**` | `LIBRARIAN` or `STUDENT` — same Application-Service scoping for `STUDENT` |
+| `GET /api/v1/courses/**` | `REGISTRAR`, `COURSE_ADMINISTRATOR`, or `STUDENT` — the catalogue is not personal data, so no scoping applies |
+| `GET /api/v1/enrollments/**` | `REGISTRAR` or `COURSE_ADMINISTRATOR` |
+| `GET /api/v1/me/**` | `STUDENT` |
+
+**Why reads are listed per resource rather than as one matcher:** an earlier version of this chain
+granted all four domain roles read access to every domain path in a single `hasAnyRole(...)`. That
+is broader than `02-component-diagram.md` §4 ever intended — it let a Registrar enumerate the book
+catalogue and a Librarian enumerate enrollments, neither of which any use case asks for. Splitting
+it per resource makes each grant a deliberate statement (see §4 of that document for what each grant
+is *for*), and makes the absent ones enforceable rather than merely unexercised.
+
+Two consequences worth naming:
+
+- **`COURSE_ADMINISTRATOR` keeps `GET /api/v1/students/**`** even though it has no student-browsing
+  workflow. It needs the grant to open a student's profile from a course roster (UC-17 reached via
+  UC-19), which is a detail read, not a browse. The restriction is expressed in the client's
+  navigation, not in the filter chain, because the filter chain cannot tell the two apart.
+- **`STUDENT` loses `GET /api/v1/enrollments/**` entirely.** Its enrolled courses come from
+  `GET /api/v1/me/courses`, scoped by the session principal rather than by a caller-supplied student
+  code — so `EnrollmentService.getDetail` no longer takes a `callerStudentId` and carries no
+  own-records check at all (§7). Withdrawing the grant is strictly safer than scoping it: there is
+  no comparison left to get wrong.
 
 **Why `SYSTEM_ADMINISTRATOR` needs an explicit exclusion, not just an absent grant:** every other role rule above is additive (`hasRole(...)` on specific paths), with `.anyRequest().authenticated()` as a permissive catch-all for reads. Adding `SYSTEM_ADMINISTRATOR` as a 5th authenticated role without also touching that catch-all would let it fall through to `.anyRequest().authenticated()` on every domain `GET` — passing the filter chain even though `02-component-diagram.md` §4 grants it zero domain read access. The `hasAnyRole(...)` matcher above is what actually enforces "no domain access at all" for this role at the filter-chain level, exercised by [cross-cutting.md](../Testing/03-test-cases/cross-cutting.md) TC-XC-040; `.anyRequest().authenticated()` remains only as a fallback for paths not explicitly listed.
 
@@ -1057,7 +1107,7 @@ public class DemoAccountsController {
 
 ### 11.5 Own-records-only scoping implementation (PM-010)
 
-§11.1's table already decided that `student`/`book`/`enrollment` GETs are open to all four domain roles at the filter-chain level, with STUDENT's "own records only" narrowing left to each Application Service (`02-component-diagram.md` §4). That narrowing shipped as part of PM-010 (`04-sprint-backlog.md` §6), alongside the RBAC matrix tests the ticket was originally scoped for — the scoping logic didn't exist yet when the ticket was picked up, only its test cases (`cross-cutting.md` §1.3, TC-XC-009/010/011) did.
+§11.1's table decides which roles reach which GETs at the filter-chain level; where STUDENT is granted a read, the "own records only" narrowing is left to each Application Service (`02-component-diagram.md` §4). Two resources are in that position — `student` and `book`; `enrollment` is not, because STUDENT holds no grant there at all (see the third bullet below). That narrowing shipped as part of PM-010 (`04-sprint-backlog.md` §6), alongside the RBAC matrix tests the ticket was originally scoped for — the scoping logic didn't exist yet when the ticket was picked up, only its test cases (`cross-cutting.md` §1.3, TC-XC-009/010/011) did.
 
 **Extracting the caller's identity.** `AuthenticatedPrincipal` gained a static helper used by every affected controller:
 
@@ -1069,13 +1119,21 @@ public static Long studentIdOf(Authentication authentication) {
 }
 ```
 
-Null-safe on both `authentication` itself (a standalone/filter-chain-free MockMvc test resolves an unset `Authentication` parameter to `null`, not a wrongly typed principal) and on the principal's shape (a non-`AuthenticatedPrincipal` principal, e.g. a `@WithMockUser`-installed test principal, is treated the same as an unscoped staff caller). This differs from `MeController`'s blind cast to `AuthenticatedPrincipal`, which is only safe there because `/me/**` is already filter-chain-restricted to `hasRole("STUDENT")` — `/students`, `/books`, `/enrollments` are reachable by all four domain roles, so a blind cast would throw for every non-Student caller.
+Null-safe on both `authentication` itself (a standalone/filter-chain-free MockMvc test resolves an unset `Authentication` parameter to `null`, not a wrongly typed principal) and on the principal's shape (a non-`AuthenticatedPrincipal` principal, e.g. a `@WithMockUser`-installed test principal, is treated the same as an unscoped staff caller). This differs from `MeController`'s blind cast to `AuthenticatedPrincipal`, which is only safe there because `/me/**` is already filter-chain-restricted to `hasRole("STUDENT")` — `/students` and `/books` are reachable by staff roles too, so a blind cast would throw for every non-Student caller.
 
 **Threading the check through.** Each web controller extracts `Long callerStudentId = AuthenticatedPrincipal.studentIdOf(authentication)` and passes it into the corresponding Application Service method, which performs the actual authorization check — per §4's mandate that this live in `application/`, not `web/`:
 
 - `StudentService.search(query, pageable, callerStudentId)` / `getDetail(code, callerStudentId)` — `search` passes `callerStudentId` through as `StudentRepository.search`'s new nullable `scopeToId` parameter (`AND (:scopeId IS NULL OR id = :scopeId)`, mirroring `BookRepository.search`'s pre-existing `ownerFilter` pattern); `getDetail` checks existence first (404), then ownership (`AccessDeniedException` → 403) — a mismatch is a 403, not a 404, per `api-specification.md` §5 decision #3.
-- `BookService.search(query, ownerFilter, pageable, callerStudentId)` — when `callerStudentId` is present it **silently overrides** the client-supplied `ownerFilter` rather than rejecting a mismatched value, consistent with decision #4's "transparently scoped, never blocked" search philosophy. `getDetail(isbn, callerStudentId)` — existence check first, then ownership; **an unowned book is also a 403 for a Student caller**, not a 200 — resolved as a product decision during PM-010: "own records only" means the caller must actually own the book, and Students have no self-service checkout endpoint that would give them a reason to browse the full catalog.
-- `EnrollmentService.getDetail(studentId, courseCode, callerStudentId)` — the ownership check runs **before** the repository lookup, unlike Student/Book's check-after-lookup. `studentId` here is a caller-supplied path variable exposing another student's numeric id directly, so a probing Student must get an identical 403 whether the target enrollment exists, has ended, or the pairing never existed at all — checking after the lookup would let a 403-vs-404 timing difference leak existence information the check-before-lookup ordering avoids.
+- `BookService.search(query, ownerStudentCode, pageable, callerStudentId)` — when `callerStudentId` is present it **silently overrides** the client-supplied `ownerStudentCode` (and skips resolving it entirely) rather than rejecting a mismatched value, consistent with decision #4's "transparently scoped, never blocked" search philosophy. `getDetail(isbn, callerStudentId)` — existence check first, then ownership; **an unowned book is also a 403 for a Student caller**, not a 200 — resolved as a product decision during PM-010: "own records only" means the caller must actually own the book, and Students have no self-service checkout endpoint that would give them a reason to browse the full catalog.
+- `EnrollmentService` — **no scoping parameter at all.** This bullet originally described a
+  check-before-lookup ownership test on `getDetail(studentId, courseCode, callerStudentId)`, needed
+  because `studentId` was a caller-supplied path variable exposing another student's numeric id and
+  a probing Student had to get an identical 403 whether the target enrollment existed, had ended, or
+  never existed. That whole class of problem was removed rather than defended: `SecurityConfig` no
+  longer grants STUDENT any access to `/api/v1/enrollments/**` (§11.1), so the method has no
+  `callerStudentId` and no ownership branch. A Student's enrolled courses come from
+  `GET /api/v1/me/courses`, scoped by the session principal rather than by anything the caller
+  supplies — there is no id to probe with and no comparison to get wrong.
 
 **Exception choice.** All three reuse `org.springframework.security.access.AccessDeniedException` rather than a new `shared.exception` type — `GlobalExceptionHandler` already maps it to the standard `{timestamp,status,error,message,path}` 403 envelope (§3), so this was a zero-new-class change, and `AccessDeniedException` thrown from deep inside an `application/` service is still resolved by Spring MVC's `ExceptionHandlerExceptionResolver` inside `DispatcherServlet` before it can reach `ExceptionTranslationFilter`'s own (envelope-less) default handler — confirmed via `OwnRecordsScopingIntegrationTest`, which exercises this path through the real `SecurityFilterChain` rather than the standalone-MVC harness `GlobalExceptionHandlerTest` uses.
 
@@ -1107,7 +1165,7 @@ public interface StudentMapper {
 
     default StudentResponse toResponse(Student student) {
         return new StudentResponse(
-            student.id().value(), student.code().value(),
+            student.code().value(),
             student.firstName(), student.lastName(), student.email().value(),
             student.dateOfBirth().value(), student.createdAt(), student.updatedAt());
     }
@@ -1117,11 +1175,11 @@ public interface StudentMapper {
             toResponse(provisioned.student()), provisioned.username(), provisioned.initialPassword());
     }
 
+    // No collections to compose: a student's books and courses are their own endpoints (§4.6).
     default StudentDetailDto toDetailDto(StudentDetailView view) {
         return new StudentDetailDto(
-            toResponse(view.student()),
-            view.ownedBooks().stream().map(this::toDto).toList(),
-            view.activeCourses().stream().map(this::toDto).toList());
+            view.studentCode(), view.firstName(), view.lastName(), view.email(),
+            view.dateOfBirth(), view.createdAt(), view.updatedAt());
     }
 }
 ```
@@ -1131,8 +1189,8 @@ What differs per sibling module — each still follows the same generated/hand-w
 | Module | Hand-written method | Body detail |
 | --- | --- | --- |
 | `course` | `toResponse(Course course)` | `course.credits().value()` unwraps `Credits`; `description` copies straight through (plain `String`, nullable) |
-| `book` | `toResponse(Book book)` | `ownerId` is nullable at the domain level too: `book.ownerId() == null ? null : book.ownerId().value()` |
-| `enrollment` | `toResponse(Enrollment enrollment)` | Two VO unwraps from two different modules on one line: `enrollment.studentId().value()`, `enrollment.courseCode().value()`, plus `enrollment.enrolledAt()` (§7's new field) |
+| `book` | `toResponse(Book book)` | The owner is rendered as `ownerStudentCode`, not `ownerId` — `BookService` resolves the code through `StudentLookup.summaryOf` and the mapper copies it straight through; `null` when the book is unowned |
+| `enrollment` | `toResponse(CreatedEnrollment created)` | Fully generated: `EnrollmentService` already unwraps the VOs and substitutes the caller's `studentCode` for the saved row's `studentId` (§7), so the mapper has only same-named `String`/`Instant` fields to copy |
 | `identity` | *(none)* | `identity`'s only DTOs (`ChangePasswordRequest`, `InitialPasswordResponse`) map through `IdentityService`'s own records (`ChangePasswordCommand`, `InitialPasswordView`) directly — no `Mapper` class was ever named for `identity` in §8.1's package layout, and this document introduces none |
 
 ---

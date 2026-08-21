@@ -41,7 +41,7 @@ class EnrollmentCreationIntegrationTest {
 
   @Autowired private MockMvc mockMvc;
 
-  private long registerStudent(String code, String email) throws Exception {
+  private String registerStudent(String code, String email) throws Exception {
     String body =
         """
         {"studentCode":"%s","firstName":"Amy","lastName":"Lee","email":"%s","dateOfBirth":"2000-01-01"}
@@ -58,7 +58,9 @@ class EnrollmentCreationIntegrationTest {
             .andExpect(status().isCreated())
             .andReturn();
 
-    return ((Number) JsonPath.read(result.getResponse().getContentAsString(), "$.id")).longValue();
+    // The response echoes the business key, not a surrogate id -- that is all the enrollment API
+    // ever accepts back (api-specification.md §5 decision #9).
+    return JsonPath.read(result.getResponse().getContentAsString(), "$.studentCode");
   }
 
   private void createCourse(String code, String name) throws Exception {
@@ -75,49 +77,50 @@ class EnrollmentCreationIntegrationTest {
         .andExpect(status().isCreated());
   }
 
-  private String enrollBody(long studentId, String courseCode) {
+  private String enrollBody(String studentCode, String courseCode) {
     return """
-        {"studentId":%d,"courseCode":"%s"}
-        """.formatted(studentId, courseCode);
+        {"studentCode":"%s","courseCode":"%s"}
+        """.formatted(studentCode, courseCode);
   }
 
   @Test
   @WithMockUser(roles = "REGISTRAR")
   void enrollsAnExistingStudentInAnExistingCourse() throws Exception {
     // TC-ENR-001
-    long studentId = registerStudent("S00401", "amy.lee.401@example.edu");
+    String studentCode = registerStudent("S00401", "amy.lee.401@example.edu");
     createCourse("CS401", "Enrollment Test Course");
 
     mockMvc
         .perform(
             post("/api/v1/enrollments")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(enrollBody(studentId, "CS401")))
+                .content(enrollBody(studentCode, "CS401")))
         .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.studentId").value(studentId))
+        .andExpect(jsonPath("$.studentCode").value(studentCode))
         .andExpect(jsonPath("$.courseCode").value("CS401"))
-        .andExpect(jsonPath("$.id").exists())
-        .andExpect(jsonPath("$.enrolledAt").exists());
+        .andExpect(jsonPath("$.enrolledAt").exists())
+        .andExpect(jsonPath("$.id").doesNotExist())
+        .andExpect(jsonPath("$.studentId").doesNotExist());
   }
 
   @Test
   @WithMockUser(roles = "REGISTRAR")
   void rejectsDuplicateEnrollment() throws Exception {
     // TC-ENR-002
-    long studentId = registerStudent("S00402", "amy.lee.402@example.edu");
+    String studentCode = registerStudent("S00402", "amy.lee.402@example.edu");
     createCourse("CS402", "Enrollment Test Course");
     mockMvc
         .perform(
             post("/api/v1/enrollments")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(enrollBody(studentId, "CS402")))
+                .content(enrollBody(studentCode, "CS402")))
         .andExpect(status().isCreated());
 
     mockMvc
         .perform(
             post("/api/v1/enrollments")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(enrollBody(studentId, "CS402")))
+                .content(enrollBody(studentCode, "CS402")))
         .andExpect(status().isConflict());
   }
 
@@ -125,13 +128,13 @@ class EnrollmentCreationIntegrationTest {
   @WithMockUser(roles = "REGISTRAR")
   void rejectsEnrollmentInAnUnknownCourse() throws Exception {
     // TC-ENR-003
-    long studentId = registerStudent("S00403", "amy.lee.403@example.edu");
+    String studentCode = registerStudent("S00403", "amy.lee.403@example.edu");
 
     mockMvc
         .perform(
             post("/api/v1/enrollments")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(enrollBody(studentId, "does-not-exist")))
+                .content(enrollBody(studentCode, "does-not-exist")))
         .andExpect(status().isBadRequest());
   }
 
@@ -145,7 +148,7 @@ class EnrollmentCreationIntegrationTest {
         .perform(
             post("/api/v1/enrollments")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(enrollBody(999999L, "CS404")))
+                .content(enrollBody("S00-NOBODY", "CS404")))
         .andExpect(status().isBadRequest());
   }
 
@@ -153,7 +156,7 @@ class EnrollmentCreationIntegrationTest {
   @WithMockUser(roles = "REGISTRAR")
   void aStudentMayHoldMultipleDistinctEnrollmentsSimultaneously() throws Exception {
     // TC-ENR-005
-    long studentId = registerStudent("S00405", "amy.lee.405@example.edu");
+    String studentCode = registerStudent("S00405", "amy.lee.405@example.edu");
     createCourse("CS405A", "Course A");
     createCourse("CS405B", "Course B");
 
@@ -161,13 +164,13 @@ class EnrollmentCreationIntegrationTest {
         .perform(
             post("/api/v1/enrollments")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(enrollBody(studentId, "CS405A")))
+                .content(enrollBody(studentCode, "CS405A")))
         .andExpect(status().isCreated());
     mockMvc
         .perform(
             post("/api/v1/enrollments")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(enrollBody(studentId, "CS405B")))
+                .content(enrollBody(studentCode, "CS405B")))
         .andExpect(status().isCreated());
   }
 
@@ -175,8 +178,8 @@ class EnrollmentCreationIntegrationTest {
   @WithMockUser(roles = "REGISTRAR")
   void aCourseMayHaveMultipleStudentsEnrolledSimultaneously() throws Exception {
     // TC-ENR-006
-    long studentA = registerStudent("S00406A", "amy.lee.406a@example.edu");
-    long studentB = registerStudent("S00406B", "amy.lee.406b@example.edu");
+    String studentA = registerStudent("S00406A", "amy.lee.406a@example.edu");
+    String studentB = registerStudent("S00406B", "amy.lee.406b@example.edu");
     createCourse("CS406", "Shared Course");
 
     mockMvc
@@ -200,7 +203,7 @@ class EnrollmentCreationIntegrationTest {
             .perform(
                 post("/api/v1/enrollments")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(enrollBody(1L, "CS101")))
+                    .content(enrollBody("S00401", "CS101")))
             .andReturn();
     assertThat(result.getResponse().getStatus()).isIn(401, 403);
   }
@@ -212,7 +215,7 @@ class EnrollmentCreationIntegrationTest {
         .perform(
             post("/api/v1/enrollments")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(enrollBody(1L, "CS101")))
+                .content(enrollBody("S00401", "CS101")))
         .andExpect(status().isForbidden());
   }
 }

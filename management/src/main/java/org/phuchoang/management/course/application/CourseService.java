@@ -1,7 +1,6 @@
 package org.phuchoang.management.course.application;
 
 import java.time.Instant;
-import java.util.List;
 import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.course.CourseDeleted;
 import org.phuchoang.management.course.CourseLookup;
@@ -46,7 +45,6 @@ public class CourseService implements CourseLookup {
     course = repository.save(course);
 
     return new CreatedCourse(
-        course.id().value(),
         course.code().value(),
         course.name(),
         course.description(),
@@ -79,7 +77,6 @@ public class CourseService implements CourseLookup {
     course = repository.save(course);
 
     return new UpdatedCourse(
-        course.id().value(),
         course.code().value(),
         course.name(),
         course.description(),
@@ -115,11 +112,12 @@ public class CourseService implements CourseLookup {
   }
 
   /**
-   * findByCode (404 if absent), then composes the course's enrolled-student roster. {@code
-   * roster} is stubbed empty here — {@code EnrollmentService.findRosterByCourse} doesn't exist
-   * until `enrollment` ships in Sprint 3, and US-5.5 wires the real call in
-   * (04-sprint-backlog.md §1, §3), mirroring {@code StudentService.getDetail}'s stub for owned
-   * books/enrollments.
+   * findByCode (404 if absent) — the record itself, nothing composed. The enrolled-student roster
+   * is <em>not</em> embedded: it is its own paged, separately authorized read ({@code GET
+   * /api/v1/enrollments?courseCode=}), so a Student who may browse the catalogue never receives the
+   * roster as a side effect of opening a course. This replaces the hardcoded empty list that stood
+   * in for the composition US-5.5 originally scoped here, mirroring the same change in {@code
+   * StudentService.getDetail}.
    */
   public CourseDetailView getDetail(String code) {
     CourseCode courseCode = new CourseCode(code);
@@ -129,14 +127,12 @@ public class CourseService implements CourseLookup {
             .orElseThrow(() -> new NotFoundException("Course '" + code + "' does not exist."));
 
     return new CourseDetailView(
-        course.id().value(),
         course.code().value(),
         course.name(),
         course.description(),
         course.credits().value(),
         course.createdAt(),
-        course.updatedAt(),
-        List.of());
+        course.updatedAt());
   }
 
   /** Backs {@code CourseLookup.existsByCode} (Enrollment.2). */
@@ -157,13 +153,11 @@ public class CourseService implements CourseLookup {
             .findByCode(code)
             .orElseThrow(() -> new NotFoundException("Course '" + code.value() + "' does not exist."));
 
-    return new CourseSummary(
-        course.id().value(), course.code().value(), course.name(), course.credits().value());
+    return new CourseSummary(course.code().value(), course.name(), course.credits().value());
   }
 
   private CourseSummaryView toSummaryView(Course course) {
-    return new CourseSummaryView(
-        course.id().value(), course.code().value(), course.name(), course.credits().value());
+    return new CourseSummaryView(course.code().value(), course.name(), course.credits().value());
   }
 
   /**
@@ -172,7 +166,6 @@ public class CourseService implements CourseLookup {
    * Application layer may.
    */
   public record CreatedCourse(
-      Long id,
       String courseCode,
       String name,
       String description,
@@ -182,7 +175,6 @@ public class CourseService implements CourseLookup {
 
   /** Same VO-unwrapping rationale as {@link CreatedCourse}, for {@link #update}'s result. */
   public record UpdatedCourse(
-      Long id,
       String courseCode,
       String name,
       String description,
@@ -191,16 +183,14 @@ public class CourseService implements CourseLookup {
       Instant updatedAt) {}
 
   /** Same VO-unwrapping rationale as {@link CreatedCourse}, for one {@link #search} result. */
-  public record CourseSummaryView(Long id, String courseCode, String name, int credits) {}
+  public record CourseSummaryView(String courseCode, String name, int credits) {}
 
   /** Same VO-unwrapping rationale as {@link CreatedCourse}, for {@link #getDetail}'s result. */
   public record CourseDetailView(
-      Long id,
       String courseCode,
       String name,
       String description,
       int credits,
       Instant createdAt,
-      Instant updatedAt,
-      List<Object> roster) {}
+      Instant updatedAt) {}
 }

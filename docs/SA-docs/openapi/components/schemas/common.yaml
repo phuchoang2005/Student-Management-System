@@ -74,28 +74,56 @@ PageMeta:
       format: int32
       example: 3
 
-MeBooksAndCoursesResponse:
+MeProfile:
   type: object
-  description: The calling Student's own owned books and active course enrollments, composed in one call. `books` and `courses` page independently via the `books*`/`courses*` query params.
-  required: [books, courses]
+  description: |
+    The calling Student's own record — the only way a Student learns their own `studentCode`, since
+    the login response carries just `{role, mustChangePassword}` and this API has no session probe.
+    Matches `StudentDetail` minus the audit timestamps, which exist for the Registrar's record-keeping.
+  required: [studentCode, firstName, lastName, email, dateOfBirth]
   properties:
-    books:
-      allOf:
-        - $ref: '#/PageMeta'
-        - type: object
-          required: [content]
-          properties:
-            content:
-              type: array
-              items:
-                $ref: './book.yaml#/BookSummary'
-    courses:
-      allOf:
-        - $ref: '#/PageMeta'
-        - type: object
-          required: [content]
-          properties:
-            content:
-              type: array
-              items:
-                $ref: './course.yaml#/CourseSummary'
+    studentCode:
+      type: string
+      example: S00123
+    firstName:
+      type: string
+    lastName:
+      type: string
+    email:
+      type: string
+      format: email
+    dateOfBirth:
+      type: string
+      format: date
+
+MeBookPage:
+  description: A page of the calling Student's own held books. No owner field — every row is theirs.
+  allOf:
+    - $ref: '#/PageMeta'
+    - type: object
+      required: [content]
+      properties:
+        content:
+          type: array
+          items:
+            type: object
+            required: [isbn, title, author]
+            properties:
+              isbn:
+                type: string
+              title:
+                type: string
+              author:
+                type: string
+
+MeCoursePage:
+  description: A page of the calling Student's own enrolled courses.
+  allOf:
+    - $ref: '#/PageMeta'
+    - type: object
+      required: [content]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: './course.yaml#/CourseSummary'

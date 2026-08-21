@@ -30,7 +30,7 @@ import org.phuchoang.management.student.application.command.UpdateStudentCommand
 import org.phuchoang.management.student.domain.DateOfBirth;
 import org.phuchoang.management.student.domain.Email;
 import org.phuchoang.management.student.domain.Student;
-import org.phuchoang.management.student.domain.StudentCode;
+import org.phuchoang.management.student.StudentCode;
 import org.phuchoang.management.student.port.StudentRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -98,7 +98,7 @@ class StudentServiceTest {
 
     StudentService.ProvisionedStudent result = service.register(command);
 
-    assertThat(result.id()).isEqualTo(1L);
+    assertThat(result.studentCode()).isEqualTo("S00123");
     assertThat(result.username()).isEqualTo("jane.doe@example.edu");
     assertThat(result.initialPassword()).isEqualTo("aB3xY9zQ");
   }
@@ -219,7 +219,6 @@ class StudentServiceTest {
 
     assertThat(result.getTotalElements()).isEqualTo(1);
     StudentService.StudentSummaryView summary = result.getContent().get(0);
-    assertThat(summary.id()).isEqualTo(1L);
     assertThat(summary.studentCode()).isEqualTo("S00123");
     assertThat(summary.email()).isEqualTo("jane.doe@example.edu");
   }
@@ -255,7 +254,7 @@ class StudentServiceTest {
   }
 
   @Test
-  void getDetailReturnsStudentFieldsWithEmptyBooksAndCoursesStub() {
+  void getDetailReturnsStudentFields() {
     service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
     when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
 
@@ -263,8 +262,7 @@ class StudentServiceTest {
 
     assertThat(detail.studentCode()).isEqualTo("S00123");
     assertThat(detail.firstName()).isEqualTo("Jane");
-    assertThat(detail.ownedBooks()).isEmpty();
-    assertThat(detail.activeCourses()).isEmpty();
+    assertThat(detail.email()).isEqualTo("jane.doe@example.edu");
   }
 
   @Test
@@ -301,6 +299,46 @@ class StudentServiceTest {
     StudentSummary summary = service.summaryOf(new StudentId(1L));
 
     assertThat(summary)
-        .isEqualTo(new StudentSummary(1L, "S00123", "Jane", "Doe", "jane.doe@example.edu"));
+        .isEqualTo(new StudentSummary("S00123", "Jane", "Doe", "jane.doe@example.edu"));
+  }
+
+  @Test
+  void idOfResolvesTheBusinessKeyToTheSurrogateIdOtherModulesNeed() {
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
+    when(repository.findByCode(existingCode)).thenReturn(Optional.of(existingStudent));
+
+    assertThat(service.idOf(existingCode)).contains(new StudentId(1L));
+  }
+
+  @Test
+  void idOfIsEmptyForAnUnknownCodeSoCallersCanRaiseTheirOwnError() {
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
+    when(repository.findByCode(new StudentCode("S99999"))).thenReturn(Optional.empty());
+
+    assertThat(service.idOf(new StudentCode("S99999"))).isEmpty();
+  }
+
+  @Test
+  void profileOfReturnsTheFullRecordIncludingDateOfBirth() {
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
+    when(repository.findById(new StudentId(1L))).thenReturn(Optional.of(existingStudent));
+
+    assertThat(service.profileOf(new StudentId(1L)))
+        .hasValueSatisfying(
+            profile -> {
+              assertThat(profile.studentCode()).isEqualTo("S00123");
+              assertThat(profile.email()).isEqualTo("jane.doe@example.edu");
+              assertThat(profile.dateOfBirth()).isNotNull();
+            });
+  }
+
+  @Test
+  void profileOfIsEmptyRatherThanThrowingWhenTheRecordIsGone() {
+    // A session principal outlives a student a Registrar deleted mid-session; that is the caller's
+    // case to render, not an exception, unlike summaryOf's genuine-data-race 404.
+    service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
+    when(repository.findById(new StudentId(99L))).thenReturn(Optional.empty());
+
+    assertThat(service.profileOf(new StudentId(99L))).isEmpty();
   }
 }

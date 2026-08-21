@@ -3,14 +3,13 @@ package org.phuchoang.management.book.web.dto;
 import java.time.Instant;
 import java.time.LocalDate;
 
-/** {@code owner} is {@code null} when the book is unowned. */
+/** {@code owner}/{@code ownerStudentCode} are {@code null} when the book is unowned. */
 public record BookDetailDto(
-    Long id,
     String isbn,
     String title,
     String author,
     LocalDate publishedDate,
-    Long ownerId,
+    String ownerStudentCode,
     Instant createdAt,
     Instant updatedAt,
     BookOwnerDto owner) {}

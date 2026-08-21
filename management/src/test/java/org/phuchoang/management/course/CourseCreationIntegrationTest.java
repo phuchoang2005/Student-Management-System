@@ -59,7 +59,7 @@ class CourseCreationIntegrationTest {
         .andExpect(jsonPath("$.courseCode").value("CS101"))
         .andExpect(jsonPath("$.name").value("Intro to CS"))
         .andExpect(jsonPath("$.credits").value(3))
-        .andExpect(jsonPath("$.id").exists())
+        .andExpect(jsonPath("$.id").doesNotExist())
         .andExpect(jsonPath("$.createdAt").exists());
   }
 

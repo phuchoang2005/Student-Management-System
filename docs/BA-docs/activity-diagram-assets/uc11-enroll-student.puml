@@ -13,28 +13,36 @@ skinparam swimlane {
 
 |Registrar|
 start
-:Select a student and a course;
+:Supply a student code and a course code;
 
 |System|
-if (Student exists?) then (no)
-  :Reject — student does not exist;
+if (Student code resolves to a student?) then (no)
+  :Reject -- no such student;
   |Registrar|
   stop
 endif
-if (Course exists?) then (no)
-  :Reject — course does not exist;
+if (Course code resolves to a course?) then (no)
+  :Reject -- no such course;
   |Registrar|
   stop
 endif
 if (Existing enrollment for this pair?) then (yes)
-  :Reject — duplicate enrollment;
+  :Reject -- duplicate enrollment;
   |Registrar|
   stop
 endif
 :Create the enrollment;
-:Confirm enrollment;
+:Confirm enrollment,\nechoing the codes supplied;
 
 |Registrar|
 :Receive confirmation;
 stop
+
+note right
+  Both sides are business codes.
+  The Registrar never handles a
+  database identifier -- resolving
+  the student code is also the
+  "student exists" check.
+end note
 @enduml

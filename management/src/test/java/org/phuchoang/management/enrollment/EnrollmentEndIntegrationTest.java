@@ -30,7 +30,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * §2's "API / contract" level) — TC-ENR-007–010, plus the {@code onStudentDeleted}/{@code
  * onCourseDeleted} cascade listeners that close the US-1.3/US-3.3 stubs
  * (06-low-level-design.md §13). Ending/cascading is verified via {@code JdbcTemplate} directly
- * rather than {@code GET /enrollments/{studentId}/{courseCode}} (added by US-5.5, see {@code
+ * rather than {@code GET /enrollments/{studentCode}/{courseCode}} (added by US-5.5, see {@code
  * EnrollmentLookupIntegrationTest}) since this test predates that endpoint, mirroring {@code
  * BookRemovalIntegrationTest}/{@code CourseRemovalIntegrationTest}. {@code
  * @ApplicationModuleListener} dispatches on a separate thread ({@code shared.async.AsyncConfig}),
@@ -55,7 +55,7 @@ class EnrollmentEndIntegrationTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private JdbcTemplate jdbcTemplate;
 
-  private record RegisteredStudent(long id, String code) {}
+  private record RegisteredStudent(String code) {}
 
   private RegisteredStudent registerStudent(String code, String email) throws Exception {
     String body =
@@ -74,8 +74,22 @@ class EnrollmentEndIntegrationTest {
             .andExpect(status().isCreated())
             .andReturn();
 
-    long id = ((Number) JsonPath.read(result.getResponse().getContentAsString(), "$.id")).longValue();
-    return new RegisteredStudent(id, code);
+    assertThat(JsonPath.<String>read(result.getResponse().getContentAsString(), "$.studentCode"))
+        .isEqualTo(code);
+    return new RegisteredStudent(code);
+  }
+
+  /**
+   * The surrogate id the DB-level assertions below match on. It is deliberately not available from
+   * any response any more (api-specification.md §5 decision #9), so a test that needs to look at
+   * the {@code enrollments} table reads it straight from the database, the same place the
+   * application does.
+   */
+  private long studentIdOf(String code) {
+    Long id =
+        jdbcTemplate.queryForObject(
+            "SELECT id FROM students WHERE student_code = ?", Long.class, code);
+    return id == null ? -1L : id;
   }
 
   private void createCourse(String code, String name) throws Exception {
@@ -92,25 +106,27 @@ class EnrollmentEndIntegrationTest {
         .andExpect(status().isCreated());
   }
 
-  private void enroll(long studentId, String courseCode) throws Exception {
+  private void enroll(String studentCode, String courseCode) throws Exception {
     mockMvc
         .perform(
             post("/api/v1/enrollments")
                 .with(user("registrar").roles("REGISTRAR"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d,"courseCode":"%s"}
-                    """.formatted(studentId, courseCode)))
+                    {"studentCode":"%s","courseCode":"%s"}
+                    """.formatted(studentCode, courseCode)))
         .andExpect(status().isCreated());
   }
 
-  private int enrollmentCount(long studentId, String courseCode) {
+  private int enrollmentCount(String studentCode, String courseCode) {
     Integer count =
         jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM enrollments e JOIN courses c ON c.id = e.course_id "
-                + "WHERE e.student_id = ? AND c.course_code = ?",
+            "SELECT COUNT(*) FROM enrollments e "
+                + "JOIN courses c ON c.id = e.course_id "
+                + "JOIN students s ON s.id = e.student_id "
+                + "WHERE s.student_code = ? AND c.course_code = ?",
             Integer.class,
-            studentId,
+            studentCode,
             courseCode);
     return count == null ? 0 : count;
   }
@@ -121,12 +137,12 @@ class EnrollmentEndIntegrationTest {
     // TC-ENR-007
     RegisteredStudent student = registerStudent("S00501", "amy.lee.501@example.edu");
     createCourse("CS501", "Course");
-    enroll(student.id(), "CS501");
+    enroll(student.code(), "CS501");
 
-    mockMvc.perform(delete("/api/v1/enrollments/" + student.id() + "/CS501"))
+    mockMvc.perform(delete("/api/v1/enrollments/" + student.code() + "/CS501"))
         .andExpect(status().isNoContent());
 
-    assertThat(enrollmentCount(student.id(), "CS501")).isZero();
+    assertThat(enrollmentCount(student.code(), "CS501")).isZero();
   }
 
   @Test
@@ -135,9 +151,9 @@ class EnrollmentEndIntegrationTest {
     // TC-ENR-008
     RegisteredStudent student = registerStudent("S00502", "amy.lee.502@example.edu");
     createCourse("CS502", "Course");
-    enroll(student.id(), "CS502");
+    enroll(student.code(), "CS502");
 
-    mockMvc.perform(delete("/api/v1/enrollments/" + student.id() + "/CS502"))
+    mockMvc.perform(delete("/api/v1/enrollments/" + student.code() + "/CS502"))
         .andExpect(status().isNoContent());
 
     mockMvc.perform(get("/api/v1/students/" + student.code())).andExpect(status().isOk());
@@ -151,7 +167,7 @@ class EnrollmentEndIntegrationTest {
     RegisteredStudent student = registerStudent("S00503", "amy.lee.503@example.edu");
     createCourse("CS503", "Course");
 
-    mockMvc.perform(delete("/api/v1/enrollments/" + student.id() + "/CS503"))
+    mockMvc.perform(delete("/api/v1/enrollments/" + student.code() + "/CS503"))
         .andExpect(status().isNotFound());
   }
 
@@ -161,8 +177,8 @@ class EnrollmentEndIntegrationTest {
     // TC-ENR-010
     RegisteredStudent student = registerStudent("S00504", "amy.lee.504@example.edu");
     createCourse("CS504", "Course");
-    enroll(student.id(), "CS504");
-    mockMvc.perform(delete("/api/v1/enrollments/" + student.id() + "/CS504"))
+    enroll(student.code(), "CS504");
+    mockMvc.perform(delete("/api/v1/enrollments/" + student.code() + "/CS504"))
         .andExpect(status().isNoContent());
 
     mockMvc
@@ -170,8 +186,8 @@ class EnrollmentEndIntegrationTest {
             post("/api/v1/enrollments")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"studentId":%d,"courseCode":"CS504"}
-                    """.formatted(student.id())))
+                    {"studentCode":"%s","courseCode":"CS504"}
+                    """.formatted(student.code())))
         .andExpect(status().isCreated());
   }
 
@@ -180,13 +196,13 @@ class EnrollmentEndIntegrationTest {
   void deletingAStudentCascadesToTheirEnrollments() throws Exception {
     RegisteredStudent student = registerStudent("S00505", "amy.lee.505@example.edu");
     createCourse("CS505", "Course");
-    enroll(student.id(), "CS505");
+    enroll(student.code(), "CS505");
 
     mockMvc.perform(delete("/api/v1/students/" + student.code())).andExpect(status().isNoContent());
 
     await()
         .atMost(Duration.ofSeconds(5))
-        .untilAsserted(() -> assertThat(enrollmentCount(student.id(), "CS505")).isZero());
+        .untilAsserted(() -> assertThat(enrollmentCount(student.code(), "CS505")).isZero());
   }
 
   @Test
@@ -194,7 +210,7 @@ class EnrollmentEndIntegrationTest {
   void deletingACourseCascadesToItsEnrollments() throws Exception {
     RegisteredStudent student = registerStudent("S00506", "amy.lee.506@example.edu");
     createCourse("CS506", "Course");
-    enroll(student.id(), "CS506");
+    enroll(student.code(), "CS506");
 
     mockMvc
         .perform(delete("/api/v1/courses/CS506").with(user("admin").roles("COURSE_ADMINISTRATOR")))
@@ -208,20 +224,20 @@ class EnrollmentEndIntegrationTest {
                   jdbcTemplate.queryForObject(
                       "SELECT COUNT(*) FROM enrollments WHERE student_id = ?",
                       Integer.class,
-                      student.id());
+                      studentIdOf(student.code()));
               assertThat(remaining).isZero();
             });
   }
 
   @Test
   void unauthenticatedRequestIsRejected() throws Exception {
-    MvcResult result = mockMvc.perform(delete("/api/v1/enrollments/1/CS101")).andReturn();
+    MvcResult result = mockMvc.perform(delete("/api/v1/enrollments/S00501/CS101")).andReturn();
     assertThat(result.getResponse().getStatus()).isIn(401, 403);
   }
 
   @Test
   @WithMockUser(roles = "COURSE_ADMINISTRATOR")
   void wrongRoleIsForbidden() throws Exception {
-    mockMvc.perform(delete("/api/v1/enrollments/1/CS101")).andExpect(status().isForbidden());
+    mockMvc.perform(delete("/api/v1/enrollments/S00501/CS101")).andExpect(status().isForbidden());
   }
 }

@@ -48,7 +48,7 @@ class BookCreationIntegrationTest {
         .formatted(isbn, title, author);
   }
 
-  private long registerStudent(String code, String email) throws Exception {
+  private String registerStudent(String code, String email) throws Exception {
     String body =
         """
         {"studentCode":"%s","firstName":"Amy","lastName":"Lee","email":"%s","dateOfBirth":"2000-01-01"}
@@ -65,7 +65,7 @@ class BookCreationIntegrationTest {
             .andExpect(status().isCreated())
             .andReturn();
 
-    return ((Number) JsonPath.read(result.getResponse().getContentAsString(), "$.id")).longValue();
+    return JsonPath.read(result.getResponse().getContentAsString(), "$.studentCode");
   }
 
   @Test
@@ -80,13 +80,13 @@ class BookCreationIntegrationTest {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.isbn").value("978-0-13-468599-1"))
         .andExpect(jsonPath("$.title").value("Clean Architecture"))
-        .andExpect(jsonPath("$.ownerId").doesNotExist());
+        .andExpect(jsonPath("$.ownerStudentCode").doesNotExist());
   }
 
   @Test
   void addsBookWithAValidOwner() throws Exception {
     // TC-BOOK-002
-    long ownerId = registerStudent("S00201", "amy.lee.201@example.edu");
+    String ownerCode = registerStudent("S00201", "amy.lee.201@example.edu");
 
     mockMvc
         .perform(
@@ -95,11 +95,11 @@ class BookCreationIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
-                    {"isbn":"978-1-4919-5035-7","title":"Designing Data-Intensive Applications","author":"Martin Kleppmann","publishedDate":"2017-03-16","ownerId":%d}
+                    {"isbn":"978-1-4919-5035-7","title":"Designing Data-Intensive Applications","author":"Martin Kleppmann","publishedDate":"2017-03-16","ownerStudentCode":"%s"}
                     """
-                        .formatted(ownerId)))
+                        .formatted(ownerCode)))
         .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.ownerId").value(ownerId));
+        .andExpect(jsonPath("$.ownerStudentCode").value(ownerCode));
   }
 
   @Test
@@ -131,7 +131,7 @@ class BookCreationIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
-                    {"isbn":"978-1-59327-584-6","title":"Some Book","author":"Some Author","ownerId":999999}
+                    {"isbn":"978-1-59327-584-6","title":"Some Book","author":"Some Author","ownerStudentCode":"S00-NOBODY"}
                     """))
         .andExpect(status().isBadRequest());
   }

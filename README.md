@@ -32,13 +32,20 @@ In plain terms, the system supports:
 - **Enrolling a student in a course** (and later unenrolling them).
 - **Looking things up**, such as "which books does this student have?" or "who is enrolled in this course?"
 
-Only authorized, logged-in users can make changes (add, edit, delete). A student can look up their own information, but not anyone else's.
+Only authorized, logged-in users can make changes (add, edit, delete), and **each role sees only the records its own work needs**: a registrar works with students, courses, and enrollments; a librarian with books and with who is holding them; a course administrator with courses and their rosters. A student sees their own record, their own books, and their own courses — nobody else's.
+
+Everything is addressed by a code a person can read out loud — a student code, a course code, an ISBN. Nobody using the system ever handles a database record number.
 
 If someone tries to do something that doesn't make sense — like enrolling in the same course twice, or looking up a student that doesn't exist — the system rejects the request with a clear explanation rather than silently doing the wrong thing.
 
 ## How is it built? (for technical readers)
 
-Under the hood, this is a Java/Spring Boot REST API — a backend service that other applications (a web dashboard, a mobile app, etc.) would talk to. It's built as a portfolio-grade example of clean, modular backend architecture, with layered code, input validation, proper error handling, and a real relational database (MySQL) enforcing data integrity.
+Under the hood, this is a Java/Spring Boot REST API, with a Next.js demo UI over it. It's built as a portfolio-grade example of clean, modular backend architecture, with layered code, input validation, proper error handling, and a real relational database (MySQL) enforcing data integrity.
+
+- `management/` — the API. Spring Boot 4 / Spring Modulith, MySQL 8, Flyway.
+- `management-frontend/` — the demo UI. Next.js 16, TypeScript, Chakra UI v3.
+- `docs/` — Markdown sources for the BA, PM, SA, Testing, and UI-UX document sets. The HTML is generated (`make docs`), not committed.
+- `util/` — build tooling; currently the docs Markdown → HTML compiler.
 
 For architecture details, module boundaries, database design, and the technical roadmap, see the documentation: [Document](docs/).
 
@@ -49,6 +56,7 @@ For architecture details, module boundaries, database design, and the technical 
 - JDK 21
 - Docker (or [Colima](https://github.com/abiosoft/colima) on macOS) — needed both to run MySQL via `docker-compose.yml` and for the [Testcontainers](https://testcontainers.com/)-backed integration tests
 - The Maven wrapper (`./mvnw`) checked into `management/` — no local Maven install required
+- Node.js 20+ — for the demo UI (`management-frontend/`) and the docs compiler (`util/`)
 
 ### 1. Start the database
 
@@ -69,7 +77,19 @@ cd management
 
 The API listens on `http://localhost:8080` by default, backed by the MySQL instance started in step 1 (Flyway migrates the schema automatically on startup).
 
-### 3. Run the test suite
+### 3. Run the demo UI
+
+```sh
+cd management-frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:3000`. The login page lists the seeded demo accounts, one per role — sign in as each in turn to see how the same system looks to a registrar, a librarian, a course administrator, and a student.
+
+Requests are proxied to the API through Next's rewrites, because the backend authenticates with a session cookie and registers no CORS configuration; `BACKEND_ORIGIN` overrides the target if the API is not on `:8080`. See [`management-frontend/README.md`](management-frontend/README.md).
+
+### 4. Run the test suite
 
 ```sh
 cd management
@@ -79,14 +99,15 @@ cd management
 
 The integration tests (`*IntegrationTest`) spin up their own throwaway MySQL container per class via Testcontainers — they don't need `make up` to be running, just a working Docker daemon.
 
-> **Colima users:** if a test run fails immediately with `Container startup failed for image testcontainers/ryuk:0.14.0` / `error while creating mount source path '.../docker.sock'`, Testcontainers' Ryuk cleanup sidecar can't mount the Colima socket. Work around it with:
+> **Colima users:** if a test run fails immediately with `Container startup failed for image testcontainers/ryuk:0.14.0` / `error while creating mount source path '.../docker.sock'`, Testcontainers is trying to bind-mount the host-side socket path into the Ryuk cleanup sidecar, which Colima's VM cannot do. Point it at the socket's path *inside* the VM instead:
 > ```sh
-> TESTCONTAINERS_RYUK_DISABLED=true ./mvnw verify
+> TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock ./mvnw verify
 > ```
+> `TESTCONTAINERS_RYUK_DISABLED=true` also gets the run through, but by switching off container cleanup rather than fixing the mount — prefer the override.
 
 After `./mvnw verify`, the coverage report is at `management/target/site/jacoco/index.html`.
 
-### 4. Build / package
+### 5. Build / package
 
 ```sh
 cd management
@@ -108,3 +129,15 @@ Every pull request against `main` triggers the [`CI` workflow](.github/workflows
 See [`docs/Testing/01-test-strategy.md`](docs/Testing/01-test-strategy.md) and [`docs/Testing/README.md`](docs/Testing/README.md) for the test strategy and the use-case → test-case traceability matrix. The ArchUnit rules under `management/src/test/java/org/phuchoang/management/architecture/` and the `shared/ModuleBoundaryTest` fail the build as soon as code violates the module layout.
 
 To run the same check locally, see [Getting Started](#getting-started) above.
+
+## Documentation
+
+The Markdown under [`docs/`](docs/) is the source. To read it as a linked HTML site — with the mermaid and PlantUML diagrams rendered and click-to-zoom — generate it:
+
+```sh
+make docs         # compile docs/**/*.md → .html
+make docs-watch   # ...and rebuild on every save
+make docs-clean   # remove the generated HTML
+```
+
+The generated HTML is gitignored; edit the Markdown and regenerate. The compiler is [`util/md-to-html.js`](util/md-to-html.js).

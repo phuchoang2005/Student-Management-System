@@ -98,14 +98,14 @@ class MustChangePasswordGateIntegrationTest {
     // TC-XC-012. STUDENT has zero write endpoints anywhere in the API (TC-XC-005) -- asserting
     // a write endpoint is 403 here would be indistinguishable from ordinary RBAC denial, not gate
     // denial. Two representative otherwise-allowed reads are used instead: the general students
-    // list (allowed to every domain role) and /me/books-and-courses (STUDENT's own dedicated
+    // list (allowed to every domain role) and /me/profile (STUDENT's own dedicated
     // endpoint) -- both must be blocked purely by the gate while mustChangePassword is true.
     String initialPassword = registerStudent("S00901", "gate.901@example.edu");
     MockHttpSession session = sessionOf(login("gate.901@example.edu", initialPassword));
 
     mockMvc.perform(get("/api/v1/students").session(session)).andExpect(status().isForbidden());
     mockMvc
-        .perform(get("/api/v1/me/books-and-courses").session(session))
+        .perform(get("/api/v1/me/profile").session(session))
         .andExpect(status().isForbidden());
   }
 
@@ -125,12 +125,12 @@ class MustChangePasswordGateIntegrationTest {
 
     mockMvc.perform(get("/api/v1/students").session(session)).andExpect(status().isForbidden());
     mockMvc
-        .perform(get("/api/v1/me/books-and-courses").session(session))
+        .perform(get("/api/v1/me/profile").session(session))
         .andExpect(status().isForbidden());
 
     changePassword(session, initialPassword, "chosenSecret1");
 
     mockMvc.perform(get("/api/v1/students").session(session)).andExpect(status().isOk());
-    mockMvc.perform(get("/api/v1/me/books-and-courses").session(session)).andExpect(status().isOk());
+    mockMvc.perform(get("/api/v1/me/profile").session(session)).andExpect(status().isOk());
   }
 }

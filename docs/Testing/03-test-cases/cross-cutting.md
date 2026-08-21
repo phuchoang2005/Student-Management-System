@@ -22,8 +22,13 @@ Source of truth: `06-low-level-design.md` §11.1.
 | `POST/PUT/DELETE /api/v1/books/**` | LIBRARIAN | — |
 | `POST /api/v1/staff-accounts` | SYSTEM_ADMINISTRATOR | UC-24 |
 | `PATCH /api/v1/staff-accounts/*/status` | SYSTEM_ADMINISTRATOR | UC-25 |
-| `GET /api/v1/**` (all list/search/detail endpoints, except initial-password above) | Any authenticated role | STUDENT's "own records only" scoping is applied inside the Application Service, not the filter chain — see §1.3 below. SYSTEM_ADMINISTRATOR has no domain-module `GET` access — see §9 |
-| `GET /api/v1/me/books-and-courses` | STUDENT only | See [identity-auth.md](./identity-auth.md) TC-IDN-021 |
+| `GET /api/v1/students/**` (except initial-password above) | REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT | COURSE_ADMINISTRATOR holds this only to open a profile from a course roster. STUDENT's "own records only" scoping is applied inside the Application Service, not the filter chain — see §1.3 |
+| `GET /api/v1/books/**` | LIBRARIAN, STUDENT | STUDENT scoped as above. REGISTRAR and COURSE_ADMINISTRATOR are denied |
+| `GET /api/v1/courses/**` | REGISTRAR, COURSE_ADMINISTRATOR, STUDENT | Not scoped — the catalogue is not personal data. LIBRARIAN is denied |
+| `GET /api/v1/enrollments/**` | REGISTRAR, COURSE_ADMINISTRATOR | STUDENT is denied outright, not scoped — their courses come from `/me/courses` |
+| `GET /api/v1/me/**` | STUDENT only | See [identity-auth.md](./identity-auth.md) TC-IDN-021 |
+
+**Reads are granted per resource, not as one blanket "any authenticated role".** Each role reads what its own work needs (`02-component-diagram.md` §4). SYSTEM_ADMINISTRATOR has no domain-module `GET` access at all — see §9.
 
 ### 1.1 Write-endpoint authorization — negative cases (one per non-owning role, per resource)
 
@@ -57,11 +62,22 @@ Source of truth: `06-low-level-design.md` §11.1.
 - **Steps:** As STUDENT, attempt every write endpoint across all 4 resource types.
 - **Expected Result:** `403 Forbidden` in every case — confirms STUDENT has zero write authority anywhere in the API, matching the "Student cannot enroll or end their own enrollment" note in `use-cases.md` UC-11/UC-12.
 
-### TC-XC-006 — Every role can read every list/search/detail endpoint (except the Student-only and Registrar-only exceptions)
-- **Related UC / Rule:** `06-low-level-design.md` §11.1 ("every `GET /api/v1/**`... any authenticated role")
-- **Priority:** P1 · **Type:** Security-RBAC
-- **Steps:** As each of the 4 roles, call `GET /students`, `GET /books`, `GET /courses`, and the corresponding `/{id}` detail endpoints.
-- **Expected Result:** `200 OK` for all roles on all these endpoints (content may be scoped for STUDENT — see §1.3).
+### TC-XC-006 — Each role reads exactly the resources its own work needs, and no others
+- **Related UC / Rule:** `06-low-level-design.md` §11.1; `02-component-diagram.md` §4; `04-authentication-authorization.md` §6.1
+- **Priority:** P0 · **Type:** Security-RBAC
+- **Steps:** For each of the 4 domain roles, call `GET /students`, `GET /books`, `GET /courses`, and `GET /enrollments` — every cell of the matrix, in both directions.
+- **Expected Result:** the granted cells return `200 OK` (content may be scoped for STUDENT — see §1.3); **every other cell returns `403 Forbidden`**, not an empty result:
+
+  | | `/students` | `/books` | `/courses` | `/enrollments` |
+  | --- | :-: | :-: | :-: | :-: |
+  | REGISTRAR | 200 | **403** | 200 | reachable |
+  | LIBRARIAN | 200 | 200 | **403** | **403** |
+  | COURSE_ADMINISTRATOR | 200 | **403** | 200 | reachable |
+  | STUDENT | 200 (scoped) | 200 (scoped) | 200 | **403** |
+
+  "reachable" rather than `200` for the two granted enrollment cells: an unfiltered `GET /enrollments` is a `400` by design (§11 below), and a `400` there *is* the pass condition — it proves the request got past the filter chain and was rejected on the endpoint's own terms rather than stopped as a `403`.
+
+  The denied direction is the point of this case. An earlier version of this matrix granted all four domain roles read access to everything, which let a Registrar enumerate the book catalogue and a Librarian enumerate enrollments — neither of which any use case asks for.
 
 ### TC-XC-007 — Only REGISTRAR may view a student's initial password
 - **Related UC / Rule:** `06-low-level-design.md` §11.1; Identity.5
@@ -75,7 +91,7 @@ Source of truth: `06-low-level-design.md` §11.1.
 - **Related UC / Rule:** `01-system-overview.md` §4.2 (every request authenticated/authorized before reaching a module)
 - **Priority:** P0 · **Type:** Security
 - **Steps:** With no session cookie, call one representative endpoint from each resource type (a `GET` and a write endpoint each).
-- **Expected Result:** `401 Unauthorized` for every one except `POST /api/v1/auth/login`.
+- **Expected Result:** rejected (`401` or `403` — Spring's default entry point for this chain answers anonymous domain `GET`s with `403`) for every one except `POST /api/v1/auth/login`.
 
 ### 1.3 STUDENT "own records only" scoping
 
@@ -97,7 +113,11 @@ Source of truth: `06-low-level-design.md` §11.1.
 - **Steps:** As a STUDENT principal, `GET /api/v1/students?q=<term matching multiple students, including others>`.
 - **Expected Result:** `200 OK` (never `403`) with 0 or 1 result — only the caller's own record if it matches, following the same "no match → `200 []`" pattern every search use case already uses; never another student's record, even if it matches the search term.
 
-TC-XC-009–011 cover `student`; `book` and `enrollment` need the same "own records only" scoping per `02-component-diagram.md` §4 — see TC-XC-043–045 in §10 below. All of TC-XC-009–011 and TC-XC-043–045 are implemented in `OwnRecordsScopingIntegrationTest`.
+TC-XC-009–011 cover `student`; `book` needs the same "own records only" scoping per `02-component-diagram.md` §4 — see TC-XC-043–045 in §10 below.
+
+**`enrollment` is the exception, and deliberately so.** It was originally in this list, scoped the same way. It is now *withdrawn* instead: role STUDENT holds no grant on `/api/v1/enrollments/**` at all, so there is no scoping to test — only a flat `403`, whether the caller asks about their own enrollment or someone else's. A Student's enrolled courses come from `GET /api/v1/me/courses`, derived from the session principal rather than from a student code the caller supplies, so there is no identifier to substitute and no ownership comparison that could be got wrong. Withdrawing a grant is strictly stronger than scoping it, and TC-XC-045 asserts the withdrawal.
+
+All of TC-XC-009–011 and TC-XC-043–045 are implemented in `OwnRecordsScopingIntegrationTest`.
 
 ---
 
@@ -109,7 +129,7 @@ Source of truth: `04-authentication-authorization.md` §4.2.
 - **Related UC / Rule:** `04-authentication-authorization.md` §4.2; Identity.3
 - **Priority:** P0 · **Type:** Security
 - **Preconditions:** Freshly-provisioned Student account, never logged a password change.
-- **Steps:** Log in with the initial password; then attempt two representative otherwise-allowed reads (`GET /api/v1/students` and `GET /api/v1/me/books-and-courses`). A write endpoint isn't used as the second case: STUDENT has zero write endpoints anywhere in the API (TC-XC-005), so a write-endpoint 403 here would be indistinguishable from ordinary RBAC denial rather than gate denial.
+- **Steps:** Log in with the initial password; then attempt two representative otherwise-allowed reads (`GET /api/v1/students` and `GET /api/v1/me/profile`). A write endpoint isn't used as the second case: STUDENT has zero write endpoints anywhere in the API (TC-XC-005), so a write-endpoint 403 here would be indistinguishable from ordinary RBAC denial rather than gate denial.
 - **Expected Result:** `403 Forbidden` on both, and on every endpoint except `POST /api/v1/auth/password`. Implemented in `MustChangePasswordGateIntegrationTest`.
 
 ### TC-XC-013 — The gate applies to every role, not only Student
@@ -235,7 +255,7 @@ Every explicitly-called-out design decision from `api-specification.md` §5, con
 | 3 | Student reading another principal's single-resource record → `403` | TC-XC-010 (this file) |
 | 4 | Student role on search/list endpoints → `200` with scoped/empty results, not `403` | TC-XC-011 (this file) |
 | 5 | `GET /students/{code}/initial-password` collapses "already changed" and "not found" into one `404` | [identity-auth.md](./identity-auth.md) TC-IDN-017, TC-IDN-018 |
-| 6 | `GET /me/books-and-courses` by a non-Student role → `403` | [identity-auth.md](./identity-auth.md) TC-IDN-021 |
+| 6 | `GET /me/**` by a non-Student role → `403` | [identity-auth.md](./identity-auth.md) TC-IDN-021 |
 | 7 | `DELETE /books/{isbn}/owner` when already unowned → idempotent `200`, not `409` | [book.md](./book.md) TC-BOOK-011 |
 
 ---
@@ -298,17 +318,17 @@ Source of truth: `06-low-level-design.md` §2.1–2.2 (package layout, class-sha
 
 Source of truth: `api-specification.md` §3 (scheme) and §5 item 8 (defaults/cap and invalid-input handling). These cases check the envelope/param contract once at the cross-cutting level rather than duplicating it identically across every module — per-module cases (default/custom page, out-of-range page) live in [student.md](./student.md), [book.md](./book.md), [course.md](./course.md), and [identity-auth.md](./identity-auth.md) instead.
 
-### TC-XC-036 — Every list/roster endpoint's response uses the `{content, page, size, totalElements, totalPages}` envelope
+### TC-XC-036 — Every list endpoint's response uses the `{content, page, size, totalElements, totalPages}` envelope
 - **Related UC / Rule:** `api-specification.md` §3 Pagination
 - **Priority:** P1 · **Type:** Functional (contract)
-- **Steps:** Call `GET /students`, `GET /books`, `GET /courses`, `GET /courses/{code}` (inspect `roster`), and `GET /me/books-and-courses` (inspect `books` and `courses`).
-- **Expected Result:** Every one of these fields has exactly the `PageMeta` + `content` shape — no bare arrays remain on any list/roster field.
+- **Steps:** Call `GET /students`, `GET /books`, `GET /courses`, `GET /enrollments?courseCode=…`, `GET /me/books`, and `GET /me/courses`.
+- **Expected Result:** every response has exactly the `PageMeta` + `content` shape, and every one is paged the same way — a plain `page`/`size` pair, with no prefixed variants anywhere. Nothing is an embedded array on a detail response any more: `StudentDetail` has no `books`/`courses`, `CourseDetail` has no `roster` (decision #10), which is what made the envelope uniform.
 
-### TC-XC-037 — `size` outside 1-100 is rejected with `400`, not clamped
+### TC-XC-037 — `size` above the cap is clamped, uniformly
 - **Related UC / Rule:** `api-specification.md` §5 item 8
-- **Priority:** P2 · **Type:** Negative
-- **Steps:** `GET /api/v1/students?size=0`, then `GET /api/v1/students?size=101`.
-- **Expected Result:** `400 Bad Request` (`ValidationError`) for both — the caller is told its request was invalid rather than silently served a different page size than it asked for.
+- **Priority:** P2 · **Type:** Boundary
+- **Steps:** `GET /api/v1/students?size=101`, then the same on `/books`, `/courses`, `/enrollments?courseCode=…`, and `/me/books`.
+- **Expected Result:** `200 OK` with `size` clamped to `100` in every case, via `spring.data.web.pageable.max-page-size`. Uniformity is the assertion here: `/me` previously hand-rolled its own page validation and answered `400` where every other endpoint clamped, which is the inconsistency splitting it into `/me/books` and `/me/courses` removed.
 
 ### TC-XC-038 — A negative `page` is rejected with `400`
 - **Related UC / Rule:** `api-specification.md` §5 item 8
@@ -350,7 +370,9 @@ Negative-case coverage for the two endpoints added by UC-24/UC-25 and the demo-a
 
 ## 10. Own Records Scoping — Book & Enrollment
 
-Source of truth: `02-component-diagram.md` §4 ("Student | none | own records only (`student`, `book`, `enrollment` scoped to `principal.studentId`)"), same rule §1.3 exercises for `student`. This scoping did not exist in production code until PM-010 (`04-sprint-backlog.md` §6, `06-low-level-design.md` §11.5) — only `/me/**` implemented it beforehand. Implemented and tested in `OwnRecordsScopingIntegrationTest`, alongside TC-XC-009–011.
+Source of truth: `02-component-diagram.md` §4 ("Student | none | own records only — `student` and `book` scoped to `principal.studentId`… no `enrollment` access"), same rule §1.3 exercises for `student`. This scoping did not exist in production code until PM-010 (`04-sprint-backlog.md` §6, `06-low-level-design.md` §11.5) — only `/me/**` implemented it beforehand. Implemented and tested in `OwnRecordsScopingIntegrationTest`, alongside TC-XC-009–011.
+
+`enrollment` appears here only to record that its grant was **withdrawn rather than scoped** (TC-XC-045).
 
 ### TC-XC-043 — A Student reading a book they own succeeds; reading another student's book, or an unowned book, is forbidden
 - **Related UC / Rule:** `02-component-diagram.md` §4; `api-specification.md` §5.3 (403, not 404, for a well-formed request that only fails authorization)
@@ -358,17 +380,24 @@ Source of truth: `02-component-diagram.md` §4 ("Student | none | own records on
 - **Steps:** As a STUDENT principal owning `book-owned-01`: `GET /api/v1/books/{book-owned-01.isbn}` (own book), `GET /api/v1/books/{book-owned-by-other.isbn}` (someone else's book), `GET /api/v1/books/{book-unowned.isbn}` (nobody's book).
 - **Expected Result:** `200 OK` for the caller's own book; `403 Forbidden` for both the other student's book and the unowned book. The unowned-book case is a resolved product decision, not an oversight: Students have no self-service checkout endpoint, so there's no reason for the general `/books` endpoint to double as a browsable catalog for them — "own records only" is read literally.
 
-### TC-XC-044 — A Student's book search is scoped to their own books regardless of the `owner` query parameter
+### TC-XC-044 — A Student's book search is scoped to their own books regardless of the `ownerStudentCode` query parameter
 - **Related UC / Rule:** `02-component-diagram.md` §4; `api-specification.md` §5.4 (transparently scoped, never `403`)
 - **Priority:** P1 · **Type:** Security-RBAC
-- **Steps:** As a STUDENT principal owning one book while another student owns a second: `GET /api/v1/books` with no `owner` param, then again with `owner=<the other student's id>`.
-- **Expected Result:** `200 OK` both times, results containing only the caller's own book in both cases — the `owner` param is silently overridden by the caller's identity when present, never honored and never rejected with `400`/`403` (that would leak whether the other id is valid).
+- **Steps:** As a STUDENT principal owning one book while another student owns a second: `GET /api/v1/books` with no filter, then again with `ownerStudentCode=<the other student's code>`.
+- **Expected Result:** `200 OK` both times, results containing only the caller's own book in both cases — the `ownerStudentCode` filter is silently overridden by the caller's identity when present, never honored and never rejected with `400`/`403` (that would leak whether the other code is valid). The supplied code is not even resolved.
 
-### TC-XC-045 — A Student reading their own enrollment succeeds; reading another student's enrollment is forbidden whether or not it exists
-- **Related UC / Rule:** `02-component-diagram.md` §4; `api-specification.md` §5.3
+### TC-XC-045 — A Student cannot reach the enrollment endpoints at all, and reads their courses through `/me` instead
+- **Related UC / Rule:** `02-component-diagram.md` §4; `04-authentication-authorization.md` §6.1; UC-16
 - **Priority:** P0 · **Type:** Security-RBAC
-- **Steps:** As a STUDENT principal: `GET /api/v1/enrollments/{self}/{ownCourse}` (own enrollment); `GET /api/v1/enrollments/{other}/{courseOtherIsEnrolledIn}` (another student's real enrollment); `GET /api/v1/enrollments/{other}/{courseOtherIsNotEnrolledIn}` (a pairing that was never created).
-- **Expected Result:** `200 OK` for the caller's own enrollment; identical `403 Forbidden` for both other-student cases, regardless of whether that enrollment actually exists — the ownership check runs before the repository lookup precisely so no existence signal leaks through a differently-timed `404` (unlike `student`/`book`, where the check runs after an existence check because the resource identifier isn't itself another student's numeric id exposed in the path).
+- **Steps:** As a STUDENT principal enrolled in one course, with a second student enrolled in another:
+  1. `GET /api/v1/enrollments/{self}/{ownCourse}` — their **own** enrollment;
+  2. `GET /api/v1/enrollments?studentCode={self}` — their own courses, via the list endpoint;
+  3. `GET /api/v1/enrollments/{other}/{courseOtherIsEnrolledIn}` — another student's real enrollment;
+  4. `GET /api/v1/enrollments/{other}/{courseOtherIsNotEnrolledIn}` — a pairing that was never created;
+  5. `GET /api/v1/me/courses`.
+- **Expected Result:** `403 Forbidden` for steps 1–4, **including the caller's own enrollment** — the whole resource is off role STUDENT's read allow-list, so there is nothing to scope and no ownership comparison to make. Step 5 returns `200 OK` listing the caller's own course.
+
+  This case previously asserted `200` for step 1 and a check-before-lookup `403` for steps 3–4, to keep a probing Student from distinguishing "exists" from "does not exist" by timing. Withdrawing the grant removes that distinction structurally rather than defending it: there is no path in, so there is no signal to leak. Step 5 is what replaces the capability — same answer, derived from the session principal rather than from a student code the caller types.
 
 ---
 
@@ -387,5 +416,5 @@ Source of truth: `02-component-diagram.md` §4 ("Student | none | own records on
 | Architecture conformance (ArchUnit) | TC-XC-028–035 |
 | Pagination conventions | TC-XC-036–038 |
 | Staff account provisioning & demo accounts (RBAC) | TC-XC-039–042 |
-| Own records scoping — book & enrollment | TC-XC-043–045 |
+| Own records scoping — book; enrollment grant withdrawn | TC-XC-043–045 |
 | Staff account provisioning & demo accounts (RBAC) | TC-XC-039–042 |

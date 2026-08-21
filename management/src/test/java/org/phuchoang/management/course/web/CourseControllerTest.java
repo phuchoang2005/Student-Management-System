@@ -51,12 +51,12 @@ class CourseControllerTest {
 
   private static CourseService.CreatedCourse aCreatedCourse() {
     Instant now = Instant.now();
-    return new CourseService.CreatedCourse(1L, "CS101", "Intro to CS", "Basics", 3, now, now);
+    return new CourseService.CreatedCourse("CS101", "Intro to CS", "Basics", 3, now, now);
   }
 
   private static CourseService.UpdatedCourse anUpdatedCourse() {
     Instant now = Instant.now();
-    return new CourseService.UpdatedCourse(1L, "CS101", "Advanced CS", "Deeper dive", 4, now, now);
+    return new CourseService.UpdatedCourse("CS101", "Advanced CS", "Deeper dive", 4, now, now);
   }
 
   private static final String VALID_BODY =
@@ -182,7 +182,7 @@ class CourseControllerTest {
   }
 
   private static final CourseService.CourseSummaryView A_SUMMARY =
-      new CourseService.CourseSummaryView(1L, "CS101", "Intro to CS", 3);
+      new CourseService.CourseSummaryView("CS101", "Intro to CS", 3);
 
   @Test
   void searchCoursesReturnsPagedSummaries() throws Exception {
@@ -211,20 +211,22 @@ class CourseControllerTest {
 
   private static CourseService.CourseDetailView aCourseDetailView() {
     Instant now = Instant.now();
-    return new CourseService.CourseDetailView(
-        1L, "CS101", "Intro to CS", "Basics", 3, now, now, List.of());
+    return new CourseService.CourseDetailView("CS101", "Intro to CS", "Basics", 3, now, now);
   }
 
   @Test
-  void getCourseReturnsDetailWithEmptyRoster() throws Exception {
+  void getCourseReturnsDetail() throws Exception {
     when(courseService.getDetail("CS101")).thenReturn(aCourseDetailView());
 
     mockMvc
         .perform(get("/api/v1/courses/CS101"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.courseCode").value("CS101"))
-        .andExpect(jsonPath("$.roster").isArray())
-        .andExpect(jsonPath("$.roster").isEmpty());
+        .andExpect(jsonPath("$.description").value("Basics"))
+        .andExpect(jsonPath("$.credits").value(3))
+        // The roster is its own endpoint (GET /api/v1/enrollments?courseCode=), not a field here.
+        .andExpect(jsonPath("$.roster").doesNotExist())
+        .andExpect(jsonPath("$.id").doesNotExist());
   }
 
   @Test

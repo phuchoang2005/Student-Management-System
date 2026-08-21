@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 public record StudentResponse(
-    Long id,
     String studentCode,
     String firstName,
     String lastName,
