@@ -21,7 +21,7 @@ export default function Home() {
 
   return (
     <Center minH="100vh">
-      <Spinner size="lg" />
+      <Spinner size="lg" color="fg.subtle" borderWidth="1.5px" />
     </Center>
   );
 }

@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, Dialog, Portal, Text } from '@chakra-ui/react';
+import { Dialog, Portal, Text } from '@chakra-ui/react';
+
+import Button from '@/components/ui/Button';
 
 /** Destructive-action gate. Every delete in the app goes through it. */
 export default function ConfirmDialog({
@@ -38,10 +40,10 @@ export default function ConfirmDialog({
               <Text fontSize="sm">{message}</Text>
             </Dialog.Body>
             <Dialog.Footer>
-              <Button variant="outline" onClick={onCancel}>
+              <Button tone="neutral" variant="outline" onClick={onCancel}>
                 Cancel
               </Button>
-              <Button colorPalette="red" loading={pending} onClick={onConfirm}>
+              <Button tone="danger" loading={pending} onClick={onConfirm}>
                 {confirmLabel}
               </Button>
             </Dialog.Footer>

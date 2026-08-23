@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Button, Code, Stack, Text } from '@chakra-ui/react';
+import { Box, Code, Stack, Text } from '@chakra-ui/react';
+import { BookOpen, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -11,6 +12,8 @@ import ErrorBanner from '@/components/ErrorBanner';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import SearchInput from '@/components/SearchInput';
+import Button from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
 import { books, me } from '@/lib/api/endpoints';
 import type { BookSummary } from '@/lib/api/types';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -74,7 +77,8 @@ function Books() {
         }
         actions={
           mayWrite ? (
-            <Button size="sm" onClick={() => setCreating(true)}>
+            <Button onClick={() => setCreating(true)}>
+              <Plus strokeWidth={1.5} />
               Add book
             </Button>
           ) : undefined
@@ -118,11 +122,11 @@ function Books() {
                   width: '6rem',
                   align: 'end' as const,
                   cell: (row: BookSummary) => (
-                    <Stack direction="row" gap="1" justify="flex-end">
+                    <Stack direction="row" gap="2" justify="flex-end">
                       <Button
-                        size="xs"
+                        size="sm"
+                        tone="danger"
                         variant="outline"
-                        colorPalette="red"
                         onClick={(event) => {
                           event.stopPropagation();
                           setDeleting(row);
@@ -139,7 +143,33 @@ function Books() {
         rows={resource.data?.content ?? []}
         keyOf={(row) => row.isbn}
         loading={resource.loading}
-        empty={isStudent ? 'You are not holding any books.' : 'No books match that search.'}
+        empty={
+          <EmptyState
+            icon={BookOpen}
+            title={
+              isStudent
+                ? 'You are not holding any books'
+                : resource.query
+                  ? 'No books match that search'
+                  : 'The catalogue is empty'
+            }
+            description={
+              isStudent
+                ? 'When the librarian assigns you a book it will appear here.'
+                : resource.query
+                  ? 'Try a different ISBN, title, or author — search matches all three.'
+                  : 'Add the first book to start tracking who is holding what.'
+            }
+            action={
+              mayWrite && !resource.query ? (
+                <Button onClick={() => setCreating(true)}>
+                  <Plus strokeWidth={1.5} />
+                  Add book
+                </Button>
+              ) : undefined
+            }
+          />
+        }
         onRowClick={(row) => router.push(`/books/${encodeURIComponent(row.isbn)}`)}
       />
 

@@ -1,13 +1,18 @@
 'use client';
 
-import { Alert, Box, Button, Card, Center, Stack } from '@chakra-ui/react';
+import { Alert, Box, Center, Stack } from '@chakra-ui/react';
+import { ArrowLeft } from 'lucide-react';
 import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 
 import ErrorBanner from '@/components/ErrorBanner';
 import FormField from '@/components/FormField';
+import Reveal from '@/components/motion/Reveal';
 import PageHeader from '@/components/PageHeader';
+import Button from '@/components/ui/Button';
+import FadeIn from '@/components/motion/FadeIn';
+import SurfaceCard from '@/components/ui/SurfaceCard';
 import { auth } from '@/lib/api/endpoints';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { landingRoute } from '@/lib/auth/permissions';
@@ -60,7 +65,8 @@ function ChangePasswordForm() {
   };
 
   return (
-    <Center minH="100vh" p="6">
+    <Center minH="100vh" p="8">
+      <FadeIn>
       <Box w="full" maxW="30rem">
         <PageHeader
           title="Change password"
@@ -71,19 +77,42 @@ function ChangePasswordForm() {
           }
         />
 
-        {done && !forced ? (
-          <Alert.Root status="success" mb="4">
+        <Reveal show={done && !forced}>
+          <Alert.Root status="success" mb="6">
             <Alert.Indicator />
             <Alert.Content>
               <Alert.Description>Your password has been changed.</Alert.Description>
             </Alert.Content>
           </Alert.Root>
-        ) : null}
+        </Reveal>
 
         <form onSubmit={onSubmit}>
-          <Card.Root>
-            <Card.Body>
-              <Stack gap="4">
+          <SurfaceCard
+            footer={
+              <Box
+                display="flex"
+                justifyContent="space-between"
+                alignItems="center"
+                w="full"
+                gap="4"
+              >
+                <Button type="submit" loading={action.pending}>
+                  Change password
+                </Button>
+                {/* Reached from the sidebar rather than forced into: without the shell around it,
+                    this link is the only way back. */}
+                {!forced && session ? (
+                  <Button asChild tone="neutral" variant="ghost">
+                    <NextLink href={landingRoute(session.role)}>
+                      <ArrowLeft strokeWidth={1.5} />
+                      Back
+                    </NextLink>
+                  </Button>
+                ) : null}
+              </Box>
+            }
+          >
+              <Stack gap="6">
                 {/* A wrong current password comes back 401 here, not 400 -- the one place outside login
                     that does, so it is rendered inline rather than treated as an expired session. */}
                 <ErrorBanner error={action.error} />
@@ -118,22 +147,10 @@ function ChangePasswordForm() {
                   required
                 />
               </Stack>
-            </Card.Body>
-            <Card.Footer justifyContent="space-between">
-              <Button type="submit" loading={action.pending}>
-                Change password
-              </Button>
-              {/* Reached from the sidebar rather than forced into: without the shell around it,
-                  this link is the only way back. */}
-              {!forced && session ? (
-                <Button asChild size="sm" variant="ghost">
-                  <NextLink href={landingRoute(session.role)}>Back</NextLink>
-                </Button>
-              ) : null}
-            </Card.Footer>
-          </Card.Root>
+          </SurfaceCard>
         </form>
       </Box>
+      </FadeIn>
     </Center>
   );
 }

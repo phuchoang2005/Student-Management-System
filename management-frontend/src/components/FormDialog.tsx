@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, CloseButton, Dialog, Portal } from '@chakra-ui/react';
+import { CloseButton, Dialog, Portal } from '@chakra-ui/react';
+import Button from '@/components/ui/Button';
 import type { FormEvent, ReactNode } from 'react';
 
 /**
@@ -38,7 +39,7 @@ export default function FormDialog({
               </Dialog.Header>
               <Dialog.Body>{children}</Dialog.Body>
               <Dialog.Footer>
-                <Button variant="outline" type="button" onClick={onClose}>
+                <Button tone="neutral" variant="outline" type="button" onClick={onClose}>
                   Cancel
                 </Button>
                 <Button type="submit" loading={pending}>

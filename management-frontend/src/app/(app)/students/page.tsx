@@ -1,10 +1,14 @@
 'use client';
 
-import { Alert, Box, Button, Center, Code, Spinner, Stack } from '@chakra-ui/react';
+import { Alert, Box, Center, Code, Spinner, Stack } from '@chakra-ui/react';
+import { UserPlus, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import ConfirmDialog from '@/components/ConfirmDialog';
+import FadeIn from '@/components/motion/FadeIn';
+import Button from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
 import DataTable from '@/components/DataTable';
 import ErrorBanner from '@/components/ErrorBanner';
 import PageHeader from '@/components/PageHeader';
@@ -43,7 +47,7 @@ function MyRecord() {
   if (loading) {
     return (
       <Center py="16">
-        <Spinner size="lg" />
+        <Spinner size="lg" color="fg.subtle" borderWidth="1.5px" />
       </Center>
     );
   }
@@ -63,7 +67,7 @@ function MyRecord() {
           ]}
         />
       ) : null}
-      <Alert.Root status="info" mt="4" size="sm">
+      <Alert.Root status="info" mt="6" size="sm">
         <Alert.Indicator />
         <Alert.Content>
           <Alert.Description>
@@ -107,7 +111,8 @@ function StudentRoll() {
         description="Search by code, name, or email. Select a student to see their record."
         actions={
           mayWrite ? (
-            <Button size="sm" onClick={() => setCreating(true)}>
+            <Button onClick={() => setCreating(true)}>
+              <UserPlus strokeWidth={1.5} />
               Register student
             </Button>
           ) : undefined
@@ -142,9 +147,10 @@ function StudentRoll() {
                   width: '10rem',
                   align: 'end' as const,
                   cell: (row: StudentSummary) => (
-                    <Stack direction="row" gap="1" justify="flex-end">
+                    <Stack direction="row" gap="2" justify="flex-end">
                       <Button
-                        size="xs"
+                        size="sm"
+                        tone="neutral"
                         variant="outline"
                         onClick={(event) => {
                           event.stopPropagation();
@@ -154,9 +160,9 @@ function StudentRoll() {
                         Edit
                       </Button>
                       <Button
-                        size="xs"
+                        size="sm"
+                        tone="danger"
                         variant="outline"
-                        colorPalette="red"
                         onClick={(event) => {
                           event.stopPropagation();
                           setDeleting(row);
@@ -173,7 +179,25 @@ function StudentRoll() {
         rows={resource.data?.content ?? []}
         keyOf={(row) => row.studentCode}
         loading={resource.loading}
-        empty="No students match that search."
+        empty={
+          <EmptyState
+            icon={Users}
+            title={resource.query ? 'No students match that search' : 'No students yet'}
+            description={
+              resource.query
+                ? 'Try a different code, name, or email — search matches all three.'
+                : 'Register your first student to begin managing academic records.'
+            }
+            action={
+              mayWrite && !resource.query ? (
+                <Button onClick={() => setCreating(true)}>
+                  <UserPlus strokeWidth={1.5} />
+                  Register student
+                </Button>
+              ) : undefined
+            }
+          />
+        }
         onRowClick={(row) => router.push(`/students/${encodeURIComponent(row.studentCode)}`)}
       />
 

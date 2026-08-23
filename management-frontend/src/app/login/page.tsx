@@ -1,28 +1,26 @@
 'use client';
 
-import {
-  Alert,
-  Badge,
-  Box,
-  Button,
-  Card,
-  Center,
-  Heading,
-  HStack,
-  Stack,
-  Text,
-} from '@chakra-ui/react';
+import { Alert, Box, Center, Heading, HStack, Stack, Text } from '@chakra-ui/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import ErrorBanner from '@/components/ErrorBanner';
 import FormField from '@/components/FormField';
+import FadeIn from '@/components/motion/FadeIn';
+import StaggerItem from '@/components/motion/Stagger';
+import Button from '@/components/ui/Button';
+import RoleBadge from '@/components/ui/RoleBadge';
+import SurfaceCard from '@/components/ui/SurfaceCard';
 import { auth } from '@/lib/api/endpoints';
 import type { DemoAccount } from '@/lib/api/types';
 import { useAuth } from '@/lib/auth/AuthContext';
 import useAsyncAction from '@/lib/hooks/useAsyncAction';
-import { ROLE_COLORS, ROLE_LABELS, landingRoute } from '@/lib/auth/permissions';
+import { landingRoute } from '@/lib/auth/permissions';
 
+/**
+ * The first screen anyone sees, and the one place the Zen brief has room to breathe: a single card,
+ * one objective (§9), and nothing else competing for the eye.
+ */
 export default function LoginPage() {
   const { session, ready, login } = useAuth();
   const router = useRouter();
@@ -57,19 +55,25 @@ export default function LoginPage() {
   };
 
   return (
-    <Center minH="100vh" p="6">
-      <Box w="full" maxW="26rem">
-        <Heading size="xl" mb="1">
-          Student Management
-        </Heading>
-        <Text color="fg.muted" fontSize="sm" mb="6">
-          Sign in to continue.
-        </Text>
+    <Center minH="100vh" p="8">
+      <FadeIn>
+        <Box w="full" maxW="26rem">
+          <Heading size="xl" mb="2">
+            Student Management
+          </Heading>
+          <Text color="fg.muted" fontSize="sm" mb="8">
+            Sign in to continue.
+          </Text>
 
-        <form onSubmit={onSubmit}>
-            <Card.Root>
-            <Card.Body>
-              <Stack gap="4">
+          <form onSubmit={onSubmit}>
+            <SurfaceCard
+              footer={
+                <Button type="submit" w="full" loading={action.pending}>
+                  Sign in
+                </Button>
+              }
+            >
+              <Stack gap="6">
                 {/* A failed login is 401 with a body; every other 4xx here would be unexpected. */}
                 <ErrorBanner error={action.error} />
                 <FormField
@@ -91,56 +95,52 @@ export default function LoginPage() {
                   required
                 />
               </Stack>
-            </Card.Body>
-            <Card.Footer>
-              <Button type="submit" w="full" loading={action.pending}>
-                Sign in
-              </Button>
-            </Card.Footer>
-          </Card.Root>
-        </form>
+            </SurfaceCard>
+          </form>
 
-        {demoAccounts.length > 0 ? (
-          <Box mt="6">
-            <Text fontSize="sm" fontWeight="medium" mb="2">
-              Demo accounts
-            </Text>
-            <Stack gap="2">
-              {demoAccounts.map((account) => (
-                <HStack key={account.username} justify="space-between">
-                  <HStack gap="2">
-                    <Badge colorPalette={ROLE_COLORS[account.role]} variant="subtle">
-                      {ROLE_LABELS[account.role]}
-                    </Badge>
-                    <Text fontSize="sm" color="fg.muted">
-                      {account.username}
-                    </Text>
-                  </HStack>
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    onClick={() => {
-                      setUsername(account.username);
-                      setPassword(account.password);
-                    }}
-                  >
-                    Use
-                  </Button>
-                </HStack>
-              ))}
-            </Stack>
-            <Alert.Root status="info" mt="3" size="sm">
-              <Alert.Indicator />
-              <Alert.Content>
-                <Alert.Description>
-                  A student account only exists once a Registrar has registered one — a student
-                  login requires a real <code>students</code> row, so no student is seeded.
-                </Alert.Description>
-              </Alert.Content>
-            </Alert.Root>
-          </Box>
-        ) : null}
-      </Box>
+          {demoAccounts.length > 0 ? (
+            <Box mt="8">
+              <Text fontSize="sm" fontWeight="medium" mb="4">
+                Demo accounts
+              </Text>
+              <Stack gap="2">
+                {demoAccounts.map((account, index) => (
+                  <StaggerItem key={account.username} index={index}>
+                    <HStack justify="space-between" gap="4">
+                      <HStack gap="2" minW="0">
+                        <RoleBadge role={account.role} />
+                        <Text fontSize="sm" color="fg.muted" truncate>
+                          {account.username}
+                        </Text>
+                      </HStack>
+                      <Button
+                        tone="neutral"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setUsername(account.username);
+                          setPassword(account.password);
+                        }}
+                      >
+                        Use
+                      </Button>
+                    </HStack>
+                  </StaggerItem>
+                ))}
+              </Stack>
+              <Alert.Root status="info" mt="6" size="sm">
+                <Alert.Indicator />
+                <Alert.Content>
+                  <Alert.Description>
+                    A student account only exists once a Registrar has registered one — a student
+                    login requires a real <code>students</code> row, so no student is seeded.
+                  </Alert.Description>
+                </Alert.Content>
+              </Alert.Root>
+            </Box>
+          ) : null}
+        </Box>
+      </FadeIn>
     </Center>
   );
 }

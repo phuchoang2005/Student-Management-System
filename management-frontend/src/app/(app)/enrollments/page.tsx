@@ -1,26 +1,20 @@
 'use client';
 
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  Code,
-  HStack,
-  Heading,
-  Input,
-  Stack,
-  Text,
-} from '@chakra-ui/react';
+import { Box, Code, HStack, Heading, Stack } from '@chakra-ui/react';
+import { ClipboardList, GraduationCap, Plus, Search, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 
 import ConfirmDialog from '@/components/ConfirmDialog';
 import DataTable from '@/components/DataTable';
 import ErrorBanner from '@/components/ErrorBanner';
+import FormField from '@/components/FormField';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import SearchInput from '@/components/SearchInput';
+import Button from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
+import SurfaceCard from '@/components/ui/SurfaceCard';
 import { courses, enrollments } from '@/lib/api/endpoints';
 import type { CourseSummary, Enrollment } from '@/lib/api/types';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -96,7 +90,8 @@ function RegistrarView() {
         description="Look a student up by their student code to see and manage the courses they are taking."
         actions={
           studentCode ? (
-            <Button size="sm" onClick={() => setEnrolling(true)}>
+            <Button onClick={() => setEnrolling(true)}>
+              <Plus strokeWidth={1.5} />
               Enroll in a course
             </Button>
           ) : undefined
@@ -104,45 +99,38 @@ function RegistrarView() {
       />
 
       <form onSubmit={onLookup}>
-          <Card.Root mb="6">
-          <Card.Body>
-            <HStack gap="2" align="flex-end">
-              <Box flex="1" maxW="20rem">
-                <Text fontSize="sm" mb="1">
-                  Student code
-                </Text>
-                <Input
-                  size="sm"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="e.g. S00123"
-                  aria-label="Student code"
-                  required
-                />
-              </Box>
-              <Button size="sm" type="submit">
-                Look up
-              </Button>
-            </HStack>
-          </Card.Body>
-        </Card.Root>
+        <SurfaceCard mb="8">
+          <HStack gap="4" align="flex-end">
+            <Box flex="1" maxW="20rem">
+              <FormField
+                label="Student code"
+                name="studentCode"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="e.g. S00123"
+                required
+              />
+            </Box>
+            <Button type="submit">
+              <Search strokeWidth={1.5} />
+              Look up
+            </Button>
+          </HStack>
+        </SurfaceCard>
       </form>
 
       <ErrorBanner error={resource.error} />
       <ErrorBanner error={endAction.error} />
 
       {!studentCode ? (
-        <Alert.Root status="info">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Description>
-              Enter a student code above. Every course that student is enrolled in will be listed.
-            </Alert.Description>
-          </Alert.Content>
-        </Alert.Root>
+        <EmptyState
+          icon={ClipboardList}
+          title="No student selected"
+          description="Enter a student code above. Every course that student is enrolled in will be listed here, ready to end or add to."
+        />
       ) : (
         <>
-          <Heading size="md" mb="3">
+          <Heading size="md" mb="4" fontWeight="semibold">
             Courses for <Code>{studentCode}</Code>
           </Heading>
           <DataTable<Enrollment>
@@ -173,9 +161,9 @@ function RegistrarView() {
                 align: 'end' as const,
                 cell: (row) => (
                   <Button
-                    size="xs"
+                    size="sm"
+                    tone="danger"
                     variant="outline"
-                    colorPalette="red"
                     onClick={(event) => {
                       event.stopPropagation();
                       setEnding(row);
@@ -189,7 +177,13 @@ function RegistrarView() {
             rows={resource.data?.content ?? []}
             keyOf={(row) => row.course.courseCode}
             loading={resource.loading}
-            empty="This student is not enrolled in any course."
+            empty={
+              <EmptyState
+                icon={GraduationCap}
+                title="Not enrolled in anything"
+                description={`${studentCode} is not taking any course yet. Use "Enroll in a course" above to add one.`}
+              />
+            }
             onRowClick={(row) =>
               router.push(`/courses/${encodeURIComponent(row.course.courseCode)}`)
             }
@@ -253,39 +247,37 @@ function EnrollDialog({
 
   return (
     <form onSubmit={onSubmit}>
-        <Card.Root mt="6">
-        <Card.Header>
-          <Card.Title>
+      <SurfaceCard
+        mt="8"
+        title={
+          <>
             Enroll <Code>{studentCode}</Code>
-          </Card.Title>
-        </Card.Header>
-        <Card.Body>
-          <Stack gap="3">
-            <ErrorBanner error={action.error} />
-            <HStack gap="2" align="flex-end">
-              <Box flex="1" maxW="20rem">
-                <Text fontSize="sm" mb="1">
-                  Course code
-                </Text>
-                <Input
-                  size="sm"
-                  value={courseCode}
-                  onChange={(e) => setCourseCode(e.target.value)}
-                  placeholder="e.g. CS101"
-                  aria-label="Course code"
-                  required
-                />
-              </Box>
-              <Button size="sm" type="submit" loading={action.pending}>
-                Enroll
-              </Button>
-              <Button size="sm" variant="outline" type="button" onClick={onClose}>
-                Cancel
-              </Button>
-            </HStack>
-          </Stack>
-        </Card.Body>
-      </Card.Root>
+          </>
+        }
+      >
+        <Stack gap="6">
+          <ErrorBanner error={action.error} />
+          <HStack gap="4" align="flex-end" wrap="wrap">
+            <Box flex="1" maxW="20rem">
+              <FormField
+                label="Course code"
+                name="courseCode"
+                value={courseCode}
+                onChange={(e) => setCourseCode(e.target.value)}
+                placeholder="e.g. CS101"
+                error={action.error?.fieldError('courseCode')}
+                required
+              />
+            </Box>
+            <Button type="submit" loading={action.pending}>
+              Enroll
+            </Button>
+            <Button tone="neutral" variant="outline" type="button" onClick={onClose}>
+              Cancel
+            </Button>
+          </HStack>
+        </Stack>
+      </SurfaceCard>
     </form>
   );
 }
@@ -336,18 +328,28 @@ function CourseAdminView() {
         rows={courseList.data?.content ?? []}
         keyOf={(row) => row.courseCode}
         loading={courseList.loading}
-        empty="No courses match that search."
+        empty={
+          <EmptyState
+            icon={GraduationCap}
+            title={courseList.query ? 'No courses match that search' : 'No courses yet'}
+            description={
+              courseList.query
+                ? 'Try a different course code or name.'
+                : 'Courses are created on the Courses tab; enrollments follow from there.'
+            }
+          />
+        }
         onRowClick={(row) => setSelected(row)}
       />
       <Pagination data={courseList.data} page={courseList.page} onPageChange={courseList.setPage} />
 
       {selected ? (
         <Box mt="8">
-          <HStack justify="space-between" mb="3">
-            <Heading size="md">
+          <HStack justify="space-between" mb="4" gap="4">
+            <Heading size="md" fontWeight="semibold">
               Enrolled in <Code>{selected.courseCode}</Code> — {selected.name}
             </Heading>
-            <Button size="xs" variant="outline" onClick={() => setSelected(null)}>
+            <Button size="sm" tone="neutral" variant="outline" onClick={() => setSelected(null)}>
               Clear
             </Button>
           </HStack>
@@ -376,7 +378,13 @@ function CourseAdminView() {
             rows={roster.data?.content ?? []}
             keyOf={(row) => row.student.studentCode}
             loading={roster.loading}
-            empty="No students are enrolled in this course."
+            empty={
+              <EmptyState
+                icon={Users}
+                title="No students enrolled"
+                description="Nobody is taking this course yet. The Registrar enrolls students from their side of this tab."
+              />
+            }
             onRowClick={(row) =>
               router.push(`/students/${encodeURIComponent(row.student.studentCode)}`)
             }

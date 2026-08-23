@@ -86,3 +86,14 @@ npm run build       # production build
 There are no automated frontend tests: the backend carries the test burden
 ([`docs/Testing/`](../docs/Testing/)), and duplicating it here buys nothing for a demo. The
 verification checklist in the frontend strategy doc is the manual counterpart.
+
+`npm run lint` is currently dead — `next lint` was removed in Next.js 16 and this project has no
+ESLint config or dependency. `npm run typecheck` and `npm run build` are the real gates.
+
+## Design system
+
+The UI implements [`docs/UI-UX/02-Japanese-Zen-Design.md`](../docs/UI-UX/02-Japanese-Zen-Design.md)
+through Chakra tokens and recipes in `src/theme/system.ts` — there is still no stylesheet of our
+own. Geist (self-hosted via the `geist` package), Lucide for icons, and Framer Motion for the small
+amount of motion §8 permits. `docs/UI-UX/01-frontend-strategy.md` §7.6 explains the four
+non-obvious constraints before you edit the theme.
