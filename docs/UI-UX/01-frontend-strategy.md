@@ -314,8 +314,10 @@ management-frontend/
     ├── components/
     │   ├── AppShell.tsx    DataTable.tsx     Pagination.tsx   PageHeader.tsx
     │   ├── RecordCard.tsx  SearchInput.tsx   ErrorBanner.tsx  Forbidden.tsx
-    │   └── FormDialog.tsx  ConfirmDialog.tsx FormField.tsx
-    │       StudentFormDialog.tsx  CourseFormDialog.tsx  BookFormDialog.tsx
+    │   ├── FormDialog.tsx  ConfirmDialog.tsx FormField.tsx
+    │   │   StudentFormDialog.tsx  CourseFormDialog.tsx  BookFormDialog.tsx
+    │   ├── ui/      { Button, SurfaceCard, RoleBadge, Tooltip, EmptyState, ThemeToggle }
+    │   └── motion/  { motion-config, FadeIn, Stagger, PageTransition, Reveal } — §7.6
     ├── lib/api/    { client.ts, endpoints.ts, types.ts }
     ├── lib/auth/   { AuthContext.tsx, RequireAuth.tsx, permissions.ts }
     ├── lib/hooks/  { usePagedResource.ts, useResource.ts, useAsyncAction.ts }
@@ -356,11 +358,25 @@ Rule 2 is also why `/change-password` sits **outside** the `(app)` route group, 
 
 ### 7.5 Styling
 
-Chakra's default system with a small `defineConfig` overlay (`theme/system.ts`): a body font stack and an accent ramp. `next-themes` drives light/dark from the OS. No stylesheet of our own.
+Chakra's default system with a `defineConfig` overlay (`theme/system.ts`) that implements [02-Japanese-Zen-Design.md](02-Japanese-Zen-Design.md) — see §7.6. `next-themes` drives light/dark from the OS, with a toggle in the topbar. Still no stylesheet of our own: the whole design system is tokens and recipes.
 
 Chakra styles through Emotion, which has no first-class App Router support yet, so `app/emotion-registry.tsx` supplies the registry Next's CSS-in-JS guide prescribes: a cache with `compat = true` (which makes Emotion's server branch cache rules and return `null` instead of emitting a `<style>` element inline), plus `useServerInsertedHTML` to re-emit those rules into `<head>`. Without it every SSR page ships ~50 KB of `<style>` tags inside `<body>` that the client never renders — tags React has to reconcile away on hydration, and which are what a hydration mismatch elsewhere in the tree ends up being reported against. The `data-emotion` attributes it writes are load-bearing: Emotion's browser code looks up `style[data-emotion="css-global <name>"]` to adopt a node instead of duplicating it, and `createCache` scans `style[data-emotion]` to learn which rules are already in the document.
 
-A role `Badge` in the topbar, colour-keyed per role, makes "who am I logged in as" readable at a glance — which matters more than it sounds during a role-switching demo.
+A role `Badge` in the topbar makes "who am I logged in as" readable at a glance — which matters more than it sounds during a role-switching demo. It is deliberately *not* colour-keyed per role any more: five hues is four accents more than §5 of the Zen spec allows, and the label already says "Registrar".
+
+### 7.6 The Zen design system
+
+[02-Japanese-Zen-Design.md](02-Japanese-Zen-Design.md) is the visual authority; `theme/system.ts` is its implementation. Four things are worth knowing before editing either:
+
+**One ramp re-colours everything.** Chakra derives `bg`, `fg`, `border`, and every neutral surface from `colors.gray.*`. The overlay repoints that ramp at `sumi`, a warm ink neutral whose 50 and 200 steps are the spec's `#F8F8F6` background and `#E5E5E5` border verbatim. Only `fg`, `bg.panel`, `bg.subtle` and `border` need an explicit override on top.
+
+**The accent cannot be used for text.** The spec's `#6B8E7A` is 3.3:1 on white and fails WCAG AA. `matcha.solid` therefore resolves to the 700 step (7.3:1), and the nominal accent is reserved for fills, borders, and indicators. Do not "correct" it back to 500.
+
+**Heavy weights are unreachable.** §4 permits 400/500/600, so `fontWeights.bold`, `.extrabold` and `.black` are all aliased to 600 rather than deleted — a recipe reaching for `bold` lands inside the spec instead of breaking.
+
+**Motion has one vocabulary.** `components/motion/motion-config.ts` owns every duration and easing in the app, and `useZenTransition()` returns a zero-duration transition under `prefers-reduced-motion`. There are no inline `transition={{...}}` objects anywhere in `src/` — that is what keeps §8's ban on bounce, spring, rotation and zoom enforceable rather than aspirational.
+
+Three primitives are new and should be reached for before composing Chakra directly: `ui/Button.tsx` (which is why no page passes `size="xs"`), `ui/SurfaceCard.tsx` (the one card), and `ui/EmptyState.tsx` (§13's icon + explanation + action).
 
 ---
 

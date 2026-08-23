@@ -3,6 +3,7 @@
 import { Alert, Code, Stack, Text } from '@chakra-ui/react';
 import { useEffect, useState, type FormEvent } from 'react';
 
+import FadeIn from './motion/FadeIn';
 import ErrorBanner from './ErrorBanner';
 import FormDialog from './FormDialog';
 import FormField from './FormField';
@@ -83,6 +84,7 @@ export default function StudentFormDialog({
           onSaved();
         }}
       >
+        <FadeIn>
         <Alert.Root status="success" mb="4">
           <Alert.Indicator />
           <Alert.Content>
@@ -104,6 +106,7 @@ export default function StudentFormDialog({
             Initial password: <Code>{registered.initialPassword}</Code>
           </Text>
         </Stack>
+        </FadeIn>
       </FormDialog>
     );
   }

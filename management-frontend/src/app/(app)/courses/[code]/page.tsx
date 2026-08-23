@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Button, Center, Code, Heading, Spinner, Stack } from '@chakra-ui/react';
+import { Box, Center, Code, Heading, Spinner, Stack } from '@chakra-ui/react';
+import { ArrowLeft, Users } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 
 import DataTable from '@/components/DataTable';
@@ -8,6 +9,8 @@ import ErrorBanner from '@/components/ErrorBanner';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import RecordCard from '@/components/RecordCard';
+import Button from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
 import { courses, enrollments } from '@/lib/api/endpoints';
 import type { Enrollment } from '@/lib/api/types';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -43,7 +46,7 @@ function CourseDetail() {
   if (loading) {
     return (
       <Center py="16">
-        <Spinner size="lg" />
+        <Spinner size="lg" color="fg.subtle" borderWidth="1.5px" />
       </Center>
     );
   }
@@ -54,7 +57,8 @@ function CourseDetail() {
         title={data ? data.name : code}
         description={data ? `${data.credits} credits` : undefined}
         actions={
-          <Button size="sm" variant="outline" onClick={() => router.back()}>
+          <Button tone="neutral" variant="outline" onClick={() => router.back()}>
+            <ArrowLeft strokeWidth={1.5} />
             Back
           </Button>
         }
@@ -63,7 +67,7 @@ function CourseDetail() {
       <ErrorBanner error={error} />
 
       {data ? (
-        <Stack gap="6">
+        <Stack gap="8">
           <RecordCard
             title="Course"
             fields={[
@@ -90,7 +94,7 @@ function Roster({ code }: { code: string }) {
 
   return (
     <Box>
-      <Heading size="md" mb="3">
+      <Heading size="md" mb="4" fontWeight="semibold">
         Enrolled students
       </Heading>
       <ErrorBanner error={resource.error} />
@@ -118,7 +122,13 @@ function Roster({ code }: { code: string }) {
         rows={resource.data?.content ?? []}
         keyOf={(row) => row.student.studentCode}
         loading={resource.loading}
-        empty="No students are enrolled in this course."
+        empty={
+          <EmptyState
+            icon={Users}
+            title="No students enrolled"
+            description="Nobody is taking this course yet. Enrollments are made from the Enrollments tab."
+          />
+        }
         onRowClick={(row) => router.push(`/students/${encodeURIComponent(row.student.studentCode)}`)}
       />
       <Pagination data={resource.data} page={resource.page} onPageChange={resource.setPage} />

@@ -1,24 +1,17 @@
 'use client';
 
-import {
-  Box,
-  Button,
-  Card,
-  Center,
-  Code,
-  HStack,
-  Input,
-  Spinner,
-  Stack,
-  Text,
-} from '@chakra-ui/react';
+import { Box, Center, Code, HStack, Spinner, Stack, Text } from '@chakra-ui/react';
+import { ArrowLeft } from 'lucide-react';
 import NextLink from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 
 import ErrorBanner from '@/components/ErrorBanner';
+import FormField from '@/components/FormField';
 import PageHeader from '@/components/PageHeader';
 import RecordCard from '@/components/RecordCard';
+import Button from '@/components/ui/Button';
+import SurfaceCard from '@/components/ui/SurfaceCard';
 import { books } from '@/lib/api/endpoints';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { can } from '@/lib/auth/permissions';
@@ -47,7 +40,7 @@ function BookDetail() {
   if (loading) {
     return (
       <Center py="16">
-        <Spinner size="lg" />
+        <Spinner size="lg" color="fg.subtle" borderWidth="1.5px" />
       </Center>
     );
   }
@@ -58,7 +51,8 @@ function BookDetail() {
         title={data ? data.title : isbn}
         description={data ? data.author : undefined}
         actions={
-          <Button size="sm" variant="outline" onClick={() => router.back()}>
+          <Button tone="neutral" variant="outline" onClick={() => router.back()}>
+            <ArrowLeft strokeWidth={1.5} />
             Back
           </Button>
         }
@@ -67,7 +61,7 @@ function BookDetail() {
       <ErrorBanner error={error} />
 
       {data ? (
-        <Stack gap="6">
+        <Stack gap="8">
           <RecordCard
             title="Book"
             fields={[
@@ -143,54 +137,45 @@ function OwnershipControls({
   };
 
   return (
-    <Card.Root>
-      <Card.Header>
-        <Card.Title>Ownership</Card.Title>
-      </Card.Header>
-      <Card.Body>
-        <Stack gap="4">
-          <ErrorBanner error={assign.error} />
-          <ErrorBanner error={release.error} />
+    <SurfaceCard title="Ownership">
+      <Stack gap="6">
+        <ErrorBanner error={assign.error} />
+        <ErrorBanner error={release.error} />
 
-          <form onSubmit={onAssign}>
-            <HStack gap="2" align="flex-end">
-              <Box flex="1">
-                <Text fontSize="sm" mb="1">
-                  {currentOwner ? 'Reassign to student code' : 'Assign to student code'}
-                </Text>
-                <Input
-                  size="sm"
-                  value={studentCode}
-                  onChange={(e) => setStudentCode(e.target.value)}
-                  placeholder="e.g. S00123"
-                  aria-label="Student code"
-                  required
-                />
-              </Box>
-              <Button size="sm" type="submit" loading={assign.pending}>
-                {currentOwner ? 'Reassign' : 'Assign'}
-              </Button>
-            </HStack>
-          </form>
-
-          <HStack justify="space-between">
-            <Text fontSize="sm" color="fg.muted">
-              {currentOwner
-                ? `Currently held by ${currentOwner}.`
-                : 'This book is on the shelf.'}
-            </Text>
-            <Button
-              size="sm"
-              variant="outline"
-              loading={release.pending}
-              disabled={!currentOwner}
-              onClick={onRelease}
-            >
-              Release
+        <form onSubmit={onAssign}>
+          <HStack gap="4" align="flex-end">
+            <Box flex="1">
+              <FormField
+                label={currentOwner ? 'Reassign to student code' : 'Assign to student code'}
+                name="studentCode"
+                value={studentCode}
+                onChange={(e) => setStudentCode(e.target.value)}
+                placeholder="e.g. S00123"
+                error={assign.error?.fieldError('studentCode')}
+                required
+              />
+            </Box>
+            <Button type="submit" loading={assign.pending}>
+              {currentOwner ? 'Reassign' : 'Assign'}
             </Button>
           </HStack>
-        </Stack>
-      </Card.Body>
-    </Card.Root>
+        </form>
+
+        <HStack justify="space-between" gap="4">
+          <Text fontSize="sm" color="fg.muted">
+            {currentOwner ? `Currently held by ${currentOwner}.` : 'This book is on the shelf.'}
+          </Text>
+          <Button
+            tone="neutral"
+            variant="outline"
+            loading={release.pending}
+            disabled={!currentOwner}
+            onClick={onRelease}
+          >
+            Release
+          </Button>
+        </HStack>
+      </Stack>
+    </SurfaceCard>
   );
 }

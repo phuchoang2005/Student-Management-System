@@ -1,11 +1,11 @@
 'use client';
 
-import { Stack, Textarea } from '@chakra-ui/react';
+import { Stack } from '@chakra-ui/react';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import ErrorBanner from './ErrorBanner';
 import FormDialog from './FormDialog';
-import FormField from './FormField';
+import FormField, { TextareaField } from './FormField';
 import { courses } from '@/lib/api/endpoints';
 import type { CourseSummary } from '@/lib/api/types';
 import useAsyncAction from '@/lib/hooks/useAsyncAction';
@@ -93,13 +93,14 @@ export default function CourseFormDialog({
           error={action.error?.fieldError('credits')}
           required
         />
-        <Textarea
+        <TextareaField
+          label="Description"
           name="description"
-          placeholder="Description (optional)"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
+          error={action.error?.fieldError('description')}
           rows={3}
-          aria-label="Description"
+          helper="Optional."
         />
       </Stack>
     </FormDialog>

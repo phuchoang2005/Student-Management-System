@@ -1,27 +1,22 @@
 'use client';
 
-import {
-  Alert,
-  Badge,
-  Box,
-  Button,
-  Card,
-  Code,
-  HStack,
-  Input,
-  NativeSelect,
-  Stack,
-  Text,
-} from '@chakra-ui/react';
+import { Alert, Badge, Box, Code, HStack, Stack, Text } from '@chakra-ui/react';
+import { ShieldCheck } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 
 import DataTable from '@/components/DataTable';
 import ErrorBanner from '@/components/ErrorBanner';
+import Reveal from '@/components/motion/Reveal';
+import FormField, { SelectField } from '@/components/FormField';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
+import Button from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
+import RoleBadge from '@/components/ui/RoleBadge';
+import SurfaceCard from '@/components/ui/SurfaceCard';
 import { staffAccounts } from '@/lib/api/endpoints';
 import type { Role, StaffAccountCreated, StaffAccountSummary } from '@/lib/api/types';
-import { ROLE_COLORS, ROLE_LABELS } from '@/lib/auth/permissions';
+import { ROLE_LABELS } from '@/lib/auth/permissions';
 import RequireAuth from '@/lib/auth/RequireAuth';
 import useAsyncAction from '@/lib/hooks/useAsyncAction';
 import usePagedResource from '@/lib/hooks/usePagedResource';
@@ -82,66 +77,54 @@ function StaffAccounts() {
       <ErrorBanner error={statusAction.error} />
 
       <form onSubmit={onCreate}>
-          <Card.Root mb="6">
-          <Card.Header>
-            <Card.Title>New staff account</Card.Title>
-          </Card.Header>
-          <Card.Body>
-            <Stack gap="3">
-              <ErrorBanner error={createAction.error} />
-              <HStack gap="2" align="flex-end" wrap="wrap">
-                <Box flex="1" minW="14rem">
-                  <Text fontSize="sm" mb="1">
-                    Username
-                  </Text>
-                  <Input
-                    size="sm"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="e.g. j.smith"
-                    aria-label="Username"
-                    required
-                  />
-                </Box>
-                <Box minW="12rem">
-                  <Text fontSize="sm" mb="1">
-                    Role
-                  </Text>
-                  <NativeSelect.Root size="sm">
-                    <NativeSelect.Field
-                      value={role}
-                      onChange={(e) => setRole(e.currentTarget.value as Role)}
-                      aria-label="Role"
-                    >
-                      {STAFF_ROLES.map((value) => (
-                        <option key={value} value={value}>
-                          {ROLE_LABELS[value]}
-                        </option>
-                      ))}
-                    </NativeSelect.Field>
-                    <NativeSelect.Indicator />
-                  </NativeSelect.Root>
-                </Box>
-                <Button size="sm" type="submit" loading={createAction.pending}>
-                  Create
-                </Button>
-              </HStack>
-            </Stack>
-          </Card.Body>
-        </Card.Root>
+        <SurfaceCard title="New staff account" mb="8">
+          <Stack gap="6">
+            <ErrorBanner error={createAction.error} />
+            <HStack gap="4" align="flex-end" wrap="wrap">
+              <Box flex="1" minW="14rem">
+                <FormField
+                  label="Username"
+                  name="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="e.g. j.smith"
+                  error={createAction.error?.fieldError('username')}
+                  required
+                />
+              </Box>
+              <Box minW="12rem">
+                <SelectField
+                  label="Role"
+                  name="role"
+                  value={role}
+                  onChange={(e) => setRole(e.currentTarget.value as Role)}
+                >
+                  {STAFF_ROLES.map((value) => (
+                    <option key={value} value={value}>
+                      {ROLE_LABELS[value]}
+                    </option>
+                  ))}
+                </SelectField>
+              </Box>
+              <Button type="submit" loading={createAction.pending}>
+                Create
+              </Button>
+            </HStack>
+          </Stack>
+        </SurfaceCard>
       </form>
 
-      {created ? (
+      <Reveal show={!!created}>
         <Alert.Root status="success" mb="6">
           <Alert.Indicator />
           <Alert.Content>
             <Alert.Title>Account created — password shown once</Alert.Title>
             <Alert.Description>
               <Text>
-                Username: <Code>{created.username}</Code>
+                Username: <Code>{created?.username}</Code>
               </Text>
               <Text>
-                Initial password: <Code>{created.initialPassword}</Code>
+                Initial password: <Code>{created?.initialPassword}</Code>
               </Text>
               <Text mt="2" fontSize="sm">
                 Unlike a student&rsquo;s, a staff initial password has no lookup path afterwards.
@@ -150,7 +133,7 @@ function StaffAccounts() {
             </Alert.Description>
           </Alert.Content>
         </Alert.Root>
-      ) : null}
+      </Reveal>
 
       <DataTable<StaffAccountSummary>
         columns={[
@@ -160,9 +143,7 @@ function StaffAccounts() {
             header: 'Role',
             width: '11rem',
             cell: (row) => (
-              <Badge colorPalette={ROLE_COLORS[row.role]} variant="subtle">
-                {ROLE_LABELS[row.role]}
-              </Badge>
+              <RoleBadge role={row.role} />
             ),
           },
           {
@@ -170,7 +151,7 @@ function StaffAccounts() {
             header: 'Status',
             width: '8rem',
             cell: (row) => (
-              <Badge colorPalette={row.enabled ? 'green' : 'gray'} variant="subtle">
+              <Badge colorPalette="gray" variant={row.enabled ? 'solid' : 'outline'}>
                 {row.enabled ? 'Active' : 'Disabled'}
               </Badge>
             ),
@@ -182,9 +163,9 @@ function StaffAccounts() {
             align: 'end' as const,
             cell: (row) => (
               <Button
-                size="xs"
+                size="sm"
+                tone={row.enabled ? 'danger' : 'neutral'}
                 variant="outline"
-                colorPalette={row.enabled ? 'red' : undefined}
                 onClick={() => toggle(row)}
               >
                 {row.enabled ? 'Deactivate' : 'Reactivate'}
@@ -195,7 +176,13 @@ function StaffAccounts() {
         rows={resource.data?.content ?? []}
         keyOf={(row) => String(row.id)}
         loading={resource.loading}
-        empty="No staff accounts yet."
+        empty={
+          <EmptyState
+            icon={ShieldCheck}
+            title="No staff accounts yet"
+            description="Create a Registrar, Librarian, or Course Administrator login above to give someone access to the system."
+          />
+        }
       />
 
       <Pagination data={resource.data} page={resource.page} onPageChange={resource.setPage} />

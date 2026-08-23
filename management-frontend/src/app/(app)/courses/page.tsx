@@ -1,6 +1,7 @@
 'use client';
 
-import { Box, Button, Code, Stack } from '@chakra-ui/react';
+import { Box, Code, Stack } from '@chakra-ui/react';
+import { GraduationCap, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -11,6 +12,8 @@ import ErrorBanner from '@/components/ErrorBanner';
 import PageHeader from '@/components/PageHeader';
 import Pagination from '@/components/Pagination';
 import SearchInput from '@/components/SearchInput';
+import Button from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
 import { courses, me } from '@/lib/api/endpoints';
 import type { CourseSummary } from '@/lib/api/types';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -71,7 +74,8 @@ function Courses() {
         }
         actions={
           mayWrite ? (
-            <Button size="sm" onClick={() => setCreating(true)}>
+            <Button onClick={() => setCreating(true)}>
+              <Plus strokeWidth={1.5} />
               Create course
             </Button>
           ) : undefined
@@ -107,10 +111,10 @@ function Courses() {
                   width: '10rem',
                   align: 'end' as const,
                   cell: (row: CourseSummary) => (
-                    <Stack direction="row" gap="1" justify="flex-end">
+                    <Stack direction="row" gap="2" justify="flex-end">
                       <Button
-                        size="xs"
-                        variant="outline"
+                        size="sm"
+                        tone="neutral" variant="outline"
                         onClick={(event) => {
                           event.stopPropagation();
                           setEditing(row);
@@ -119,9 +123,9 @@ function Courses() {
                         Edit
                       </Button>
                       <Button
-                        size="xs"
+                        size="sm"
+                        tone="danger"
                         variant="outline"
-                        colorPalette="red"
                         onClick={(event) => {
                           event.stopPropagation();
                           setDeleting(row);
@@ -138,7 +142,33 @@ function Courses() {
         rows={resource.data?.content ?? []}
         keyOf={(row) => row.courseCode}
         loading={resource.loading}
-        empty={isStudent ? 'You are not enrolled in any course yet.' : 'No courses match that search.'}
+        empty={
+          <EmptyState
+            icon={GraduationCap}
+            title={
+              isStudent
+                ? 'You are not enrolled in any course yet'
+                : resource.query
+                  ? 'No courses match that search'
+                  : 'No courses yet'
+            }
+            description={
+              isStudent
+                ? 'Once the registrar enrolls you, your courses will appear here.'
+                : resource.query
+                  ? 'Try a different course code or name.'
+                  : 'Create the first course to begin building the catalogue.'
+            }
+            action={
+              mayWrite && !resource.query ? (
+                <Button onClick={() => setCreating(true)}>
+                  <Plus strokeWidth={1.5} />
+                  Create course
+                </Button>
+              ) : undefined
+            }
+          />
+        }
         onRowClick={(row) => router.push(`/courses/${encodeURIComponent(row.courseCode)}`)}
       />
 

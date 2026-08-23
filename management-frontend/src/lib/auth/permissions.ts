@@ -8,6 +8,9 @@
  * Reads are granted **per resource**, not as one undifferentiated "domain read": each role sees the
  * data its own work needs and nothing else (02-component-diagram.md §4).
  */
+import type { LucideIcon } from 'lucide-react';
+import { BookOpen, ClipboardList, GraduationCap, KeyRound, ShieldCheck, Users } from 'lucide-react';
+
 import type { Role } from '@/lib/api/types';
 
 export const ROLES: Record<Role, Role> = {
@@ -70,19 +73,16 @@ export const ROLE_LABELS: Record<Role, string> = {
   SYSTEM_ADMINISTRATOR: 'System Admin',
 };
 
-export const ROLE_COLORS: Record<Role, string> = {
-  REGISTRAR: 'blue',
-  LIBRARIAN: 'green',
-  COURSE_ADMINISTRATOR: 'purple',
-  STUDENT: 'orange',
-  SYSTEM_ADMINISTRATOR: 'red',
-};
-
 export interface NavItem {
   href: string;
   label: string;
   /** Which roles see the item. Not derived from a capability: see `roles` on `/students` below. */
   roles: Role[];
+  /**
+   * One outline glyph from Lucide (§7 — a single icon library, used consistently). The icon is
+   * decorative: the label is always rendered beside it, so it never carries meaning on its own.
+   */
+  icon: LucideIcon;
 }
 
 /**
@@ -97,16 +97,28 @@ export const NAV_ITEMS: NavItem[] = [
   {
     href: '/students',
     label: 'Students',
+    icon: Users,
     // STUDENT sees this item, but it renders their own record directly rather than a list.
     roles: ['REGISTRAR', 'LIBRARIAN', 'STUDENT'],
   },
-  { href: '/books', label: 'Books', roles: ['LIBRARIAN', 'STUDENT'] },
-  { href: '/courses', label: 'Courses', roles: ['REGISTRAR', 'COURSE_ADMINISTRATOR', 'STUDENT'] },
-  { href: '/enrollments', label: 'Enrollments', roles: ['REGISTRAR', 'COURSE_ADMINISTRATOR'] },
-  { href: '/staff-accounts', label: 'Staff Accounts', roles: ['SYSTEM_ADMINISTRATOR'] },
+  { href: '/books', label: 'Books', icon: BookOpen, roles: ['LIBRARIAN', 'STUDENT'] },
+  {
+    href: '/courses',
+    label: 'Courses',
+    icon: GraduationCap,
+    roles: ['REGISTRAR', 'COURSE_ADMINISTRATOR', 'STUDENT'],
+  },
+  {
+    href: '/enrollments',
+    label: 'Enrollments',
+    icon: ClipboardList,
+    roles: ['REGISTRAR', 'COURSE_ADMINISTRATOR'],
+  },
+  { href: '/staff-accounts', label: 'Staff Accounts', icon: ShieldCheck, roles: ['SYSTEM_ADMINISTRATOR'] },
   {
     href: '/change-password',
     label: 'Change Password',
+    icon: KeyRound,
     roles: ['REGISTRAR', 'LIBRARIAN', 'COURSE_ADMINISTRATOR', 'STUDENT', 'SYSTEM_ADMINISTRATOR'],
   },
 ];

@@ -1,11 +1,15 @@
 'use client';
 
-import { Badge, Box, Button, Flex, HStack, Heading, Stack, Text } from '@chakra-ui/react';
+import { Box, Flex, HStack, Heading, Icon, Stack, Text } from '@chakra-ui/react';
 import NextLink from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
+import PageTransition from '@/components/motion/PageTransition';
+import Button from '@/components/ui/Button';
+import RoleBadge from '@/components/ui/RoleBadge';
+import ThemeToggle from '@/components/ui/ThemeToggle';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { ROLE_COLORS, ROLE_LABELS, navItemsFor } from '@/lib/auth/permissions';
+import { navItemsFor } from '@/lib/auth/permissions';
 
 /**
  * Sidebar + topbar + page slot.
@@ -14,6 +18,10 @@ import { ROLE_COLORS, ROLE_LABELS, navItemsFor } from '@/lib/auth/permissions';
  * Administrator sees Courses and Enrollments, a System Administrator sees exactly two items. During
  * a role-switching demo the nav *is* the explanation, so it's rendered from the same list the route
  * guards consult (`permissions.ts`) rather than a hand-kept copy.
+ *
+ * The chrome itself is deliberately quiet (§15): one hairline under the topbar, one down the side of
+ * the nav, and no fill anywhere except on the active item. Only the page slot animates — a shell
+ * that re-enters on every navigation would be the app performing rather than responding.
  */
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { session, logout } = useAuth();
@@ -33,23 +41,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         as="header"
         align="center"
         justify="space-between"
-        px="6"
-        py="3"
+        px="8"
+        py="4"
         borderBottomWidth="1px"
+        borderColor="border"
         bg="bg.panel"
-        gap="4"
+        gap="6"
       >
-        <Heading size="md">Student Management</Heading>
-        <HStack gap="3">
+        <Heading size="md" fontWeight="semibold" letterSpacing="-0.01em">
+          Student Management
+        </Heading>
+        <HStack gap="4">
           {session ? (
             <>
-              <Badge colorPalette={ROLE_COLORS[session.role]} variant="subtle">
-                {ROLE_LABELS[session.role]}
-              </Badge>
+              <RoleBadge role={session.role} />
               <Text fontSize="sm" color="fg.muted" maxW="16rem" truncate>
                 {session.username}
               </Text>
-              <Button size="xs" variant="outline" onClick={handleLogout}>
+              <ThemeToggle />
+              <Button tone="neutral" variant="outline" size="sm" onClick={handleLogout}>
                 Log out
               </Button>
             </>
@@ -64,10 +74,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           w="15rem"
           flexShrink={0}
           borderRightWidth="1px"
+          borderColor="border"
           bg="bg.panel"
-          p="3"
+          p="4"
         >
-          <Stack gap="1">
+          <Stack gap="2">
             {items.map((item) => {
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
@@ -75,11 +86,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   key={item.href}
                   asChild
                   size="sm"
+                  tone="neutral"
                   justifyContent="flex-start"
+                  fontWeight={active ? 'medium' : 'normal'}
                   variant={active ? 'subtle' : 'ghost'}
-                  colorPalette={active ? 'blue' : undefined}
+                  color={active ? 'accent.fg' : 'fg.muted'}
+                  bg={active ? 'accent.subtle' : undefined}
+                  _hover={{ bg: active ? 'accent.subtle' : 'bg.muted', color: 'fg' }}
                 >
                   <NextLink href={item.href} aria-current={active ? 'page' : undefined}>
+                    <Icon as={item.icon} boxSize="4" strokeWidth={1.5} aria-hidden />
                     {item.label}
                   </NextLink>
                 </Button>
@@ -88,8 +104,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </Stack>
         </Box>
 
-        <Box as="main" flex="1" p="6" maxW="72rem">
-          {children}
+        {/* §2: 1200–1440px of content, generous outer margins. */}
+        <Box as="main" flex="1" px="8" py="8" maxW="80rem" w="full">
+          <PageTransition>{children}</PageTransition>
         </Box>
       </Flex>
     </Flex>
