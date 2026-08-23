@@ -123,6 +123,7 @@ A login identity that lets an actor authenticate into the system. Every actor (S
 5. Until an account holder replaces their initial password, the Registrar may look up that initial password on demand. This access ends permanently the moment the password is replaced.
 6. A staff account (Registrar, Librarian, Course Administrator) is created only by a System Administrator, never automatically and never by self-registration. A System Administrator account itself is never created through the application.
 7. A System Administrator may disable a staff account at any time; a disabled account cannot log in until a System Administrator re-enables it. Disabling an account does not delete it or affect any records the account holder previously created.
+8. A System Administrator may see which accounts are signed in at any moment, and may end any signed-in session other than their own. Ending a session revokes only that session: the account itself is untouched and its holder may sign in again immediately. Ending a session is not the same as disabling an account (Identity.7) — disabling prevents the *next* sign-in and leaves the current session running, while ending a session stops the current one and permits the next.
 
 ---
 

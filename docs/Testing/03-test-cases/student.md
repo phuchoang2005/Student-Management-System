@@ -262,14 +262,45 @@ Covers **UC-1** (Register Student), **UC-2** (Update Student Details), **UC-3** 
 
 ---
 
+---
+
+## 6. Regressions
+
+Cases that exist because the behaviour they describe was once wrong. Each fails against the defect it names.
+
+### TC-STU-035 — Editing a student opens with the existing date of birth
+- **Related UC / Rule:** UC-2 / US-1.2
+- **Priority:** P0 · **Type:** Regression
+- **Preconditions:** A registered student with a known date of birth.
+- **Steps:** As Registrar, open the student list and press Edit on that student.
+- **Expected Result:** Every field is pre-filled, **including date of birth**. Submitting a changed name succeeds and both the list and the detail page show it.
+- **The defect:** the dialog was typed on `StudentSummary`, which carries no `dateOfBirth`, so the field opened empty. Being `required`, the browser's own constraint check then blocked submission before any handler ran — the Save button appeared to do nothing at all. Note this is *not* reproducible through the API: the `PUT` was always correct.
+
+### TC-STU-036 — A course's description survives an edit
+- **Related UC / Rule:** UC-9 / US-3.2
+- **Priority:** P0 · **Type:** Regression
+- **Steps:** As Course Administrator, edit a course that has a description, changing only its name.
+- **Expected Result:** The description is pre-filled and unchanged after saving.
+- **The defect:** the same shape as TC-STU-035 on `CourseFormDialog`, and quieter — `description` is not `required`, so the form submitted happily and wrote the blank back, destroying the text rather than refusing to save.
+
+### TC-STU-037 — Registration time does not move when the record is edited
+- **Related UC / Rule:** UC-1, UC-2
+- **Priority:** P0 · **Type:** Regression
+- **Steps:** Register a student and note `createdAt`; update them twice; read `createdAt` again. Cross-check `SELECT created_at FROM students` directly.
+- **Expected Result:** Unchanged, and matching the wall clock at registration. The stored column holds UTC.
+- **The defect:** reads converted MySQL's zoneless `DATETIME` at the JVM's default zone while writes used UTC, so every read was off by the offset — and because the value read was written back on update, the error compounded once per `version`. See TC-XC-046–048 for the round-trip cases; this one is the user-visible symptom that was reported.
+
+---
+
 ## Traceability Summary
 
 | UC / US | Test Case IDs |
 | --- | --- |
 | UC-1 / US-1.1 | TC-STU-001–012 |
-| UC-2 / US-1.2 | TC-STU-013–020 |
+| UC-2 / US-1.2 | TC-STU-013–020, TC-STU-035, TC-STU-037 |
 | UC-3 / US-1.3 | TC-STU-021–026 |
 | UC-13 / US-5.1 | TC-STU-027–029, TC-STU-032–034 |
 | UC-17 / US-5.1 | TC-STU-030–031 |
+| UC-9 / US-3.2 (regression only) | TC-STU-036 — see [course.md](./course.md) for UC-9's own coverage |
 
 Role-based access (who may call each endpoint) for this module: see [cross-cutting.md](./cross-cutting.md) §1.

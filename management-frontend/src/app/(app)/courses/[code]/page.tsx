@@ -74,6 +74,7 @@ function CourseDetail() {
               { label: 'Course code', value: <Code>{data.courseCode}</Code> },
               { label: 'Name', value: data.name },
               { label: 'Credits', value: data.credits },
+              { label: 'Students enrolled', value: data.enrolledCount },
               { label: 'Description', value: data.description || '—' },
               { label: 'Created', value: new Date(data.createdAt).toLocaleString() },
             ]}

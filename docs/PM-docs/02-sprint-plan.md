@@ -126,3 +126,16 @@ Every item in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list
 Epic H (PM-019–024, 34h) was added after this plan was written and after v1.0 shipped, in response to walking the finished demo UI role by role. It is scoped and decomposed in [01-product-backlog.md](./01-product-backlog.md) §8a and [04-sprint-backlog.md](./04-sprint-backlog.md) §7 rather than being retrofitted into the timeline above — the four sprints here were planned against the specification as it stood, and rewriting them to include work that came out of using the product would misrepresent what was known when.
 
 What the walkthrough surfaced, and reading the specification had not: every domain role could read every domain resource, so each role's screens showed data it had no reason to see; and two endpoints made the operator handle database ids. Both are narrowings of existing use cases rather than new ones, which is why Epic H adds no UC.
+
+---
+
+## Addendum — Sprint 6 (unplanned)
+
+Epic I (PM-025–028, US-4.3, US-7.3/7.4, 28h) was added after Sprint 5, and follows the same rule as the Sprint 5 addendum: it is scoped in [01-product-backlog.md](./01-product-backlog.md) §8b and decomposed in [04-sprint-backlog.md](./04-sprint-backlog.md) §9, not retrofitted into the four planned sprints above.
+
+Where Sprint 5's work came from *demoing* the product, this came from *using* it, and the difference shows in what each surfaced. A walkthrough finds things that look wrong on screen — breadth of access, ids where names belong. Using it finds things that only go wrong over time: a registration timestamp that drifted a little further with every edit and so looked plausible in any single sitting, and an edit form whose Save button did nothing at all because a field the dialog never loaded was also `required`.
+
+Two consequences worth recording for planning purposes rather than for the code:
+
+- **The two bug fixes (PM-025, PM-026) cost 7h of the 28h**, and neither was visible from the specification, the test suite, or a demo script. The test suite in particular was actively hiding PM-025: it bound its database without a time zone, so both halves of every round trip used the same wrong one and every assertion passed.
+- **Epic I adds the first new business rule since the original set** (`Identity.8`) and the first new use cases since UC-25. Previous unplanned work had only narrowed or re-keyed what already existed, so this is also the first addendum that required editing `req.md`.

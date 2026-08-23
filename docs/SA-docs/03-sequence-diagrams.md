@@ -194,12 +194,12 @@ sequenceDiagram
     Svc->>Repo: findByCodeOrNameOrEmail(query, pageable)
     Repo->>DB: SELECT ... WHERE ... LIMIT/OFFSET (+ COUNT for totalElements)
     DB-->>Repo: rows + count
-    Repo-->>Svc: Page<Student>
+    Repo-->>Svc: Page[Student]
     alt no match / page past the end
         Svc-->>Ctrl: empty page
         Ctrl-->>Registrar: 200 OK ({content: [], page, size, totalElements: 0, totalPages: 0})
     else match(es) found
-        Svc-->>Ctrl: Page<StudentSummary>
+        Svc-->>Ctrl: Page[StudentSummary]
         Ctrl-->>Registrar: 200 OK ({content: [summaries], page, size, totalElements, totalPages})
     end
     Note over Registrar: Selecting a result continues at UC-17 (§2.5)
@@ -281,7 +281,7 @@ sequenceDiagram
     else ISBN unique
         opt ownerStudentCode specified
             Svc->>Lookup: idOf(ownerStudentCode)
-            Lookup-->>Svc: Optional&lt;StudentId&gt;
+            Lookup-->>Svc: Optional[StudentId]
             alt owner does not exist (Book.4)
                 Svc-->>Ctrl: UnknownStudentException
                 Ctrl-->>Librarian: 400 Bad Request
@@ -317,7 +317,7 @@ sequenceDiagram
     Sec->>Ctrl: forward request (auth gate as in §2.1)
     Ctrl->>Svc: assignOwner(isbn, studentCode)
     Svc->>Lookup: idOf(studentCode)
-    Lookup-->>Svc: Optional&lt;StudentId&gt;
+    Lookup-->>Svc: Optional[StudentId]
     alt target student does not exist (Book.4)
         Svc-->>Ctrl: UnknownStudentException
         Ctrl-->>Librarian: 400 Bad Request
@@ -414,12 +414,12 @@ sequenceDiagram
     Svc->>Repo: findByIsbnOrTitleOrAuthor(query, ownerFilter, pageable)
     Repo->>DB: SELECT ... WHERE ... LIMIT/OFFSET (+ COUNT for totalElements)
     DB-->>Repo: rows + count
-    Repo-->>Svc: Page<Book>
+    Repo-->>Svc: Page[Book]
     alt no match / page past the end
         Svc-->>Ctrl: empty page
         Ctrl-->>Librarian: 200 OK ({content: [], page, size, totalElements: 0, totalPages: 0})
     else match(es) found
-        Svc-->>Ctrl: Page<BookSummary>
+        Svc-->>Ctrl: Page[BookSummary]
         Ctrl-->>Librarian: 200 OK ({content: [summaries], page, size, totalElements, totalPages})
     end
     Note over Librarian: Selecting a result continues at UC-18 (§3.6)
@@ -590,12 +590,12 @@ sequenceDiagram
     Svc->>Repo: findByCodeOrName(query, pageable)
     Repo->>DB: SELECT ... WHERE ... LIMIT/OFFSET (+ COUNT for totalElements)
     DB-->>Repo: rows + count
-    Repo-->>Svc: Page<Course>
+    Repo-->>Svc: Page[Course]
     alt no match / page past the end
         Svc-->>Ctrl: empty page
         Ctrl-->>CourseAdmin: 200 OK ({content: [], page, size, totalElements: 0, totalPages: 0})
     else match(es) found
-        Svc-->>Ctrl: Page<CourseSummary>
+        Svc-->>Ctrl: Page[CourseSummary]
         Ctrl-->>CourseAdmin: 200 OK ({content: [summaries], page, size, totalElements, totalPages})
     end
     Note over CourseAdmin: Selecting a result continues at UC-19 (§4.5)
@@ -605,7 +605,11 @@ sequenceDiagram
 
 Registrar, Course Administrator, or a Student (via UC-16) selects one course to see its record.
 
-**The roster is not part of this response.** It is its own read — `GET /api/v1/enrollments?courseCode={code}` (§5.4) — granted to the Registrar and Course Administrator but not to a Student browsing the catalogue. Embedding it, as an earlier version of this diagram did, would have handed a Student the names and email addresses of everyone else taking a course as a side effect of opening it. Removing the composition also removes `course`'s only outbound module dependency: `course` now calls nothing.
+**The roster is not part of this response.** It is its own read — `GET /api/v1/enrollments?courseCode={code}` (§5.4) — granted to the Registrar and Course Administrator but not to a Student browsing the catalogue. Embedding it, as an earlier version of this diagram did, would have handed a Student the names and email addresses of everyone else taking a course as a side effect of opening it.
+
+**The enrolled-student *count* is**, however (`api-specification.md` §5 decision #11). "How many" is not "who": the count is what the catalogue view needs and it names nobody, so it is safe on exactly the response the roster is kept off. It is fetched by a second query in the same read-only transaction.
+
+That query reads the `enrollments` table directly from `course`'s own JDBC adapter rather than through a call into `enrollment`, so `course` still calls no other module — the coupling is at the schema, not in the module graph, and it has to be: `enrollment` depends on `course`, so the reverse Java edge would close a cycle (`02-component-diagram.md` §2.2).
 
 ```mermaid
 sequenceDiagram
@@ -628,7 +632,11 @@ sequenceDiagram
         Ctrl-->>Caller: 404 Not Found
     else course found
         Repo-->>Svc: Course
-        Svc-->>Ctrl: CourseDetail (the record's own fields)
+        Svc->>Repo: enrollmentCountOf(code)
+        Repo->>DB: SELECT COUNT(*) FROM enrollments e JOIN courses c ...
+        DB-->>Repo: count
+        Repo-->>Svc: count
+        Svc-->>Ctrl: CourseDetail (the record's own fields + enrolledCount)
         Ctrl-->>Caller: 200 OK
     end
     Note over Caller: the roster is a separate request, and only for staff — §5.4
@@ -660,7 +668,7 @@ sequenceDiagram
     Sec->>Ctrl: forward request (auth gate as in §2.1)
     Ctrl->>Svc: enroll(studentCode, courseCode)
     Svc->>SLookup: idOf(studentCode)
-    SLookup-->>Svc: Optional&lt;StudentId&gt;
+    SLookup-->>Svc: Optional[StudentId]
     alt student does not exist (Enrollment.3)
         Svc-->>Ctrl: UnknownStudentException
         Ctrl-->>Caller: 400 Bad Request
@@ -712,7 +720,7 @@ sequenceDiagram
     Sec->>Ctrl: forward request (auth gate as in §2.1)
     Ctrl->>Svc: end(studentCode, courseCode)
     Svc->>SLookup: idOf(studentCode)
-    SLookup-->>Svc: Optional&lt;StudentId&gt;
+    SLookup-->>Svc: Optional[StudentId]
     alt no such student, or no such enrollment
         Svc-->>Ctrl: NotFoundException
         Ctrl-->>Caller: 404 Not Found
@@ -746,7 +754,7 @@ sequenceDiagram
     Sec->>Ctrl: forward request (auth gate as in §2.1)
     Ctrl->>Svc: getDetail(studentCode, courseCode)
     Svc->>SLookup: idOf(studentCode)
-    SLookup-->>Svc: Optional&lt;StudentId&gt; (empty → the same 404 below)
+    SLookup-->>Svc: Optional[StudentId] (empty → the same 404 below)
     Svc->>Repo: findByStudentAndCourse(studentId, courseCode)
     Repo->>DB: SELECT
     DB-->>Repo: result
@@ -800,7 +808,7 @@ sequenceDiagram
         Ctrl-->>Caller: 400 Bad Request
     else filtered by studentCode
         Svc->>SLookup: idOf(studentCode)
-        SLookup-->>Svc: Optional&lt;StudentId&gt;
+        SLookup-->>Svc: Optional[StudentId]
         alt no such student
             Svc-->>Ctrl: UnknownStudentException
             Ctrl-->>Caller: 400 Bad Request
@@ -811,12 +819,12 @@ sequenceDiagram
             Svc->>Repo: findByStudentId(studentId, pageable)
             Repo->>DB: SELECT ... LIMIT/OFFSET + COUNT
             DB-->>Repo: rows
-            Repo-->>Svc: Page&lt;Enrollment&gt;
+            Repo-->>Svc: Page[Enrollment]
             loop per row
                 Svc->>CLookup: summaryOf(courseCode)
                 CLookup-->>Svc: CourseSummary
             end
-            Svc-->>Ctrl: Page&lt;EnrollmentDetail&gt;
+            Svc-->>Ctrl: Page[EnrollmentDetail]
             Ctrl-->>Caller: 200 OK
         end
     else filtered by courseCode
@@ -832,16 +840,70 @@ sequenceDiagram
             Svc->>Repo: findByCourseCode(courseCode, pageable)
             Repo->>DB: SELECT ... JOIN courses ... LIMIT/OFFSET + COUNT
             DB-->>Repo: rows
-            Repo-->>Svc: Page&lt;Enrollment&gt;
+            Repo-->>Svc: Page[Enrollment]
             loop per row
                 Svc->>SLookup: summaryOf(studentId)
                 SLookup-->>Svc: StudentSummary
             end
-            Svc-->>Ctrl: Page&lt;EnrollmentDetail&gt;
+            Svc-->>Ctrl: Page[EnrollmentDetail]
             Ctrl-->>Caller: 200 OK
         end
     end
 ```
+
+---
+
+### 5.5 UC-26: Enroll Student in Multiple Courses
+
+Registrar enrolls one student into several courses in a single request. The per-course validations are exactly §5.1's; what this diagram exists to show is the **transaction boundary**, which is unique in this system.
+
+`EnrollmentBatchService` is a separate bean from `EnrollmentService`, and is itself **not** transactional. That is not incidental. `@Transactional` is applied by a proxy, so a loop written *inside* `EnrollmentService` calling its own `enroll` would be self-invocation — the proxy bypassed, the annotation inert, and every course sharing one transaction, which is precisely the all-or-nothing behaviour this use case exists to avoid. Going through an injected reference crosses the proxy, so each course opens and commits a transaction of its own.
+
+The student check sits outside the loop and rejects the whole request: the student is the subject of the request rather than one of its items, so an unknown one leaves every course unanswerable (`api-specification.md` §5 decision #12).
+
+```mermaid
+sequenceDiagram
+    actor Reg as Registrar
+    participant Sec as Spring Security
+    participant Ctrl as EnrollmentController
+    participant Batch as EnrollmentBatchService
+    participant Svc as EnrollmentService
+    participant SL as StudentLookup
+    participant DB as MySQL
+
+    Reg->>Sec: POST /api/v1/enrollments/batch {studentCode, courseCodes[]}
+    Sec->>Ctrl: forward request (REGISTRAR only)
+    Ctrl->>Batch: enrollAll(command)
+    Batch->>SL: idOf(studentCode)
+    alt student does not exist
+        SL-->>Batch: empty
+        Batch-->>Ctrl: UnknownStudentException
+        Ctrl-->>Reg: 400 Bad Request — nothing enrolled
+    else student exists
+        SL-->>Batch: StudentId
+        Note over Batch: drop duplicate course codes, keeping the first occurrence
+        loop for each distinct course code
+            Batch->>Svc: enroll(studentCode, courseCode)
+            Note over Svc,DB: own transaction — §5.1's checks, unchanged
+            alt course unknown
+                Svc-->>Batch: UnknownCourseException
+                Note over Batch: record UNKNOWN_COURSE, continue
+            else already enrolled
+                Svc-->>Batch: DuplicateEnrollmentException
+                Note over Batch: record ALREADY_ENROLLED, continue
+            else enrolled
+                Svc->>DB: INSERT INTO enrollments ...
+                DB-->>Svc: committed
+                Svc-->>Batch: CreatedEnrollment
+                Note over Batch: record ENROLLED
+            end
+        end
+        Batch-->>Ctrl: outcomes[]
+        Ctrl-->>Reg: 200 OK {requested, enrolled, failed, results[]}
+    end
+```
+
+Note the two statuses that do *not* appear: no 409 and no 201. A duplicate is an outcome inside a successful response rather than a conflict, and creation is partial, so there is no single `Location` to report. A course reported `ENROLLED` is already committed and is not undone by a rejection later in the loop.
 
 ---
 
@@ -940,7 +1002,7 @@ sequenceDiagram
     Ctrl->>EnrollSvc: findByStudent(studentId, pageable)
     EnrollSvc->>DB: SELECT ... LIMIT/OFFSET (+ COUNT)
     DB-->>EnrollSvc: rows + count
-    EnrollSvc-->>Ctrl: Page&lt;CourseSummary&gt; (empty page if none, never an error)
+    EnrollSvc-->>Ctrl: Page[CourseSummary] (empty page if none, never an error)
     Ctrl-->>Student: 200 OK
 
     Student->>Sec: GET /api/v1/me/books?page=0&size=20
@@ -948,7 +1010,7 @@ sequenceDiagram
     Ctrl->>BookSvc: findByOwner(studentId, pageable)
     BookSvc->>DB: SELECT ... LIMIT/OFFSET (+ COUNT)
     DB-->>BookSvc: rows + count
-    BookSvc-->>Ctrl: Page&lt;BookSummary&gt; (empty page if none, never an error)
+    BookSvc-->>Ctrl: Page[BookSummary] (empty page if none, never an error)
     Ctrl-->>Student: 200 OK
 
     Note over Student: Selecting a book → UC-18 (§3.6), selecting a course → UC-19 (§4.5)

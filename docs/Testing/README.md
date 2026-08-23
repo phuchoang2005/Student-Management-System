@@ -1,6 +1,6 @@
 # Testing Documentation
 
-Test Plan / Test Strategy, Test Cases, and Test Data Preparation for the Student Management System. These documents were originally written **ahead of implementation**, derived entirely from the specification (`docs/BA-docs/`, `docs/SA-docs/`) to drive test authoring as each module was built. As of Sprint 4 (PM-015), implementation is complete: all UC-1–25 have corresponding automated test classes under `management/src/test/java`, tracked in the [UC → File Index](#uc--file-index) below — see [`docs/PM-docs/04-sprint-backlog.md`](../PM-docs/04-sprint-backlog.md) for the JaCoCo coverage numbers from the latest full run.
+Test Plan / Test Strategy, Test Cases, and Test Data Preparation for the Student Management System. These documents were originally written **ahead of implementation**, derived entirely from the specification (`docs/BA-docs/`, `docs/SA-docs/`) to drive test authoring as each module was built. As of Sprint 6, implementation is complete: all UC-1–28 have corresponding automated test classes under `management/src/test/java`, tracked in the [UC → File Index](#uc--file-index) below — see [`docs/PM-docs/04-sprint-backlog.md`](../PM-docs/04-sprint-backlog.md) for the JaCoCo coverage numbers from the latest full run.
 
 This is documentation only — no test code is included here. See [02-test-plan.md](./02-test-plan.md) §4 for the intended suite/package structure once implementation begins.
 
@@ -25,8 +25,8 @@ This documentation set is **derived from, and traces back to**, the existing spe
 
 | Source | What it contributes here |
 | --- | --- |
-| [req.md](../BA-docs/req.md) | Business rule IDs (Student.1–4, Book.1–5, Course.1–3, Enrollment.1–4, Identity.1–7) that every test case's "Related UC / Rule" field traces back to |
-| [use-cases.md](../BA-docs/use-cases.md) | The 25 use cases (UC-1–UC-25) that structure every test-case file below |
+| [req.md](../BA-docs/req.md) | Business rule IDs (Student.1–4, Book.1–5, Course.1–3, Enrollment.1–4, Identity.1–8) that every test case's "Related UC / Rule" field traces back to |
+| [use-cases.md](../BA-docs/use-cases.md) | The 28 use cases (UC-1–UC-28) that structure every test-case file below |
 | [user-stories.md](../BA-docs/user-stories.md) | Acceptance criteria cross-referenced alongside each UC |
 | `SA-docs/01`–`06` + `tactical-ddd-design.md` | Architecture, RBAC, DB schema, and exception/HTTP-status mapping that ground the cross-cutting and boundary-value test cases |
 | `api-specification.md` + `openapi/` | Exact endpoint paths/verbs and the 7 explicit ambiguous-case resolutions used throughout |
@@ -64,18 +64,23 @@ If a source document changes, the corresponding test cases here should be review
 | UC-23 View Student's Initial Password | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `InitialPasswordViewIntegrationTest` |
 | UC-24 Create Staff Account | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `StaffAccountIntegrationTest` |
 | UC-25 Deactivate/Reactivate Staff Account | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `StaffAccountIntegrationTest` |
-| RBAC matrix, must-change-password gate, optimistic locking, cross-module cascades, error envelope, architecture conformance (ArchUnit), staff-account/demo-account RBAC | [cross-cutting.md](./03-test-cases/cross-cutting.md) | ✅ Implemented & tested — `RbacMatrixIntegrationTest`, `MustChangePasswordGateIntegrationTest`, `OwnRecordsScopingIntegrationTest`, `EnrollmentOptimisticLockingConfirmationTest`, `CascadeLifecycleIntegrationTest`, `EventPublicationRegistryIntegrationTest`, `GlobalExceptionHandlerTest`, `architecture/*`, `DemoAccountsIntegrationTest`, `DemoAccountsDisabledIntegrationTest` |
+| UC-26 Enroll Student in Multiple Courses | [enrollment.md](./03-test-cases/enrollment.md) | ✅ Implemented & tested — `BatchEnrollmentIntegrationTest` |
+| UC-27 View Active Sessions | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `ActiveSessionIntegrationTest` |
+| UC-28 End an Active Session | [identity-auth.md](./03-test-cases/identity-auth.md) | ✅ Implemented & tested — `ActiveSessionIntegrationTest` |
+| RBAC matrix, must-change-password gate, optimistic locking, cross-module cascades, error envelope, architecture conformance (ArchUnit), staff-account/demo-account RBAC | [cross-cutting.md](./03-test-cases/cross-cutting.md) | ✅ Implemented & tested — `RbacMatrixIntegrationTest`, `MustChangePasswordGateIntegrationTest`, `OwnRecordsScopingIntegrationTest`, `EnrollmentOptimisticLockingConfirmationTest`, `CascadeLifecycleIntegrationTest`, `EventPublicationRegistryIntegrationTest`, `GlobalExceptionHandlerTest`, `architecture/*`, `DemoAccountsIntegrationTest`, `DemoAccountsDisabledIntegrationTest`, `TimestampRoundTripIntegrationTest` |
 
 ## Test Case Volume Summary
 
 | File | Test cases | UCs covered |
 | --- | --- | --- |
-| [student.md](./03-test-cases/student.md) | TC-STU-001–034 (34) | UC-1, 2, 3, 13, 17 |
+| [student.md](./03-test-cases/student.md) | TC-STU-001–037 (37) | UC-1, 2, 3, 13, 17 (+ a UC-9 regression) |
 | [book.md](./03-test-cases/book.md) | TC-BOOK-001–023 (23) | UC-4, 5, 6, 7, 14, 18 |
-| [course.md](./03-test-cases/course.md) | TC-CRS-001–027 (27) | UC-8, 9, 10, 15, 19 |
-| [enrollment.md](./03-test-cases/enrollment.md) | TC-ENR-001–012 (12) | UC-11, 12, 20 |
-| [identity-auth.md](./03-test-cases/identity-auth.md) | TC-IDN-001–032 (32) | UC-16, 21, 22, 23, 24, 25 |
-| [cross-cutting.md](./03-test-cases/cross-cutting.md) | TC-XC-001–042 (42) | Spans all modules, plus architecture/layering conformance (no UC — grounded in `06-low-level-design.md` §2 instead), pagination conventions (no UC — grounded in `api-specification.md` §3 instead), and staff-account/demo-account RBAC (UC-24, UC-25) |
-| **Total** | **170** | **All 25 UCs** |
+| [course.md](./03-test-cases/course.md) | TC-CRS-001–033 (33) | UC-8, 9, 10, 15, 19 |
+| [enrollment.md](./03-test-cases/enrollment.md) | TC-ENR-001–028 (28) | UC-11, 12, 20, 26 |
+| [identity-auth.md](./03-test-cases/identity-auth.md) | TC-IDN-001–041 (41) | UC-16, 21, 22, 23, 24, 25, 27, 28 |
+| [cross-cutting.md](./03-test-cases/cross-cutting.md) | TC-XC-001–049 (49) | Spans all modules, plus architecture/layering conformance (no UC — grounded in `06-low-level-design.md` §2 instead), pagination conventions (no UC — grounded in `api-specification.md` §3 instead), staff-account/demo-account RBAC (UC-24, UC-25), and the date/time round trip (no UC — grounded in `06-low-level-design.md` §9.1a instead) |
+| **Total** | **211** | **All 28 UCs** |
 
-Every `req.md` rule (Student.1–4, Book.1–5, Course.1–3, Enrollment.1–4, Identity.1–7) and every UC-1–25 main flow and lettered alternate/exception flow has at least one corresponding test case somewhere in this set — see each file's closing traceability table for the exact mapping.
+Every `req.md` rule (Student.1–4, Book.1–5, Course.1–3, Enrollment.1–4, Identity.1–8) and every UC-1–28 main flow and lettered alternate/exception flow has at least one corresponding test case somewhere in this set — see each file's closing traceability table for the exact mapping.
+
+A handful of cases are grounded in no use case at all, because they pin behaviour a use case would never think to state: the date/time round trip (TC-XC-046–049), session-fixation protection (TC-IDN-041), and the two form regressions (TC-STU-035–036). Each names the defect it was written against, so it is clear what removing it would give up.

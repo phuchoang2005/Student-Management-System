@@ -66,7 +66,7 @@ Mirrors Book Management's shape: Course Administrator owns write access and sear
 
 ![Enrollment Management](./use-case-diagram-assets/05-enrollment-management.svg)
 
-UC-11 (Enroll Student in Course) and UC-12 (End Enrollment) are Registrar-only. Student self-service enrollment and withdrawal are out of scope — a Student's involvement with enrollments is read-only, via UC-16/UC-20 in §6.
+UC-11 (Enroll Student in Course), UC-26 (Enroll Student in Multiple Courses) and UC-12 (End Enrollment) are Registrar-only. Student self-service enrollment and withdrawal are out of scope — a Student's involvement with enrollments is read-only, via UC-16/UC-20 in §6. UC-26 depends on UC-11 rather than extending it: it applies UC-11's validations once per course and answers with each course's outcome, so a rejected course costs only itself.
 
 ---
 
@@ -82,7 +82,9 @@ UC-16 (View Own Books, Courses & Enrollments) is Student-only. UC-20 (View Enrol
 
 ![Identity & Access](./use-case-diagram-assets/07-identity-access.svg)
 
-All five actors share Login and Change Password. UC-23 (View Student's Initial Password) is Registrar-only; UC-24 (Create Staff Account) and UC-25 (Deactivate/Reactivate Staff Account) are System Administrator-only. UC-22 depends on an authenticated session from UC-21 — shown as a dependency rather than `«extend»`, since it's a precondition, not an optional insertion point. UC-25 similarly depends on an account already having been created via UC-24.
+All five actors share Login and Change Password. UC-23 (View Student's Initial Password) is Registrar-only; UC-24 (Create Staff Account), UC-25 (Deactivate/Reactivate Staff Account), UC-27 (View Active Sessions) and UC-28 (End an Active Session) are System Administrator-only. UC-22 depends on an authenticated session from UC-21 — shown as a dependency rather than `«extend»`, since it's a precondition, not an optional insertion point. UC-25 similarly depends on an account already having been created via UC-24.
+
+UC-27 lists exactly the sessions UC-21 opened, and UC-28 addresses one of them, so both depend on those rather than on any account use case. That is the distinction the note in the diagram draws: UC-25 acts on the *account* and takes effect at the next sign-in, while UC-28 acts on the *session* and takes effect at the holder's next request, leaving the account free to sign in again (req.md §4 Identity.7 vs Identity.8).
 
 ---
 
@@ -115,3 +117,6 @@ All five actors share Login and Change Password. UC-23 (View Student's Initial P
 | UC-23 View Student's Initial Password | §7 Identity & Access | Registrar |
 | UC-24 Create Staff Account | §7 Identity & Access | System Administrator |
 | UC-25 Deactivate/Reactivate Staff Account | §7 Identity & Access | System Administrator |
+| UC-26 Enroll Student in Multiple Courses | §5 Enrollment Management | Registrar |
+| UC-27 View Active Sessions | §7 Identity & Access | System Administrator |
+| UC-28 End an Active Session | §7 Identity & Access | System Administrator |

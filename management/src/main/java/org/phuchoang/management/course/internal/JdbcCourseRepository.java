@@ -1,7 +1,10 @@
 package org.phuchoang.management.course.internal;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.phuchoang.management.course.CourseId;
 import org.phuchoang.management.course.domain.Course;
 import org.phuchoang.management.course.CourseCode;
@@ -41,6 +44,24 @@ class JdbcCourseRepository implements CourseRepository {
             .toList();
     long total = springRepo.countBySearch(query);
     return new PageImpl<>(content, pageable, total);
+  }
+
+  @Override
+  public Map<String, Long> enrollmentCountsFor(Collection<String> courseCodes) {
+    // A guard, not an optimisation: `IN ()` is a syntax error in MySQL, and an empty page is a
+    // perfectly ordinary search result.
+    if (courseCodes.isEmpty()) {
+      return Map.of();
+    }
+    return springRepo.enrollmentCountsFor(courseCodes).stream()
+        .collect(
+            Collectors.toMap(
+                CourseEnrollmentCountRow::courseCode, CourseEnrollmentCountRow::enrolledCount));
+  }
+
+  @Override
+  public long enrollmentCountOf(CourseCode code) {
+    return springRepo.enrollmentCountOf(code.value());
   }
 
   @Override

@@ -19,7 +19,11 @@ import { ApiError } from '@/lib/api/client';
 export default function ErrorBanner({ error, title }: { error: unknown; title?: string }) {
   let message = '';
   if (error instanceof ApiError) {
-    if (error.status === 403) {
+    if (error.status === 401) {
+      // Outside the login form a 401 is always a dead session -- expired, or ended by an
+      // administrator. The redirect to /login is already under way by the time this renders.
+      message = error.message || 'Your session has ended. Please sign in again.';
+    } else if (error.status === 403) {
       message = error.isBodyless
         ? 'You must change your password before using this part of the app.'
         : "You don't have permission for this action.";

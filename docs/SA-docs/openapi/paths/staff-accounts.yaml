@@ -57,9 +57,13 @@ status:
       **Roles:** System Administrator only.
 
       Toggles whether the target staff account may log in (UC-25). Symmetric — the same
-      operation both disables and re-enables, depending on the request body. Does not
-      force-terminate an already-open session for the target account (see
-      `04-authentication-authorization.md` §3b).
+      operation both disables and re-enables, depending on the request body.
+
+      **Affects the next sign-in, not the current session.** Disabling an account does not
+      force-terminate a session that account already has open. To cut off access that is happening
+      now, follow this with `DELETE /sessions/{handle}` (UC-28), which ends the session while
+      leaving the account able to sign in again — the two are deliberately separate acts answering
+      different questions (`04-authentication-authorization.md` §3b, §3c).
     x-roles: [SYSTEM_ADMINISTRATOR]
     parameters:
       - name: id

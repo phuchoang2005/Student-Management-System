@@ -9,6 +9,8 @@
  */
 import request from './client';
 import type {
+  ActiveSession,
+  BatchEnrollmentResponse,
   BookCreateRequest,
   BookDetail,
   BookSummary,
@@ -111,6 +113,15 @@ export const enrollments = {
     }),
   create: (studentCode: string, courseCode: string) =>
     request<Enrollment>('POST', '/api/v1/enrollments', { body: { studentCode, courseCode } }),
+  /**
+   * One student, up to 50 courses. Answers 200 with a per-course outcome for each — a duplicate or
+   * unknown course fails only its own row, and the rest stay enrolled. Only an unknown student is a
+   * whole-request 400, since it makes every row unanswerable.
+   */
+  createBatch: (studentCode: string, courseCodes: string[]) =>
+    request<BatchEnrollmentResponse>('POST', '/api/v1/enrollments/batch', {
+      body: { studentCode, courseCodes },
+    }),
   get: (studentCode: string, courseCode: string) =>
     request<Enrollment>('GET', `/api/v1/enrollments/${enc(studentCode)}/${enc(courseCode)}`),
   remove: (studentCode: string, courseCode: string) =>
@@ -140,6 +151,21 @@ export const staffAccounts = {
     request<StaffAccountStatus>('PATCH', `/api/v1/staff-accounts/${id}/status`, {
       body: { enabled },
     }),
+};
+
+/**
+ * Who is signed in right now, and ending one of those sessions. System Administrator only.
+ *
+ * Not paged, unlike every other list here: the session registry is an in-memory snapshot with no
+ * stable ordering to offset into, so pages would overlap and skip as sessions come and go.
+ */
+export const sessions = {
+  list: () => request<ActiveSession[]>('GET', '/api/v1/sessions'),
+  /**
+   * Deferred by nature: the session is flagged, and its owner's *next* request is what gets
+   * rejected with a 401. Nothing can be done with it in the meantime.
+   */
+  revoke: (handle: string) => request<null>('DELETE', `/api/v1/sessions/${enc(handle)}`),
 };
 
 /**

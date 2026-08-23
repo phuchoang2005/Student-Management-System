@@ -243,6 +243,8 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 
 **Postconditions:** An active enrollment links the student and course.
 
+> Enrolling one student into several courses in a single request is UC-26, which repeats steps 3–5 per course and reports each course's outcome separately rather than stopping at the first rejection.
+
 ---
 
 ## UC-12: End Enrollment
@@ -587,6 +589,73 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 
 ---
 
+## UC-26: Enroll Student in Multiple Courses
+
+- **Actor:** Registrar
+- **Preconditions:** The student exists. At least one course is named.
+- **Trigger:** Registrar selects a student and several courses, then submits once.
+
+**Main Flow**
+1. Registrar selects a student.
+2. Registrar selects one or more courses from the course catalogue.
+3. System validates the student exists. *(Enrollment.3)*
+4. System discards any course named more than once in the request, keeping the first occurrence.
+5. For each remaining course, System validates the course exists *(Enrollment.2)*, validates no existing enrollment for this (student, course) pair *(Enrollment.1)*, and creates the enrollment.
+6. System reports the outcome of every requested course — enrolled, or the reason it was not.
+
+**Alternate / Exception Flows**
+- **3a.** Student does not exist → reject the whole request; nothing is enrolled. The student is the subject of the request rather than one of its items, so an unknown student leaves every course unanswerable.
+- **5a.** A course does not exist → that course is reported as unknown; the remaining courses proceed.
+- **5b.** Student is already enrolled in a course → that course is reported as already enrolled; the remaining courses proceed.
+- **5c.** Every course is rejected → the request still succeeds and reports each rejection. Nothing was enrolled, but nothing was wrong with the request itself.
+
+**Postconditions:** An active enrollment links the student to each course reported as enrolled. Those enrollments stand regardless of any other course in the same request being rejected — a rejection later in the list does not undo an earlier success.
+
+**Related Rules:** Enrollment.1–3.
+
+---
+
+## UC-27: View Active Sessions
+
+- **Actor:** System Administrator
+- **Preconditions:** Actor is signed in.
+- **Trigger:** System Administrator opens the active sessions view.
+
+**Main Flow**
+1. System lists every account currently signed in, with the account's username, its role, and when it was last seen.
+2. System marks the actor's own session among them.
+
+**Alternate / Exception Flows**
+- **1a.** Nobody is signed in → the list is empty. This is also what is seen immediately after a restart, because the record of who is signed in does not survive one.
+
+**Postconditions:** None — this is a read.
+
+**Related Rules:** Identity.8.
+
+---
+
+## UC-28: End an Active Session
+
+- **Actor:** System Administrator
+- **Preconditions:** The target session is listed in UC-27 and is not the actor's own.
+- **Trigger:** System Administrator selects a listed session and confirms ending it.
+
+**Main Flow**
+1. System Administrator selects a session other than their own.
+2. System Administrator confirms.
+3. System revokes the session. *(Identity.8)*
+4. The revoked session's holder is refused on their next request and returned to sign-in.
+
+**Alternate / Exception Flows**
+- **1a.** Actor selects their own session → reject. Signing out is the deliberate way to end one's own session; doing it from this view is indistinguishable from the feature malfunctioning.
+- **2a.** The session ended on its own between being listed and being confirmed → reject as no longer present.
+
+**Postconditions:** The session can no longer be used. The account is unchanged and its holder may sign in again immediately — this is not a disablement *(Identity.7)*. Revocation takes effect on the holder's next request rather than at the instant it is confirmed.
+
+**Related Rules:** Identity.8.
+
+---
+
 ## Use Case Summary Table
 
 | Use Case | Primary Actor | Business Rules |
@@ -616,3 +685,6 @@ Derived from [req.md](./req.md) and [user-stories.md](./user-stories.md). Actors
 | UC-23 View Student's Initial Password | Registrar | Identity.4–5 |
 | UC-24 Create Staff Account | System Administrator | Identity.2–3, Identity.6 |
 | UC-25 Deactivate/Reactivate Staff Account | System Administrator | Identity.7 |
+| UC-26 Enroll Student in Multiple Courses | Registrar | Enrollment.1–3 |
+| UC-27 View Active Sessions | System Administrator | Identity.8 (read-only) |
+| UC-28 End an Active Session | System Administrator | Identity.8 |

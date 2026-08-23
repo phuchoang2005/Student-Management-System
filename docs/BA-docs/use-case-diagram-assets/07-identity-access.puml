@@ -24,6 +24,8 @@ rectangle "Identity & Access" {
   usecase "UC-21\nLogin" as UC21
   usecase "UC-24\nCreate Staff\nAccount" as UC24
   usecase "UC-25\nDeactivate/Reactivate\nStaff Account" as UC25
+  usecase "UC-27\nView Active\nSessions" as UC27
+  usecase "UC-28\nEnd an Active\nSession" as UC28
 }
 
 Registrar --> UC21
@@ -39,7 +41,20 @@ SysAdmin --> UC21
 SysAdmin --> UC22
 SysAdmin --> UC24
 SysAdmin --> UC25
+SysAdmin --> UC27
+SysAdmin --> UC28
 
 UC22 ..> UC21 : requires active session
 UC25 ..> UC24 : targets an account\ncreated via UC-24
+UC28 ..> UC27 : targets a session\nlisted by UC-27
+UC27 ..> UC21 : lists the sessions\nUC-21 opened
+
+note bottom of UC28
+  Revokes one session, not the
+  account -- the holder may sign
+  in again at once. Contrast
+  UC-25, which blocks the next
+  sign-in and leaves the current
+  session running.
+end note
 @enduml

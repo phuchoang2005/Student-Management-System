@@ -1,0 +1,33 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|System Administrator|
+start
+:Open the active sessions view;
+
+|System|
+:Collect every signed-in session;
+:Replace each session's identifier
+with a non-reversible handle;
+:Mark the actor's own session;
+
+|System Administrator|
+if (Any sessions listed?) then (yes)
+  :See each account, its role,
+  and when it was last seen;
+else (no)
+  :See an empty list
+  (also the state after a restart);
+endif
+stop
+@enduml

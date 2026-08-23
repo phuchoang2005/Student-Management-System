@@ -105,6 +105,12 @@ export interface CourseSummary {
   courseCode: string;
   name: string;
   credits: number;
+  /**
+   * How many students are enrolled. A count, not the roster — the roster stays a separately
+   * authorized read (`GET /enrollments?courseCode=`), so this reveals no student's identity to a
+   * Student browsing the catalogue. A snapshot rather than a capacity guarantee.
+   */
+  enrolledCount: number;
 }
 
 export interface CourseDetail extends CourseSummary {
@@ -147,6 +153,37 @@ export interface Enrollment {
   enrolledAt: string;
 }
 
+/** One course's outcome in a batch enrollment. `ENROLLED` is the only success. */
+export type BatchEnrollmentStatus =
+  | 'ENROLLED'
+  | 'UNKNOWN_COURSE'
+  | 'ALREADY_ENROLLED'
+  | 'INVALID_COURSE_CODE';
+
+export interface BatchEnrollmentResult {
+  courseCode: string;
+  status: BatchEnrollmentStatus;
+  /** Set only when `status` is `ENROLLED`. */
+  enrolledAt: string | null;
+  /** Set only when `status` is not `ENROLLED`. */
+  message: string | null;
+}
+
+/**
+ * The batch answers 200 even when every course was rejected — the request succeeded, and the
+ * per-course statuses are its answer. `requested` counts *distinct* courses, so it is below the
+ * number submitted when the request repeated one.
+ *
+ * Enrolled courses are committed independently: a rejection later in the list does not undo them.
+ */
+export interface BatchEnrollmentResponse {
+  studentCode: string;
+  requested: number;
+  enrolled: number;
+  failed: number;
+  results: BatchEnrollmentResult[];
+}
+
 export interface MeProfile {
   studentCode: string;
   firstName: string;
@@ -168,6 +205,24 @@ export type MeCourse = CourseSummary;
  * Staff accounts keep their numeric `id`: `PATCH /staff-accounts/{id}/status` is an `identity`
  * concern with no business key, and the note-fix role rework does not touch the sysadmin surface.
  */
+/**
+ * One signed-in session.
+ *
+ * `handle` is a SHA-256 digest of the session id, never the id itself — a session id is a
+ * replayable credential, so the API does not emit one. It is the address used to end the session.
+ *
+ * The list is in-memory and per-process: it empties when the backend restarts, and that is expected
+ * rather than a fault.
+ */
+export interface ActiveSession {
+  handle: string;
+  username: string;
+  role: Role;
+  lastRequest: string;
+  /** The caller's own session. It cannot be revoked from here — sign out instead. */
+  current: boolean;
+}
+
 export interface StaffAccountSummary {
   id: number;
   username: string;

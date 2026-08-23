@@ -47,9 +47,7 @@ class EventPublicationRegistryIntegrationTest {
 
   @DynamicPropertySource
   static void datasourceProperties(DynamicPropertyRegistry registry) {
-    registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-    registry.add("spring.datasource.username", MYSQL::getUsername);
-    registry.add("spring.datasource.password", MYSQL::getPassword);
+    TestDatasource.bind(registry, MYSQL);
   }
 
   @Autowired private MockMvc mockMvc;

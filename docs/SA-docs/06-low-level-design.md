@@ -344,6 +344,24 @@ that case is the caller's job. `StudentProfile` is a root-level read-model carry
 
 Identical shape to `student` — no outbound cross-module calls, `CourseService` implements `CourseLookup` the same way `StudentService` implements `StudentLookup`, `Course` has one behavior method beyond its factory (`applyChanges`).
 
+**`enrolledCount` (`api-specification.md` §5 decision #11) does not change that "no outbound calls" statement**, because it is not fetched by one. `CourseRepository` gains two methods, and `JdbcCourseRepository` answers both with SQL against the `enrollments` table:
+
+| Port method | Backing query | Used by |
+| --- | --- | --- |
+| `enrollmentCountsFor(Collection<String> courseCodes) : Map<String, Long>` | `SELECT c.course_code, COUNT(e.id) FROM courses c LEFT JOIN enrollments e ON e.course_id = c.id WHERE c.course_code IN (:courseCodes) GROUP BY c.course_code` | `CourseService.search` — one query for the whole page, not one per row |
+| `enrollmentCountOf(CourseCode code) : long` | The same shape as `SpringDataEnrollmentRepository.countByCourseCode` | `CourseService.getDetail` |
+
+Four points of care:
+
+- **`LEFT JOIN`, not `JOIN`.** A course nobody is enrolled in must return `0`, not drop out of the result — otherwise the caller cannot distinguish "no enrollments" from "no such course".
+- **The empty-collection guard is required, not an optimisation.** `IN ()` is a syntax error in MySQL, and an empty page is an ordinary search result, so `enrollmentCountsFor` returns `Map.of()` without querying when handed nothing.
+- **`search` and `getDetail` become `@Transactional(readOnly = true)`.** They previously carried no transaction at all, which was fine for a single statement; each is now two, and they should see one snapshot.
+- **The join result needs its own Row type.** `CourseEnrollmentCountRow(String courseCode, long enrolledCount)` — a plain record in `internal/`, materialised by Spring Data JDBC as an ad-hoc entity, exactly as `EnrollmentCourseRow` already is (§9.1). It is not folded into `CourseRow`, whose shape belongs to the aggregate that gets saved.
+
+`CourseSummaryView`/`CourseDetailView` and `CourseSummaryDto`/`CourseDetailDto` each gain the field; MapStruct maps it by name, so `CourseMapper` (§12) is unchanged. `CourseResponse` deliberately does not — see the schema note in `openapi/components/schemas/course.yaml`.
+
+The module-cycle reasoning for reading another module's table in SQL is the same one §9.1 already records for `enrollment` reading `courses`, now applied in both directions; `02-component-diagram.md` §2.2 states the consequence.
+
 ```mermaid
 classDiagram
     class CourseController {
@@ -545,6 +563,46 @@ classDiagram
 
 ---
 
+### 7.1 `EnrollmentBatchService` (UC-26)
+
+A second `@Service` in `enrollment/application/`, holding the bulk-enrollment endpoint's logic. Two design points, both load-bearing:
+
+**It is a separate bean, not a method on `EnrollmentService`.** `@Transactional` is honoured by a proxy, so a loop inside `EnrollmentService` calling `this.enroll(...)` is self-invocation: the proxy is bypassed, `enroll`'s annotation never applies, and every course shares one transaction — the exact all-or-nothing behaviour the use case exists to avoid. Injecting `EnrollmentService` into a distinct bean crosses the proxy, so each `enroll` call opens and commits its own transaction (propagation `REQUIRED` with no outer transaction present).
+
+**It is itself not `@Transactional`.** Annotating it would reintroduce the outer transaction the separate bean was created to avoid.
+
+```java
+package org.phuchoang.management.enrollment.application;
+
+@Service
+public class EnrollmentBatchService {
+
+  private final EnrollmentService enrollmentService;   // injected -> proxied
+  private final StudentLookup studentLookup;
+
+  public BatchEnrollmentResult enrollAll(BatchEnrollStudentCommand command) {
+    StudentCode studentCode = new StudentCode(command.studentCode());
+    studentLookup.idOf(studentCode)
+        .orElseThrow(() -> new UnknownStudentException(...));   // whole-request 400
+
+    List<String> courseCodes = List.copyOf(new LinkedHashSet<>(command.courseCodes()));
+    List<BatchEnrollmentOutcome> outcomes = new ArrayList<>(courseCodes.size());
+    for (String courseCode : courseCodes) {
+      outcomes.add(enrollOne(studentCode.value(), courseCode));
+    }
+    return new BatchEnrollmentResult(studentCode.value(), outcomes);
+  }
+}
+```
+
+`enrollOne` catches `UnknownCourseException`, `DuplicateEnrollmentException` and `DomainValidationException` per course and converts each into an `Outcome`. It deliberately does **not** catch `UnknownStudentException`: reaching it means the student was deleted between the check above and this row, which invalidates the request's precondition rather than this one course, so it propagates as the same 400.
+
+Result records: `Outcome` (`ENROLLED`, `UNKNOWN_COURSE`, `ALREADY_ENROLLED`, `INVALID_COURSE_CODE`), `BatchEnrollmentOutcome(courseCode, outcome, enrolledAt, message)`, and `BatchEnrollmentResult(studentCode, outcomes)` with derived `enrolledCount()`/`failedCount()`. Those two are mapped by `@Mapping(expression = ...)` rather than `source`, because MapStruct treats only a record's *components* as properties (§12).
+
+Validation lives on the request DTO — `@NotEmpty @Size(max = 50) List<@NotBlank @Size(max = 20) String> courseCodes`. The container-element constraints report paths like `courseCodes[2]`, which `GlobalExceptionHandler` already folds into the standard `ValidationError`.
+
+**No `SecurityConfig` change is needed:** `POST /api/v1/enrollments/**` is already `hasRole("REGISTRAR")` and covers `/batch` (§11.1).
+
 ## 8. `identity` module
 
 The one module whose domain layer needs infrastructure collaborators (hashing, encryption, password generation) passed in rather than field-injected, to keep `domain/` framework-free per `02-component-diagram.md` §3.
@@ -726,6 +784,23 @@ Both delegate straight to `IdentityService.provisionStaff`/`setAccountEnabled` (
 
 ---
 
+### 8.8 `SessionService` and `SessionController` (UC-27, UC-28)
+
+Placed in `identity`, not `shared`: `SessionRegistry` is a framework type (`org.springframework.security.core.session`), invisible to Spring Modulith's dependency analysis, so injecting it creates no module edge. `identity` already depends on `shared.security` for `AuthenticatedPrincipal`, which is the only project type crossing here. `shared` would be the wrong home anyway — it has no `application/` package, and `NamingConventionsTest` requires a `@Service` to live in one.
+
+| Class | Package | Responsibility |
+| --- | --- | --- |
+| `SessionService` | `identity/application/` | Reads `SessionRegistry`; digests session ids into handles; `expireNow()` on revoke |
+| `SessionController` | `identity/web/` | `GET /api/v1/sessions`, `DELETE /api/v1/sessions/{handle}` |
+| `SessionMapper` | `identity/web/` | `ActiveSessionView` → `ActiveSessionDto` |
+| `ActiveSessionDto` | `identity/web/dto/` | `(handle, username, role, lastRequest, current)` |
+
+**The one trap worth stating in code as well as here.** `AuthenticatedPrincipal` is a `record`, so it has value-based `equals`/`hashCode`, and `SessionRegistryImpl.principals` is a `ConcurrentMap` keyed on the principal *object*. `AuthController.changePassword` (§8.5) installs `principal.withPasswordChanged()` into the session without informing the registry, so a principal reconstructed in order to look one up can differ from the stored key by one field and match nothing — `getAllSessions(rebuilt, false)` returns empty, silently. Every method in `SessionService` therefore iterates `getAllPrincipals()` and never constructs a principal to key by.
+
+Handle derivation uses a fresh `MessageDigest.getInstance("SHA-256")` per call (the class is not thread-safe) and `HexFormat.of().formatHex(...)`. Revocation resolves a handle by scanning principals × sessions and digesting each — `O(P × S)` with one digest apiece, which for an in-memory registry on a single-process deployment is not worth an index. A cached `handle → sessionId` map is deliberately avoided: it would be a second source of truth requiring its own pruning on every `SessionDestroyedEvent`.
+
+`SessionController` is **not paged**, unlike every other list in this API — the registry is an in-memory snapshot with no stable ordering to offset into. It reads its own session id with `request.getSession(false)`, since asking for the caller's session must never create one.
+
 ## 9. Persistence Mapping & Flyway Migration
 
 ### 9.1 Annotation conventions
@@ -772,6 +847,44 @@ public record EnrollmentRow(
 ```
 
 **`EnrollmentRow.courseId` vs. `Enrollment.courseCode` — a translation the repository port already implied but never spelled out:** `enrollments.course_id` is the DB's surrogate FK (`05-database-schema.md` §3.4), but `EnrollmentRepository`'s port methods (§7) are typed in `CourseCode`, matching the aggregate. `JdbcEnrollmentRepository` (`internal/`) resolves the difference with a SQL join against `courses` in its `@Query` methods — e.g. `findByCourseCode` becomes `SELECT e.* FROM enrollments e JOIN courses c ON c.id = e.course_id WHERE c.course_code = :courseCode`, and `save` first resolves `courseCode` to `courseId` (a one-row `SELECT id FROM courses WHERE course_code = :courseCode`, already guaranteed to exist because `EnrollmentService.enroll` validated it via `CourseLookup.existsByCode` beforehand) before writing the `EnrollmentRow`. This is a plain SQL join, not a Java import across the module boundary — `ApplicationModules.verify()` (§2.1) only forbids the latter — so it doesn't violate the module boundary it looks like it might cross.
+
+### 9.1a Date/time conversions — `JdbcConversionsConfig`
+
+MySQL's `DATETIME` carries a wall clock with no zone, and by default the two halves of the round trip disagree about which zone that is.
+
+| Half | What happens by default | Correct? |
+| --- | --- | --- |
+| Write | `JdbcColumnTypes` resolves an `Instant` property to `java.sql.Timestamp` (via its `Temporal → Timestamp` entry); the store's `InstantToTimestampConverter` is `Timestamp.from(instant)`, and Connector/J renders it into the *connection* time zone, which `application.properties` pins to `serverTimezone=UTC`. | Yes |
+| Read | `rs.getObject` on a `DATETIME` returns `java.time.LocalDateTime` (`MysqlType.DATETIME`'s default Java class), and Spring's stock `Jsr310Converters.LocalDateTimeToInstantConverter` interprets it at **`ZoneId.systemDefault()`**. | **No** — off by the JVM's offset from UTC |
+
+The read defect compounds, because `JdbcStudentRepository.toRow`/`JdbcCourseRepository.toRow` write the `createdAt` they last read back into every `UPDATE`: the error accumulates once per `version`.
+
+`LocalDate` has the mirror-image defect on the *write* side. Its store converter is `Timestamp.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant())`, so at a positive UTC offset it sends the previous evening; MySQL truncates that `DATETIME` into the `DATE` column and `students.date_of_birth` lands a whole day early. Reads need no converter — `rs.getObject` on a `DATE` returns a `LocalDate` with no zone applied.
+
+`shared/persistence/JdbcConversionsConfig` registers exactly the two halves that are wrong:
+
+```java
+@Configuration
+public class JdbcConversionsConfig {
+  @Bean
+  public JdbcCustomConversions jdbcCustomConversions(JdbcDialect dialect) {
+    return JdbcConfiguration.createCustomConversions(
+        dialect, List.of(UtcLocalDateTimeToInstant.INSTANCE, UtcLocalDateToTimestamp.INSTANCE));
+  }
+  // @ReadingConverter LocalDateTime -> Instant : source.toInstant(ZoneOffset.UTC)
+  // @WritingConverter LocalDate -> Timestamp   : Timestamp.from(source.atStartOfDay(UTC).toInstant())
+}
+```
+
+Three implementation notes that are easy to get wrong:
+
+- **No `Instant → LocalDateTime` writing converter.** It would be dead code. `MappingRelationalConverter.determineCustomWriteTarget` asks `CustomConversions` for the exact pair `(Instant, Timestamp)` first, and the store converter already claims it; a `(Instant, LocalDateTime)` pair is never consulted.
+- **A plain `JdbcCustomConversions` bean, not an `AbstractJdbcConfiguration` subclass.** Boot's `DataJdbcRepositoriesAutoConfiguration$SpringBootJdbcConfiguration.jdbcCustomConversions()` is `@ConditionalOnMissingBean`, so declaring this bean replaces that one and leaves the mapping context, converter, dialect, aggregate template and repository registration auto-configured.
+- **Built through `JdbcConfiguration.createCustomConversions`,** the same call `AbstractJdbcConfiguration` makes — `new JdbcCustomConversions(List.of(...))` would silently drop the dialect's own converters and simple types.
+
+User converters win over the store's: `CustomConversions` reverses the `[user, store, default]` list before registering it, and `GenericConversionService` registers each pair with `addFirst`.
+
+**Test fixtures had been masking this.** Every integration test bound `MySQLContainer.getJdbcUrl()`, which carries no time-zone parameter, so Connector/J fell back to `connectionTimeZone=LOCAL` — the JVM's zone on both halves — and the round trip was accidentally self-consistent while production was wrong. `TestDatasource.bind` is now the single place a container is bound to `spring.datasource.*`, and it appends `serverTimezone=UTC`; a test class added later inherits the parameter rather than silently reintroducing the blind spot.
 
 ### 9.2 Flyway migration DDL
 
@@ -893,10 +1006,23 @@ public SecurityFilterChain filterChain(HttpSecurity http, AuthenticationManager 
     loginFilter.setFilterProcessesUrl("/api/v1/auth/login");
     loginFilter.setAuthenticationSuccessHandler(this::onLoginSuccess);
     loginFilter.setAuthenticationFailureHandler(this::onLoginFailure);
+    loginFilter.setSecurityContextRepository(new HttpSessionSecurityContextRepository());
+    // Required, not optional -- see the note under this snippet.
+    loginFilter.setSessionAuthenticationStrategy(
+        new CompositeSessionAuthenticationStrategy(List.of(
+            new ChangeSessionIdAuthenticationStrategy(),
+            new RegisterSessionAuthenticationStrategy(sessionRegistry))));
 
     http
         .csrf(AbstractHttpConfigurer::disable)
-        .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+        .sessionManagement(session -> session
+            .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+            // Installs ConcurrentSessionFilter, which *is* the revocation mechanism. The limit is
+            // unlimited: concurrent logins are not being capped, the machinery is being switched on.
+            .sessionConcurrency(concurrency -> concurrency
+                .maximumSessions(SessionLimit.UNLIMITED)
+                .sessionRegistry(sessionRegistry)
+                .expiredSessionStrategy(new SessionRevokedExpiredStrategy(objectMapper))))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/v1/auth/demo-accounts").permitAll()
@@ -904,6 +1030,13 @@ public SecurityFilterChain filterChain(HttpSecurity http, AuthenticationManager 
             .requestMatchers(HttpMethod.GET, "/api/v1/students/*/initial-password").hasRole("REGISTRAR")
             .requestMatchers(HttpMethod.POST, "/api/v1/staff-accounts/**").hasRole("SYSTEM_ADMINISTRATOR")
             .requestMatchers(HttpMethod.PATCH, "/api/v1/staff-accounts/**").hasRole("SYSTEM_ADMINISTRATOR")
+            .requestMatchers(HttpMethod.GET, "/api/v1/staff-accounts/**").hasRole("SYSTEM_ADMINISTRATOR")
+            // Same reasoning as the /staff-accounts GET: the per-resource read allow-list below
+            // does not cover /sessions, so without these a GET falls through to
+            // .anyRequest().authenticated() and every signed-in role could enumerate -- and end --
+            // everyone else's sessions.
+            .requestMatchers(HttpMethod.GET, "/api/v1/sessions").hasRole("SYSTEM_ADMINISTRATOR")
+            .requestMatchers(HttpMethod.DELETE, "/api/v1/sessions/*").hasRole("SYSTEM_ADMINISTRATOR")
             .requestMatchers(HttpMethod.POST, "/api/v1/students/**").hasRole("REGISTRAR")
             .requestMatchers(HttpMethod.PUT, "/api/v1/students/**").hasRole("REGISTRAR")
             .requestMatchers(HttpMethod.DELETE, "/api/v1/students/**").hasRole("REGISTRAR")
@@ -931,6 +1064,20 @@ public SecurityFilterChain filterChain(HttpSecurity http, AuthenticationManager 
 }
 
 @Bean
+public SessionRegistry sessionRegistry() {
+    // A bean, not a DSL-created instance: SessionRegistryImpl is an ApplicationListener, and only a
+    // registry that is a bean receives SessionDestroyedEvent/SessionIdChangedEvent and prunes itself.
+    return new SessionRegistryImpl();
+}
+
+@Bean
+public HttpSessionEventPublisher httpSessionEventPublisher() {
+    // Bridges the container's HttpSessionEvents into the application context. Without it nothing
+    // tells the registry a session was logged out or timed out, and it leaks dead ids forever.
+    return new HttpSessionEventPublisher();
+}
+
+@Bean
 public PasswordEncoder passwordEncoder() {
     return new BCryptPasswordEncoder();
 }
@@ -944,7 +1091,8 @@ Summarized, the same rules read as:
 | `POST/DELETE /api/v1/enrollments/**` | `REGISTRAR` (no `PUT` — Enrollment has no update, §7) |
 | `POST/PUT/DELETE /api/v1/courses/**` | `COURSE_ADMINISTRATOR` |
 | `POST/PUT/DELETE /api/v1/books/**` | `LIBRARIAN` |
-| `POST/PATCH /api/v1/staff-accounts/**` | `SYSTEM_ADMINISTRATOR` |
+| `POST/PATCH/GET /api/v1/staff-accounts/**` | `SYSTEM_ADMINISTRATOR` |
+| `GET /api/v1/sessions`, `DELETE /api/v1/sessions/*` | `SYSTEM_ADMINISTRATOR` |
 | `GET /api/v1/auth/demo-accounts` | none (public) — only reachable at all when `app.demo-accounts.enabled=true`, §11.4 |
 | `GET /api/v1/students/**` | `REGISTRAR`, `LIBRARIAN`, `COURSE_ADMINISTRATOR`, or `STUDENT` — scoping for `STUDENT` happens in the Application Service |
 | `GET /api/v1/books/**` | `LIBRARIAN` or `STUDENT` — same Application-Service scoping for `STUDENT` |
@@ -970,6 +1118,42 @@ Two consequences worth naming:
   code — so `EnrollmentService.getDetail` no longer takes a `callerStudentId` and carries no
   own-records check at all (§7). Withdrawing the grant is strictly safer than scoping it: there is
   no comparison left to get wrong.
+
+**Why the login filter needs its session strategy set by hand.** `.sessionManagement()` publishes its
+`SessionAuthenticationStrategy` as a shared object, and that object is consumed only by
+`AbstractAuthenticationFilterConfigurer` — i.e. by filters the DSL builds, such as `formLogin`. This
+chain installs its login filter with `addFilterAt` (§11.2), so no configurer ever runs for it and it
+keeps `AbstractAuthenticationProcessingFilter`'s inherited `NullAuthenticatedSessionStrategy`. There
+is no fallback either: `SessionManagementConfigurer.createSessionManagementFilter` returns `null`
+under `shouldRequireExplicitAuthenticationStrategy()`, so `SessionManagementFilter` is not in the
+chain to compensate.
+
+Left alone that costs two things, and only one of them is the new feature:
+
+- `SessionRegistry.getAllPrincipals()` would be permanently empty, so §8.8's endpoints would list
+  nothing.
+- **The session id was never rotated on login** — the application had no session-fixation
+  protection. That had gone unnoticed precisely because nothing else depended on the strategy being
+  real.
+
+Order within the composite matters: `ChangeSessionIdAuthenticationStrategy` must precede
+`RegisterSessionAuthenticationStrategy`, or the id registered is the pre-rotation one.
+`ConcurrentSessionControlAuthenticationStrategy` is deliberately omitted — under
+`SessionLimit.UNLIMITED` it only adds a `getAllSessions()` call per login.
+
+**Why `ConcurrentSessionFilter` needs a custom expired strategy.** Its default,
+`ResponseBodySessionInformationExpiredStrategy`, prints one plain-text sentence and never calls
+`setStatus`, so a revoked session's next request would answer **200 OK** with prose — which no client
+can distinguish from success. `SessionRevokedExpiredStrategy` replaces it with a 401 in the standard
+`Error` envelope, written directly to the response because this filter runs ahead of
+`DispatcherServlet` and `GlobalExceptionHandler` can never see it. It assembles the body as a `Map`
+with a pre-formatted timestamp, matching `onLoginFailure` — the `ObjectMapper` in `shared.security` is
+constructed directly rather than injected from Boot, and a bare Jackson mapper renders an `Instant` as
+a numeric epoch.
+
+`FilterOrderRegistration` places `ConcurrentSessionFilter` after the login filter and before
+`AuthorizationFilter`, and therefore before `MustChangePasswordFilter`, so a revoked session is turned
+away ahead of both authorization and the must-change gate.
 
 **Why `SYSTEM_ADMINISTRATOR` needs an explicit exclusion, not just an absent grant:** every other role rule above is additive (`hasRole(...)` on specific paths), with `.anyRequest().authenticated()` as a permissive catch-all for reads. Adding `SYSTEM_ADMINISTRATOR` as a 5th authenticated role without also touching that catch-all would let it fall through to `.anyRequest().authenticated()` on every domain `GET` — passing the filter chain even though `02-component-diagram.md` §4 grants it zero domain read access. The `hasAnyRole(...)` matcher above is what actually enforces "no domain access at all" for this role at the filter-chain level, exercised by [cross-cutting.md](../Testing/03-test-cases/cross-cutting.md) TC-XC-040; `.anyRequest().authenticated()` remains only as a fallback for paths not explicitly listed.
 
@@ -1209,6 +1393,13 @@ Both events are `record`s at the publishing module's root (§2.2): `student.Stud
 ## 14. Traceability
 
 `tactical-ddd-design.md` §12 already maps every `req.md` rule to a tactical construct and an existing (module-level) class/method name; every entry in that table resolves, unchanged, to a concrete method in §§4–8 and §13 above — this document adds no new mapping, only the parameter/return types and the exception types each method throws. The deltas this document introduces *beyond* what `tactical-ddd-design.md` names are called out individually rather than in a separate table: `UserRepository.deleteByStudentId` (§8.3), the `PasswordHasher`/`PasswordCipher`/`InitialPasswordGenerator` ports (§8.1), the full `shared` exception hierarchy including `StaleWriteException` (§3), the `AuthController`-not-`StudentController` routing note for UC-23 (§4.6), the `createdAt`/`updatedAt`/`enrolledAt` fields closing the aggregate↔DTO gap found while writing this revision (§4.4, §7), the `version`-column optimistic-locking decision (§10), the `EnrollmentRow.courseId ⇄ Enrollment.courseCode` translation the repository adapter performs (§9.1), and — new in this revision — the `SYSTEM_ADMINISTRATOR` role and `User.enabled` field, `IdentityService.provisionStaff`/`setAccountEnabled`/`listDemoAccounts`, `StaffAccountController` (§8.7), `DemoAccountsController` (§11.4), and the `DuplicateUsernameException`/`UserNotFoundException` exception types (§3), all implementing UC-24/UC-25 and the demo-accounts convenience per `04-authentication-authorization.md` §3a/§3b/§8.
+
+This revision adds four more, three of which are new mappings and one of which is a correction:
+
+- **`Identity.8`** → `SessionService.listActiveSessions`/`revoke` and `SessionController` (§8.8), implementing UC-27/UC-28 per `04-authentication-authorization.md` §3c. This is the first `req.md` rule added since `tactical-ddd-design.md` §12 was written, and it maps to no aggregate: a session is not a modelled entity here but a framework read model, which is why `SessionService` has no port and no `*Row`.
+- **`Enrollment.1–3` in bulk** → `EnrollmentBatchService.enrollAll` (§7.1), implementing UC-26. It introduces no new invariant; it applies `EnrollmentService.enroll`'s existing ones per course, and the only thing genuinely new is the transaction boundary.
+- **`enrolledCount`** → `CourseRepository.enrollmentCountsFor`/`enrollmentCountOf` (§5). A read model, not an invariant.
+- **A correction, not an addition:** `JdbcConversionsConfig` (§9.1a) does not implement any rule — it repairs the `Instant`/`LocalDate` ⇄ MySQL mapping §9.1's `*Row` records assume and never stated, under which `createdAt` drifted by the JVM's UTC offset on every read and `date_of_birth` was stored a day early.
 
 ## 15. Out of Scope
 

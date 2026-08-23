@@ -1,0 +1,89 @@
+collection:
+  get:
+    operationId: listActiveSessions
+    tags: [Sessions]
+    summary: List every signed-in session
+    description: |
+      **Roles:** System Administrator. UC-27.
+
+      **Not paged**, unlike every other list in this API. The source is Spring Security's in-memory
+      session registry, which has no stable ordering to offset into, so pages would overlap and skip
+      as sessions come and go between requests. It is bounded by the number of people signed in at
+      once (`../04-authentication-authorization.md` §3c).
+
+      **In-memory and per-process.** The list is emptied by a restart — that signs nobody out, it
+      only discards the record of who was signed in. Were the application ever run as more than one
+      instance, each would report only its own sessions.
+
+      Ordered by `lastRequest`, most recent first.
+    x-roles: [SYSTEM_ADMINISTRATOR]
+    responses:
+      '200':
+        description: Every live session. An empty array when nobody is signed in.
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '../components/schemas/session.yaml#/ActiveSession'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+
+item:
+  delete:
+    operationId: revokeSession
+    tags: [Sessions]
+    summary: End a signed-in session
+    description: |
+      **Roles:** System Administrator. UC-28.
+
+      **Revocation is deferred.** This marks the session revoked; the holder's *next* request is what
+      is refused, with a `401`, and what actually invalidates the session. Nothing can be done with
+      the session in the interval, but it has not ceased to exist at the moment this returns
+      (`../04-authentication-authorization.md` §3c.3).
+
+      **This is not a deactivation.** The account is untouched and its holder may sign in again
+      immediately (req.md §4 Identity.8). Blocking the *next* sign-in is
+      `PATCH /staff-accounts/{id}/status`, which conversely leaves the current session running.
+    x-roles: [SYSTEM_ADMINISTRATOR]
+    parameters:
+      - name: handle
+        in: path
+        required: true
+        description: The `handle` from `GET /sessions` — a digest, never a session identifier.
+        schema:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+    responses:
+      '204':
+        description: The session was revoked.
+      '400':
+        description: |
+          The handle names the caller's own session. Signing out is the deliberate way to end it.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/ValidationError'
+            example:
+              timestamp: '2026-01-15T09:24:00Z'
+              status: 400
+              error: Bad Request
+              message: You cannot end your own session. Use sign out instead.
+              path: /api/v1/sessions/f5ca38f7
+              errors:
+                - field: handle
+                  message: You cannot end your own session. Use sign out instead.
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+      '404':
+        description: |
+          No live session matches that handle — it ended on its own between being listed and this
+          request.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/Error'

@@ -17,11 +17,13 @@ Source of truth: `06-low-level-design.md` §11.1.
 | `POST /api/v1/auth/password` | Any authenticated role | Only endpoint reachable while `mustChangePassword = true` |
 | `GET /api/v1/students/*/initial-password` | REGISTRAR | — |
 | `POST/PUT/DELETE /api/v1/students/**` | REGISTRAR | — |
-| `POST/DELETE /api/v1/enrollments/**` | REGISTRAR | No `PUT` — `Enrollment` has no update use case |
+| `POST/DELETE /api/v1/enrollments/**` | REGISTRAR | No `PUT` — `Enrollment` has no update use case. The `POST` matcher covers `/enrollments/batch` (UC-26) without a rule of its own |
 | `POST/PUT/DELETE /api/v1/courses/**` | COURSE_ADMINISTRATOR | — |
 | `POST/PUT/DELETE /api/v1/books/**` | LIBRARIAN | — |
 | `POST /api/v1/staff-accounts` | SYSTEM_ADMINISTRATOR | UC-24 |
 | `PATCH /api/v1/staff-accounts/*/status` | SYSTEM_ADMINISTRATOR | UC-25 |
+| `GET /api/v1/sessions` | SYSTEM_ADMINISTRATOR | UC-27. Explicit, not inherited: the per-resource read allow-list below does not cover `/sessions`, so without this matcher a `GET` would fall through to `.anyRequest().authenticated()` |
+| `DELETE /api/v1/sessions/*` | SYSTEM_ADMINISTRATOR | UC-28 |
 | `GET /api/v1/students/**` (except initial-password above) | REGISTRAR, LIBRARIAN, COURSE_ADMINISTRATOR, STUDENT | COURSE_ADMINISTRATOR holds this only to open a profile from a course roster. STUDENT's "own records only" scoping is applied inside the Application Service, not the filter chain — see §1.3 |
 | `GET /api/v1/books/**` | LIBRARIAN, STUDENT | STUDENT scoped as above. REGISTRAR and COURSE_ADMINISTRATOR are denied |
 | `GET /api/v1/courses/**` | REGISTRAR, COURSE_ADMINISTRATOR, STUDENT | Not scoped — the catalogue is not personal data. LIBRARIAN is denied |
@@ -353,6 +355,7 @@ Negative-case coverage for the two endpoints added by UC-24/UC-25 and the demo-a
 - **Priority:** P0 · **Type:** Security-RBAC
 - **Steps:** As SYSTEM_ADMINISTRATOR, attempt `GET /api/v1/students`, `GET /api/v1/books`, `GET /api/v1/courses`, and one write endpoint from each.
 - **Expected Result:** every request is rejected — reads are `403 Forbidden` just like an out-of-role write, since `identity`'s System Administrator scoping (§1 RBAC Matrix above) grants no `GET /api/v1/**` fallthrough the way the 4 domain-facing roles get.
+- **Note:** the role now holds one read grant, `GET /api/v1/sessions` (TC-IDN-033). That does not weaken this case: sessions report who is signed in and expose no student, book, course, or enrollment, so "no domain data" still describes the role exactly. This case asserts the domain modules specifically, and must not be relaxed into "the role can read nothing".
 
 ### TC-XC-041 — An unauthenticated caller cannot reach either `staff-accounts` endpoint
 - **Related UC / Rule:** `06-low-level-design.md` §11.1
@@ -401,6 +404,43 @@ Source of truth: `02-component-diagram.md` §4 ("Student | none | own records on
 
 ---
 
+---
+
+## 10. Date/time round trip
+
+MySQL `DATETIME` carries no time zone, so both halves of every round trip have to agree on which one it means. These cases pin that agreement (`06-low-level-design.md` §9.1a).
+
+They are also a warning about test setup. Before this was fixed, every integration test bound `MySQLContainer.getJdbcUrl()` with no time-zone parameter, so the driver used the JVM's zone on **both** halves and the round trip was accidentally self-consistent — the suite was green while production was wrong. `TestDatasource.bind` now appends `serverTimezone=UTC` in one place. **A test that binds a container URL by hand reintroduces the blind spot.**
+
+### TC-XC-046 — `createdAt` survives repeated updates and matches the stored UTC wall clock
+- **Related UC / Rule:** `06-low-level-design.md` §9.1a; `05-database-schema.md` §6
+- **Priority:** P0 · **Type:** Regression
+- **Steps:** Create a course and note `createdAt`. Update it **twice**. Read it back. Separately, read `created_at` straight out of the column.
+- **Expected Result:** `createdAt` is within seconds of the wall clock at creation, is unchanged by the updates, and the stored column interpreted as UTC matches it.
+- **Two updates, not one, on purpose:** the drift compounded once per `version`, because the value read was written back on every `UPDATE`. A single update is a weaker signal than two.
+- **Assert against the column, not only the API:** a self-consistent round trip is exactly what the defect already produced. Only the stored wall clock proves the zone.
+
+### TC-XC-047 — A date of birth is stored on the day it was submitted
+- **Related UC / Rule:** `06-low-level-design.md` §9.1a
+- **Priority:** P0 · **Type:** Regression
+- **Steps:** Register a student with `dateOfBirth: 2000-01-01`; read the response, the detail endpoint, and the `date_of_birth` column.
+- **Expected Result:** `2000-01-01` in all three.
+- **The defect:** `LocalDate` was written as `atStartOfDay(systemDefault())`, so at a positive UTC offset it went over the wire as the previous evening and MySQL truncated it into the `DATE` column a day early. Reproduces only at a non-UTC JVM zone — which is why running the suite in UTC alone would not catch it.
+
+### TC-XC-048 — A student's `createdAt` is not rewound by an update
+- **Related UC / Rule:** UC-1, UC-2
+- **Priority:** P0 · **Type:** Regression
+- **Steps:** Register a student, note `createdAt`, update them, read it again.
+- **Expected Result:** Unchanged. The aggregate this was originally reported against; TC-STU-037 is the same property stated from the user's side.
+
+### TC-XC-049 — Sub-second precision is truncated, and that is the contract
+- **Related UC / Rule:** `05-database-schema.md` §6
+- **Priority:** P2 · **Type:** Boundary
+- **Steps:** Create any record and compare the `createdAt` in the create response with the one a subsequent `GET` returns.
+- **Expected Result:** They agree to the second but may differ within it. `DATETIME` without an explicit `(n)` is `DATETIME(0)`, so MySQL discards the sub-second component the in-memory `Instant` carries. Assertions on timestamps must compare at second resolution or read the persisted value — an exact-equality check against the create response is a flaky test, not a defect.
+
+---
+
 ## Traceability Summary
 
 | Concern | Test Case IDs |
@@ -417,4 +457,4 @@ Source of truth: `02-component-diagram.md` §4 ("Student | none | own records on
 | Pagination conventions | TC-XC-036–038 |
 | Staff account provisioning & demo accounts (RBAC) | TC-XC-039–042 |
 | Own records scoping — book; enrollment grant withdrawn | TC-XC-043–045 |
-| Staff account provisioning & demo accounts (RBAC) | TC-XC-039–042 |
+| Date/time round trip | TC-XC-046–049 |

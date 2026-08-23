@@ -1,6 +1,8 @@
 package org.phuchoang.management.course.application;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.course.CourseDeleted;
 import org.phuchoang.management.course.CourseLookup;
@@ -106,19 +108,39 @@ public class CourseService implements CourseLookup {
     events.publishEvent(new CourseDeleted(course.code()));
   }
 
-  /** UC-15 — matches code/name, paged. {@code query} may be blank/{@code null}. */
+  /**
+   * UC-15 — matches code/name, paged. {@code query} may be blank/{@code null}.
+   *
+   * <p>The enrolled-student count is fetched once for the whole page rather than per row: a page of
+   * 20 costs one extra query, not 20. {@code readOnly} because this is now two statements — the
+   * page and its counts should come from one snapshot, or a concurrent enrollment could land
+   * between them and produce a count for a course the page doesn't contain.
+   *
+   * <p>That count is read outside any enrolling transaction, so it is a snapshot rather than a
+   * guarantee — it must not be used as a capacity check.
+   */
+  @Transactional(readOnly = true)
   public Page<CourseSummaryView> search(String query, Pageable pageable) {
-    return repository.search(query, pageable).map(this::toSummaryView);
+    Page<Course> page = repository.search(query, pageable);
+    List<String> codes = page.getContent().stream().map(course -> course.code().value()).toList();
+    Map<String, Long> counts = repository.enrollmentCountsFor(codes);
+    return page.map(
+        course ->
+            new CourseSummaryView(
+                course.code().value(),
+                course.name(),
+                course.credits().value(),
+                counts.getOrDefault(course.code().value(), 0L)));
   }
 
   /**
-   * findByCode (404 if absent) — the record itself, nothing composed. The enrolled-student roster
-   * is <em>not</em> embedded: it is its own paged, separately authorized read ({@code GET
+   * findByCode (404 if absent), plus the enrolled-student count. The roster itself is still
+   * <em>not</em> embedded: it is its own paged, separately authorized read ({@code GET
    * /api/v1/enrollments?courseCode=}), so a Student who may browse the catalogue never receives the
-   * roster as a side effect of opening a course. This replaces the hardcoded empty list that stood
-   * in for the composition US-5.5 originally scoped here, mirroring the same change in {@code
-   * StudentService.getDetail}.
+   * roster as a side effect of opening a course. A count carries no student's name, which is what
+   * makes it safe on the same DTO the roster is deliberately absent from.
    */
+  @Transactional(readOnly = true)
   public CourseDetailView getDetail(String code) {
     CourseCode courseCode = new CourseCode(code);
     Course course =
@@ -126,11 +148,14 @@ public class CourseService implements CourseLookup {
             .findByCode(courseCode)
             .orElseThrow(() -> new NotFoundException("Course '" + code + "' does not exist."));
 
+    // A count, not the roster itself -- "how many" is not "who", and the distinction is the whole
+    // reason this is safe to hand a Student browsing the catalogue.
     return new CourseDetailView(
         course.code().value(),
         course.name(),
         course.description(),
         course.credits().value(),
+        repository.enrollmentCountOf(courseCode),
         course.createdAt(),
         course.updatedAt());
   }
@@ -156,10 +181,6 @@ public class CourseService implements CourseLookup {
     return new CourseSummary(course.code().value(), course.name(), course.credits().value());
   }
 
-  private CourseSummaryView toSummaryView(Course course) {
-    return new CourseSummaryView(course.code().value(), course.name(), course.credits().value());
-  }
-
   /**
    * Unwraps {@code Course}'s Value Objects here rather than in {@code CourseMapper} — the web
    * layer may never call a method on a Domain-layer object directly (LayeringRulesTest), only the
@@ -183,7 +204,7 @@ public class CourseService implements CourseLookup {
       Instant updatedAt) {}
 
   /** Same VO-unwrapping rationale as {@link CreatedCourse}, for one {@link #search} result. */
-  public record CourseSummaryView(String courseCode, String name, int credits) {}
+  public record CourseSummaryView(String courseCode, String name, int credits, long enrolledCount) {}
 
   /** Same VO-unwrapping rationale as {@link CreatedCourse}, for {@link #getDetail}'s result. */
   public record CourseDetailView(
@@ -191,6 +212,7 @@ public class CourseService implements CourseLookup {
       String name,
       String description,
       int credits,
+      long enrolledCount,
       Instant createdAt,
       Instant updatedAt) {}
 }

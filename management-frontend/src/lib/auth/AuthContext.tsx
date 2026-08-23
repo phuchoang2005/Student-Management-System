@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 
+import { onSessionExpired } from '@/lib/api/client';
 import { auth, logoutEndpoint } from '@/lib/api/endpoints';
 import type { Role } from '@/lib/api/types';
 
@@ -20,8 +21,9 @@ import type { Role } from '@/lib/api/types';
  * rather than a 401, so the client cannot ask "who am I?". What it can do is remember the login
  * response and mirror it to sessionStorage so a refresh survives.
  *
- * Known limit, accepted for a demo: if the server session expires while sessionStorage still holds
- * state, the first 403 clears it and drops the user back to /login.
+ * When the server session goes away — it expired, or a System Administrator ended it — the next
+ * request answers 401 and `client.ts` calls back into here to clear the mirror, which drops the user
+ * to /login rather than leaving them on a screen whose every request now fails.
  */
 
 const STORAGE_KEY = 'management.session';
@@ -82,6 +84,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     writeStoredSession(next);
     setSession(next);
   }, []);
+
+  // Registered once, for the lifetime of the provider. `client.ts` owns no auth state of its own,
+  // so it calls back here instead of importing this module (which would be a cycle).
+  useEffect(() => {
+    onSessionExpired(() => persist(null));
+    return () => onSessionExpired(null);
+  }, [persist]);
 
   const login = useCallback(
     async (username: string, password: string) => {

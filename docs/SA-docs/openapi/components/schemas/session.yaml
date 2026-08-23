@@ -1,0 +1,38 @@
+ActiveSession:
+  type: object
+  description: |
+    One signed-in session.
+
+    Carries no `mustChangePassword` or `enabled`. `POST /auth/password` replaces the session
+    principal without informing the session registry, so the registry's copy of those flags can be
+    stale; account state is `GET /staff-accounts`'s answer, and this resource is about sessions
+    (`../04-authentication-authorization.md` §3c.2).
+  required: [handle, username, role, lastRequest, current]
+  properties:
+    handle:
+      type: string
+      pattern: '^[0-9a-f]{64}$'
+      example: f5ca38f748a1d6eaf726b8a42fb575c3c71f1864a8143301782de13da2d9202b
+      description: |
+        A SHA-256 digest of the session identifier, and the address used to end the session.
+
+        The identifier itself is never emitted. A session identifier is a bearer credential —
+        anything holding one can present it as a `JSESSIONID` cookie and become that user — so the
+        API publishes a value that is stable enough to address a session and preimage-resistant
+        enough that a screenshot, a log line, or browser history cannot be replayed
+        (api-specification.md §5 decision #13).
+    username:
+      type: string
+      example: demo.registrar
+    role:
+      $ref: './common.yaml#/Role'
+    lastRequest:
+      type: string
+      format: date-time
+      description: When this session last made a request.
+    current:
+      type: boolean
+      description: |
+        The calling administrator's own session. `DELETE /sessions/{handle}` refuses it — signing out
+        is the deliberate way to end one's own session
+        (`../04-authentication-authorization.md` §3c.4).

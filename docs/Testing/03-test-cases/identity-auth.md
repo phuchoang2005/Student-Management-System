@@ -244,6 +244,72 @@ Covers **UC-16** (View Own Record, Books & Courses), **UC-21** (Login), **UC-22*
 
 ---
 
+## 9. Active sessions (UC-27, UC-28 / US-7.3, US-7.4)
+
+Endpoints: `GET /api/v1/sessions`, `DELETE /api/v1/sessions/{handle}`.
+
+These cases need **real logins**, not `@WithMockUser` or an injected test principal: the thing under test is whether a session is registered at all, which only the actual login filter does.
+
+### TC-IDN-033 — A real login appears in the session list
+- **Related UC / Rule:** UC-27; Identity.8
+- **Priority:** P0 · **Type:** Functional
+- **Preconditions:** An account exists that can log in.
+- **Steps:** Log that account in for real (`POST /api/v1/auth/login`). Then, as System Administrator: `GET /api/v1/sessions`.
+- **Expected Result:** `200 OK`; an array containing a row whose `username` and `role` match the account just signed in, with a `lastRequest`.
+- **Why it matters:** this is the case that fails if `SecurityConfig` stops calling `loginFilter.setSessionAuthenticationStrategy(...)`. The login filter is installed with `addFilterAt`, so no DSL configurer supplies that strategy — the registry would be permanently empty and this list always `[]` (`04-authentication-authorization.md` §3c.1).
+
+### TC-IDN-034 — The list publishes a digest, never a session identifier
+- **Related UC / Rule:** `api-specification.md` §5 decision #13
+- **Priority:** P0 · **Type:** Security-Positive
+- **Steps:** Sign an account in, capture its session id, then `GET /api/v1/sessions` as System Administrator.
+- **Expected Result:** No `handle` equals the session id; every `handle` matches `^[0-9a-f]{64}$`; the SHA-256 of the captured session id **is** among the handles. Assert against the `handle` values rather than scanning the whole body for the id as a substring — short test-harness session ids occur by chance inside ISO timestamps and would fail such a check while proving nothing.
+- **Why it matters:** a session identifier is a bearer credential. Emitting one would make the admin screen, its screenshots, and any log of it a full account takeover.
+
+### TC-IDN-035 — A revoked session is refused on its next request
+- **Related UC / Rule:** UC-28; Identity.8
+- **Priority:** P0 · **Type:** Functional
+- **Steps:** Sign an account in; as System Administrator `DELETE /api/v1/sessions/{handle}`; then make any authenticated request carrying that session.
+- **Expected Result:** `204 No Content` on the delete. The following request answers **`401 Unauthorized`** in the standard `Error` envelope with a `message`.
+- **Why it matters:** `ConcurrentSessionFilter`'s default expired-session strategy prints a plain-text sentence and never sets a status — it would answer `200 OK` with prose, which no client can tell from success. The status assertion is the whole point of the case.
+
+### TC-IDN-036 — A revoked session drops out of the list
+- **Related UC / Rule:** UC-28
+- **Priority:** P1 · **Type:** Functional
+- **Steps:** Revoke a listed session, then `GET /api/v1/sessions` again.
+- **Expected Result:** `200 OK`; that username no longer appears.
+
+### TC-IDN-037 — An unknown handle is not found
+- **Related UC / Rule:** UC-28, alternate flow 2a
+- **Priority:** P1 · **Type:** Negative
+- **Steps:** As System Administrator: `DELETE /api/v1/sessions/{64 hex zeros}`.
+- **Expected Result:** `404 Not Found` — the case of a session that ended on its own between being listed and being confirmed.
+
+### TC-IDN-038 — Only the System Administrator may read or end sessions
+- **Related UC / Rule:** `04-authentication-authorization.md` §6, §6.1
+- **Priority:** P0 · **Type:** Security-RBAC
+- **Steps:** As each of Registrar, Librarian, Course Administrator, Student: `GET /api/v1/sessions` and `DELETE /api/v1/sessions/{handle}`.
+- **Expected Result:** `403 Forbidden` for all eight calls. Both matchers are explicit in the filter chain; without them a `GET` would fall through to `.anyRequest().authenticated()` and any signed-in role could enumerate — and end — everyone else's sessions.
+
+### TC-IDN-039 — An administrator cannot end their own session
+- **Related UC / Rule:** UC-28, alternate flow 1a; §3c.4
+- **Priority:** P1 · **Type:** Negative
+- **Steps:** As System Administrator, find the row where `current` is `true` and `DELETE` its handle.
+- **Expected Result:** `400 Bad Request` naming `handle` in `errors[]`. Ending one's own session from this view is indistinguishable from the feature malfunctioning; signing out already does it deliberately.
+
+### TC-IDN-040 — Ending a session is not disabling an account
+- **Related UC / Rule:** Identity.7 vs Identity.8
+- **Priority:** P0 · **Type:** Functional
+- **Steps:** Revoke an account's session, then log that same account in again.
+- **Expected Result:** The login succeeds. Contrast TC-IDN-028, where a *disabled* account cannot log in but an already-open session keeps working. The pair is what makes the two rules distinguishable — each is the other's mirror image.
+
+### TC-IDN-041 — The session id is rotated on login
+- **Related UC / Rule:** `04-authentication-authorization.md` §1 (session fixation)
+- **Priority:** P0 · **Type:** Security-Positive
+- **Steps:** Obtain a session before authenticating, note its id, then log in over the same session.
+- **Expected Result:** The post-login session id differs. Not strictly part of UC-27/28, but it ships with them: the same missing `SessionAuthenticationStrategy` that left the registry empty also left the id unrotated, so both are fixed and both are pinned here.
+
+---
+
 ## Traceability Summary
 
 | UC / US | Test Case IDs |
@@ -255,5 +321,8 @@ Covers **UC-16** (View Own Record, Books & Courses), **UC-21** (Login), **UC-22*
 | UC-24 / US-7.1 | TC-IDN-024–027 |
 | UC-25 / US-7.2 | TC-IDN-028–030 |
 | Demo accounts | TC-IDN-031–032 |
+| UC-27 / US-7.3 | TC-IDN-033–034, TC-IDN-036, TC-IDN-038 |
+| UC-28 / US-7.4 | TC-IDN-035–040 |
+| Session fixation (no UC) | TC-IDN-041 |
 
 Account auto-provisioning (UC-1 tail): [student.md](./student.md) TC-STU-008–010. Full RBAC matrix, must-change-password gate, and staff-account/demo-account RBAC: [cross-cutting.md](./cross-cutting.md) §1–2, §9.

@@ -117,6 +117,17 @@ As a **registrar**, I want to remove a student's enrollment in a course, so that
 - Given an active enrollment, when it is ended — again by student code and course code — then only the link between student and course is removed. *(req.md §4 Enrollment.4)*
 - Neither the student nor the course is deleted or otherwise affected. *(req.md §4 Enrollment.4)*
 
+### US-4.3 — Enroll a student in several courses at once
+As a **registrar**, I want to pick several courses for one student and submit them together, so that enrolling someone into a term's worth of study is one action rather than one action per course.
+
+**Acceptance Criteria**
+- Given a student and several courses, when I submit, then the student is enrolled in each of them. *(req.md §4 Enrollment.1–3)*
+- Given one of the chosen courses is one the student is already enrolled in, when I submit, then the others are still enrolled and that one is reported as already enrolled. *(req.md §4 Enrollment.1)*
+- Given one of the chosen courses does not exist, when I submit, then the others are still enrolled and that one is reported as unknown. *(req.md §4 Enrollment.2)*
+- Given the student does not exist, when I submit, then the whole request is rejected and nothing is enrolled. *(req.md §4 Enrollment.3)*
+- Given I choose the same course twice, when I submit, then it is enrolled once and reported once.
+- The courses reported as enrolled stay enrolled regardless of any other course in the same submission being rejected.
+
 ---
 
 ## 5. Read Access (Per Actor)
@@ -244,6 +255,24 @@ As a **system administrator**, I want to disable or re-enable a staff account, s
 - Given a disabled staff account, when I re-enable it, then it can log in again. *(req.md §4 Identity.7)*
 - Disabling or re-enabling an account does not affect any data the account holder previously created.
 
+### US-7.3 — See who is signed in
+As a **system administrator**, I want to see which accounts are signed in right now, so that I know who currently has access before I decide whether to act.
+
+**Acceptance Criteria**
+- Given people are signed in, when I open the active sessions view, then I see each one's username, role, and when they were last active. *(req.md §4 Identity.8)*
+- Given I am signed in, when I open the view, then my own session is marked as mine.
+- Given the server has just restarted, when I open the view, then the list is empty — the record of who is signed in does not survive a restart, and nobody was signed out by it.
+- The view never shows anything that could be used to impersonate a session.
+
+### US-7.4 — End someone's session
+As a **system administrator**, I want to end a signed-in session, so that I can cut off access immediately without disabling the account.
+
+**Acceptance Criteria**
+- Given a listed session other than my own, when I end it, then its holder is refused on their next request and returned to sign-in. *(req.md §4 Identity.8)*
+- Given I have ended a session, when I look again, then it is no longer listed.
+- Given a session I ended, when its holder signs in again, then they are allowed in — ending a session is not disabling an account. *(req.md §4 Identity.7, Identity.8)*
+- Given my own session, when I try to end it, then the request is rejected and I am pointed at signing out instead.
+
 ---
 
 ## Traceability Summary
@@ -261,6 +290,7 @@ As a **system administrator**, I want to disable or re-enable a staff account, s
 | US-3.3 | req.md §5 "When a course is removed" |
 | US-4.1 | req.md §4 Enrollment 1–3 |
 | US-4.2 | req.md §4 Enrollment.4 |
+| US-4.3 | req.md §4 Enrollment 1–3 |
 | US-5.1 | req.md §2 Student, §3 Student↔Book, Student↔Course (read-only) |
 | US-5.2 | req.md §2 Book, §3 Student↔Book (read-only) |
 | US-5.3 | req.md §2 Course, §3 Student↔Course (read-only) |
@@ -271,3 +301,5 @@ As a **system administrator**, I want to disable or re-enable a staff account, s
 | US-6.3 | req.md §4 Identity.4–5 (read-only) |
 | US-7.1 | req.md §4 Identity.2–3, Identity.6 |
 | US-7.2 | req.md §4 Identity.7 |
+| US-7.3 | req.md §4 Identity.8 (read-only) |
+| US-7.4 | req.md §4 Identity.8 |

@@ -530,6 +530,87 @@ Ordering matters here and is deliberate: **PM-020 → PM-021 → PM-019 → PM-0
 | Sprint 3 | 40h | 40h | ✓ |
 | Sprint 4 | 34h | 34h | ✓ |
 | Sprint 5 | 34h | — (added after the plan) | n/a |
-| **Total** | **197h** | **163h planned + 34h added** | ✓ |
+| Sprint 6 | 28h | — (added after the plan) | n/a |
+| **Total** | **225h** | **163h planned + 62h added** | ✓ |
 
-Every one of the 44 items in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears exactly once above, decomposed into 2–6 tasks apiece. Sprint 5 has no counterpart row in [02-sprint-plan.md](./02-sprint-plan.md): that document plans the four sprints scoped up front, and Epic H was added afterwards in response to the demo walkthrough. If a source document changes (LLD, test cases, or the Product Backlog's estimates), review this set for drift the same way [README.md](./README.md) already flags for the other three PM docs.
+Every one of the 51 items in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears exactly once above, decomposed into 2–6 tasks apiece. Sprints 5 and 6 have no counterpart rows in [02-sprint-plan.md](./02-sprint-plan.md): that document plans the four sprints scoped up front, and Epics H and I were both added afterwards — H from the demo walkthrough, I from using the application. Both are recorded as addenda there rather than folded into the timeline. If a source document changes (LLD, test cases, or the Product Backlog's estimates), review this set for drift the same way [README.md](./README.md) already flags for the other three PM docs.
+
+---
+
+## 9. Sprint 6 — Registrar workflow and session oversight (28h)
+
+Not part of the original plan, and not part of Sprint 5's either. Where Epic H came out of *demoing* the product, this came out of *using* it. See [01-product-backlog.md](./01-product-backlog.md) §8b (Epic I).
+
+Ordering: **PM-025 first and alone**, then PM-026, PM-027, US-4.3, and US-7.3/7.4 + PM-028 together. PM-025 rewrites the JDBC converter graph and touches every integration test's datasource binding; nothing else should be moving while it lands.
+
+### PM-025 — Timestamp and date UTC correctness (5h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `shared/persistence/JdbcConversionsConfig`: a `JdbcCustomConversions` bean registering `@ReadingConverter LocalDateTime→Instant` and `@WritingConverter LocalDate→Timestamp`, both at `ZoneOffset.UTC` | Internal | 1h |
+| `TestDatasource.bind` — one place binding a Testcontainers MySQL to `spring.datasource.*`, appending `serverTimezone=UTC` | Tests | 0.5h |
+| Repoint all 29 `@DynamicPropertySource` blocks at the helper | Tests | 1h |
+| `TimestampRoundTripIntegrationTest` — TC-XC-046–048, asserting against the raw column as well as the API | Tests | 1.5h |
+| Document the UTC convention in `05-database-schema.md` §6 and the mechanism in `06-low-level-design.md` §9.1a | Docs | 1h |
+
+**Status:** done. The reported symptom was a wrong registration time; the cause was that only the *read* half was wrong — Connector/J returns `LocalDateTime` for a `DATETIME` and Spring's stock converter interprets it at the JVM's zone, while the write correctly used the connection's UTC. Because `toRow` writes back the `createdAt` it last read, the error compounded 7h per `version`, which is why it looked like a plausible timestamp in any single sitting rather than an obvious bug.
+
+Two things were found rather than fixed-as-specified. `students.date_of_birth` was being stored a day early by the mirror-image defect on `LocalDate`'s *write* side, which nobody had reported. And the test suite had been actively hiding both: every test bound a container URL with no time-zone parameter, so both halves used the same wrong zone and every assertion passed. A `@WritingConverter Instant→LocalDateTime` was written and then deleted — `determineCustomWriteTarget` asks for `(Instant, Timestamp)` first and the store converter already claims that pair, so it was dead code.
+
+Verified by disabling the config and re-running: `createdAt` came back 14h early after two updates (7h × 2, confirming the compounding) and `2000-01-01` read back as `1999-12-31`.
+
+### PM-026 — Edit forms fetch the full record (2h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `StudentFormDialog`: fetch `StudentDetail` via `useResource` when editing; seed `dateOfBirth`; guard the seed against a stale record; block submit while loading | Frontend | 1h |
+| `CourseFormDialog`: the same for `description` | Frontend | 0.5h |
+| Regression cases TC-STU-035–036 | Tests | 0.5h |
+
+**Status:** done. Reported as "the information doesn't change". The dialog was typed on `StudentSummary`, which carries no `dateOfBirth`, so the field opened empty on every edit — and being `required`, the browser's own constraint check rejected the form before any handler ran, so Save appeared inert. Not reproducible through the API, which is why no backend test caught it.
+
+`CourseFormDialog` had the same defect on `description` and is the worse of the two: nothing there is `required`, so the form submitted happily and wrote the blank back, destroying the text rather than refusing to save. A stale-error check on two confirm handlers (`removeAction.error` read from the closed-over render rather than the run's return value) was corrected in the same pass.
+
+### PM-027 — Enrolled-student count on courses (3h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `CourseRepository.enrollmentCountsFor`/`enrollmentCountOf`; `CourseEnrollmentCountRow`; the `LEFT JOIN` and single-course queries | Port, Internal | 1h |
+| `CourseService.search`/`getDetail` — one counts query per page, both now `@Transactional(readOnly = true)`; the field on both views and both DTOs | Application, Web | 0.5h |
+| Students column on the courses list, course detail, and the Course Admin list | Frontend | 0.5h |
+| TC-CRS-028–033 | Tests | 1h |
+
+**Status:** done. The interesting constraint was that `course` cannot call `enrollment` — `enrollment` already depends on `course`, so the reverse edge closes a cycle `ApplicationModules.verify()` rejects. The count is read by joining the `enrollments` table from `course`'s own JDBC adapter instead: a SQL dependency rather than a Java one, which is the same escape `enrollment` already used in the other direction. It is now reciprocal, and recorded on both sides.
+
+`LEFT JOIN` rather than `JOIN` is load-bearing — a course nobody is enrolled in must return `0`, not vanish from the list. This is also a documented tension with `api-specification.md` §5 decision #10, resolved as decision #11: #10's reasons are paging and authorization, and a scalar has neither, so a count is safe on the response a roster is deliberately kept off.
+
+### US-4.3 — Enroll into several courses at once (8h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `EnrollmentBatchService` — a separate bean, not transactional, looping through the proxied `EnrollmentService` | Application | 2h |
+| `BatchEnrollmentRequest`/`ResultDto`/`Response`; `POST /enrollments/batch`; mapper methods | Web | 1.5h |
+| Multi-select course picker replacing the single-code dialog, with a per-course outcome summary | Frontend | 3h |
+| TC-ENR-022–028 | Tests | 1.5h |
+
+**Status:** done. The whole design rests on one detail: `@Transactional` is applied by a proxy, so a loop written inside `EnrollmentService` calling its own `enroll` would be self-invocation — proxy bypassed, annotation inert, every course sharing one transaction, which is exactly the all-or-nothing behaviour the story exists to avoid. A separate bean calling through an injected reference crosses the proxy and gives each course its own transaction. TC-ENR-023 is written to fail if anyone ever folds it back.
+
+Status code chosen as `200`, not `207`: the latter is a WebDAV code defined against an XML body, and using it here would be a pun that buys a client nothing. An unknown *student* stays a whole-request `400` while an unknown *course* is a per-course outcome, because the student is the subject of the request rather than one of its items. Duplicate codes within one request are collapsed rather than reported twice.
+
+### US-7.3 / US-7.4 / PM-028 — Active sessions, revocation, session fixation (10h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `SessionRegistry` + `HttpSessionEventPublisher` beans; `sessionConcurrency` with `SessionLimit.UNLIMITED`; **`loginFilter.setSessionAuthenticationStrategy`** with rotation before registration | Security | 2h |
+| `SessionRevokedExpiredStrategy` — 401 in the standard envelope, replacing a default that answers 200 with prose | Security | 1h |
+| `SessionService` (SHA-256 handles, `getAllPrincipals` iteration, self-revocation guard) + `SessionController`/`SessionMapper`/`ActiveSessionDto` | Application, Web | 2.5h |
+| `/sessions` tab, capability, nav entry; 401 ejection wired through `client.ts` → `AuthContext` | Frontend | 2.5h |
+| TC-IDN-033–041 | Tests | 2h |
+
+**Status:** done. The estimate assumed the session registry would populate itself once declared; it does not, and finding out why took most of the security half. The login filter is installed with `addFilterAt`, so no `AbstractAuthenticationFilterConfigurer` ever runs for it — and that configurer is the only consumer of the `SessionAuthenticationStrategy` that `.sessionManagement()` publishes. The filter kept its inherited no-op strategy, with no fallback, and the registry would have been permanently empty.
+
+That same gap turned out to be **PM-028 already**: with a no-op strategy the session id was never rotated on login, so the application had no session-fixation protection. It had gone unnoticed precisely because nothing else depended on the strategy being real. One line in the composite fixes both, which is why the two were done together.
+
+Two more defaults needed replacing rather than accepting. `ConcurrentSessionFilter`'s expired-session strategy prints a sentence and never sets a status, so a revoked session's next request would have answered `200 OK` with prose — indistinguishable from success. And session ids are never emitted: they are bearer credentials, so the API publishes a SHA-256 digest as an opaque handle (decision #13).
+
+One trap is documented in the code because it is invisible: `AuthenticatedPrincipal` is a record with value-based equality and the registry keys its map on the principal object, while `AuthController.changePassword` swaps that object mid-session without telling the registry. Looking a principal up by reconstructing one therefore matches nothing, silently. Every read iterates `getAllPrincipals()` instead.

@@ -89,8 +89,22 @@ Derived from the controllers in `management/src/main/java/org/phuchoang/manageme
 | `GET` | `/staff-accounts?page&size` | `SYSTEM_ADMINISTRATOR` | — | `200 PageResponse<StaffAccountSummary>` |
 | `POST` | `/staff-accounts` | `SYSTEM_ADMINISTRATOR` | `{username, role}` | `201 {username, role, initialPassword}` |
 | `PATCH` | `/staff-accounts/{id}/status` | `SYSTEM_ADMINISTRATOR` | `{enabled}` | `200 {username, enabled}` |
+| `GET` | `/sessions` | `SYSTEM_ADMINISTRATOR` | — | `200 ActiveSession[]` — **a bare array, not a `PageResponse`** |
+| `DELETE` | `/sessions/{handle}` | `SYSTEM_ADMINISTRATOR` | — | `204` · `400` own session · `404` gone |
 
 `role` on staff creation must be one of `REGISTRAR`, `LIBRARIAN`, `COURSE_ADMINISTRATOR`.
+
+`ActiveSession` is `{handle, username, role, lastRequest, current}`. Three things to build against:
+
+- **`handle` is a digest, not a session id.** The API never emits a session identifier — one is a
+  replayable credential. Treat the handle as an opaque address and never display it as if it
+  identified the user.
+- **`/sessions` is the one list endpoint with no `PageResponse`.** The source is an in-memory
+  snapshot with no stable ordering to offset into, so `usePagedResource` does not apply here; use
+  `useResource` and render the array.
+- **Revocation is deferred.** `204` means the session is flagged; its holder is turned away on their
+  *next* request. Do not tell the user the person has been signed out — tell them the session has
+  been ended.
 
 ### 3.2 Student — `student/web/StudentController.java`
 
@@ -133,6 +147,10 @@ Derived from the controllers in `management/src/main/java/org/phuchoang/manageme
 
 `courseCode` is immutable — `PUT` does not accept it. `CourseDetail` has **no `roster` field**; see §4.4.
 
+`CourseSummary` and `CourseDetail` both carry `enrolledCount`. `CourseResponse` (create/update) does
+not — after a create the count is trivially `0`, and after an update it is unchanged, so a form that
+needs the new value should refetch rather than read it off the write response.
+
 ### 3.5 Enrollment — `enrollment/web/EnrollmentController.java`
 
 | Method | Path | Roles | Request | Response |
@@ -141,6 +159,17 @@ Derived from the controllers in `management/src/main/java/org/phuchoang/manageme
 | `POST` | `/enrollments` | `REGISTRAR` | `{studentCode, courseCode}` | `201 {studentCode, courseCode, enrolledAt}` |
 | `GET` | `/enrollments/{studentCode}/{courseCode}` | `REGISTRAR`, `COURSE_ADMINISTRATOR` | — | `200 {student, course, enrolledAt}` |
 | `DELETE` | `/enrollments/{studentCode}/{courseCode}` | `REGISTRAR` | — | `204` |
+| `POST` | `/enrollments/batch` | `REGISTRAR` | `{studentCode, courseCodes[]}` | `200 {studentCode, requested, enrolled, failed, results[]}` |
+
+**The batch endpoint answers `200` even when courses were rejected** — check `enrolled`/`failed`, not
+the status code. Each `results[]` entry is `{courseCode, status, enrolledAt?, message?}` where
+`status` is `ENROLLED`, `UNKNOWN_COURSE`, `ALREADY_ENROLLED`, or `INVALID_COURSE_CODE`. Only an
+unknown *student* is a `400`, because it makes every course unanswerable.
+
+Two consequences for the UI. The courses reported `ENROLLED` are already committed and are not undone
+by a later rejection, so the summary can be trusted and the list refetched immediately. And
+`requested` counts *distinct* courses — a repeated code is collapsed — so it can be below the number
+the user selected.
 
 Keyed by the **student code + course code pair**. The list endpoint requires **exactly one** filter — neither or both is a `400`, which is deliberate: with neither it would enumerate every enrollment in the system, and with both the answer is the single enrollment the item endpoint already addresses.
 
@@ -251,13 +280,16 @@ The single source for nav rendering and button gating. Mirrors `SecurityConfig.f
 | `enrollments:write` | ✅ | ❌ | ❌ | ❌ | ❌ |
 | `me:read` | ❌ | ❌ | ❌ | ✅ | ❌ |
 | `staff:manage` | ❌ | ❌ | ❌ | ❌ | ✅ |
+| `sessions:manage` | ❌ | ❌ | ❌ | ❌ | ✅³ |
 | `password:change` | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ¹ **Held, but not a destination.** Course Admin needs `students:read` to open a profile from a course roster, and gets no Students nav item. This is the one case where capability and navigation deliberately differ — which is why `NAV_ITEMS` carries an explicit role list rather than deriving visibility from a capability. A capability-driven nav cannot express "reachable, but not somewhere you browse to".
 
 ² Transparently scoped server-side to the caller's own records — a Student searching students gets 0 or 1 rows, and another student's detail returns `403`. **The UI needs no special-casing for this**; it is the server's job and it already does it. The Student screens use `/me/*` anyway, which is scoped by session rather than by a code.
 
-**`SYSTEM_ADMINISTRATOR` is denied every domain read**, so its nav shows exactly two items: Staff Accounts and Change Password — the RBAC allow-list made visible.
+³ Covers every session, not only staff ones — a Student's session is as endable as a Registrar's. The admin's own session is the one exception, and it is refused server-side as well as disabled in the UI: ending it from this screen is indistinguishable from the feature breaking, and signing out already does it deliberately.
+
+**`SYSTEM_ADMINISTRATOR` is still denied every domain read**, so its nav shows three items: Staff Accounts, Active Sessions, and Change Password — the RBAC allow-list made visible. `sessions:manage` does not weaken that statement: the sessions screen reports who is signed in and reveals no student, book, course, or enrollment.
 
 ---
 
@@ -271,12 +303,13 @@ The single source for nav rendering and button gating. Mirrors `SecurityConfig.f
 | `/students/[code]` | Registrar, Librarian, Course Admin | Record card, plus: **Librarian** → books on loan (`GET /books?ownerStudentCode=`); **Registrar / Course Admin** → enrolled courses (`GET /enrollments?studentCode=`), each row linking to the course. Registrar also gets the initial-password reveal. UC-17, 23 |
 | `/books` | Librarian, Student | **Student:** `GET /me/books`. **Librarian:** search + table + add / delete. UC-4, 7, 14, 16 |
 | `/books/[isbn]` | Librarian, Student | Record card; Librarian additionally gets assign (by student code) and release. UC-5, 6, 18 |
-| `/courses` | Registrar, Course Admin, Student | **Student:** `GET /me/courses` — enrolled only. **Registrar:** read-only catalogue. **Course Admin:** catalogue + create / edit / delete. UC-8, 9, 10, 15, 16 |
-| `/courses/[code]` | Registrar, Course Admin, Student | Record card; **Registrar / Course Admin** additionally get the roster (`GET /enrollments?courseCode=`), each row linking to that student. UC-19 |
-| `/enrollments` | Registrar, Course Admin | **Registrar:** type a student code → their courses → enroll / end. **Course Admin:** course list → a course → its roster → a student's profile. UC-11, 12, 20 |
+| `/courses` | Registrar, Course Admin, Student | **Student:** `GET /me/courses` — enrolled only. **Registrar:** read-only catalogue. **Course Admin:** catalogue + create / edit / delete. Every variant shows a **Students** column (`enrolledCount`) — a count, never the roster. UC-8, 9, 10, 15, 16 |
+| `/courses/[code]` | Registrar, Course Admin, Student | Record card, including **Students enrolled**; **Registrar / Course Admin** additionally get the roster itself (`GET /enrollments?courseCode=`), each row linking to that student. The count is on everyone's card, the roster only on theirs. UC-19 |
+| `/enrollments` | Registrar, Course Admin | **Registrar:** type a student code → their courses → end, or open a course picker and enroll into several at once, with a per-course summary of what succeeded. **Course Admin:** course list → a course → its roster → a student's profile. UC-11, 12, 20, 26 |
 | `/staff-accounts` | SysAdmin | List, create, deactivate / reactivate. UC-24, 25 |
+| `/sessions` | SysAdmin | Who is signed in, newest activity first, and ending one. Not paged — the source is an in-memory snapshot with no stable ordering. The admin's own row is marked and its End button disabled. UC-27, 28 |
 
-**Coverage: all 25 use cases.** Several UCs (search + detail, create + update + delete) share one screen, and UC-16 is spread across the Student's three tabs rather than living on a page of its own.
+**Coverage: all 28 use cases.** Several UCs (search + detail, create + update + delete) share one screen, and UC-16 is spread across the Student's three tabs rather than living on a page of its own.
 
 ### 6.1 Screen anatomy
 
@@ -427,14 +460,18 @@ cd management-frontend && npm run dev      # :3000
 | 1 | — | Open `/login`; the seeded accounts are listed live from `GET /auth/demo-accounts` | PM-017 |
 | 2 | `demo.registrar` | Register a student — the one-time `initialPassword` is shown; re-read it from the detail page | UC-1, UC-23 |
 | 3 | `demo.courseadmin` | Create course `CS101` | UC-8 |
-| 4 | `demo.registrar` | Enrollments tab → type the **student code** → enroll in `CS101`. Note there is no id to look up anywhere, and no Books item in the nav | UC-11, §2.4 |
+| 4 | `demo.registrar` | Enrollments tab → type the **student code** → **Enroll in a course** → tick `CS101` and a second course → submit once. Note there is no id to look up anywhere, and no Books item in the nav | UC-26, §2.4 |
+| 4a | `demo.registrar` | Submit the same picker again with `CS101` still ticked plus a new course: the new one enrolls, `CS101` comes back "already enrolled", and the summary says *1 of 2 enrolled* | UC-26 partial success |
+| 4b | `demo.registrar` | Courses tab → the **Students** column now reads `1` for `CS101` | `enrolledCount` |
 | 5 | `demo.librarian` | Add a book, assign it by student code; then Students → that student → **their books on loan**. Note: no Courses, no Enrollments in the nav | UC-4, UC-5, UC-17 |
 | 6 | `demo.courseadmin` | Enrollments → `CS101` → **the roster** → click the student → their profile. Note there is no Students nav item — the roster is the only way in | UC-19, UC-17, §5 ¹ |
 | 7 | **the new student** | Log in (username = their email) → **forced** to `/change-password` → then: Students shows *their own record directly*, Courses shows only `CS101`, Books shows the assigned book, and there is no Enrollments tab at all | UC-21, UC-22, UC-16 |
 | 8 | `demo.sysadmin` | Create a staff account (initial password shown once), then deactivate it | UC-24, UC-25 |
-| 9 | `demo.sysadmin` | Note the nav shows only Staff Accounts — a domain read returns `403` | RBAC allow-list |
+| 9 | `demo.sysadmin` | Note the nav shows Staff Accounts, Active Sessions and Change Password — a domain read still returns `403` | RBAC allow-list |
+| 10 | `demo.sysadmin` | Active Sessions → the student from step 7 is listed, alongside the admin's own row (marked, End disabled). End the student's session | UC-27, UC-28 |
+| 11 | **the student**, in their own browser | Click anything: the request is refused and they land back on `/login`. Sign in again — it works, because a session was ended, not an account disabled | UC-28, Identity.7 vs Identity.8 |
 
-Steps 2→7 are the narrative spine: a student created by one role, given a course by a second and a book by a third, then logging in as themselves and seeing exactly their own half of each. Steps 4–6 are the per-resource RBAC in action; step 7 is both the must-change-password gate and the Student's narrowed surface.
+Steps 2→7 are the narrative spine: a student created by one role, given a course by a second and a book by a third, then logging in as themselves and seeing exactly their own half of each. Steps 4–6 are the per-resource RBAC in action; step 7 is both the must-change-password gate and the Student's narrowed surface. Steps 10–11 need two browsers (or one plus a private window) — the point of the pair is that ending a session is visibly *not* the same as disabling an account.
 
 **Reset between runs:** `make reset`. Demo-account seeding is idempotent, so a restart never resets a password changed during a demo.
 
@@ -451,6 +488,13 @@ Run against a live stack after implementation:
 - [ ] The same holds for a staff account a SysAdmin just created: signing in lands on the bare `/change-password` form (not a spinner), and submitting it releases the session.
 - [ ] A hard reload of `/change-password` and of one deep route logs **no** hydration error and no "Encountered a script tag" warning — check in a clean profile, since browser extensions produce look-alike warnings.
 - [ ] View source on that reload: the `data-emotion` `<style>` tags are in `<head>` and there are none in `<body>`.
+- [ ] Editing a student opens with the **date of birth already filled in**, and saving a changed name updates both the list and the detail page. (This was the reported bug: the field is on `StudentDetail`, not `StudentSummary`, and being `required` and empty it silently blocked submission.) The same holds for a course's description.
+- [ ] A student's **Registered** timestamp matches the wall clock at registration, and does not move after two edits. Cross-check the column: `make mysql` → `SELECT created_at FROM students;` holds UTC.
+- [ ] A date of birth reads back as the date entered, not the day before.
+- [ ] The batch enroll picker reports each course separately, and the ones it reports as enrolled survive a refresh.
+- [ ] Ending a session from `/sessions` bounces that user to `/login` on their next action, and they can sign straight back in.
+- [ ] The admin's own row on `/sessions` cannot be ended, and no value on that screen matches the `JSESSIONID` cookie.
+- [ ] `JSESSIONID` **changes** across login — session-fixation protection. Capture it before and after in DevTools.
 - [ ] Each role's sidebar matches §5 exactly: Registrar has no Books, Librarian has no Courses or Enrollments, Course Admin has no Students, Student has no Enrollments, SysAdmin has two items.
 - [ ] Registrar `GET /api/v1/books` → `403`; Librarian `GET /api/v1/courses` → `403`; Student `GET /api/v1/enrollments?studentCode=…` → `403`.
 - [ ] The Student's Students tab renders their own record with no list and no search box.
