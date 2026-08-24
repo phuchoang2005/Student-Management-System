@@ -12,6 +12,7 @@ import org.phuchoang.management.shared.exception.StaleWriteException;
 import org.phuchoang.management.student.domain.Student;
 import org.phuchoang.management.student.StudentCode;
 import org.phuchoang.management.student.port.StudentRepository;
+import org.phuchoang.management.shared.TestDatasource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -40,9 +41,7 @@ class StudentUpdateIntegrationTest {
 
   @DynamicPropertySource
   static void datasourceProperties(DynamicPropertyRegistry registry) {
-    registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-    registry.add("spring.datasource.username", MYSQL::getUsername);
-    registry.add("spring.datasource.password", MYSQL::getPassword);
+    TestDatasource.bind(registry, MYSQL);
   }
 
   @Autowired private MockMvc mockMvc;

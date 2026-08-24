@@ -16,6 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.phuchoang.management.course.CourseSummary;
+import org.phuchoang.management.enrollment.application.EnrollmentBatchService;
 import org.phuchoang.management.enrollment.application.EnrollmentService;
 import org.phuchoang.management.shared.exception.DomainValidationException;
 import org.phuchoang.management.shared.exception.FieldError;
@@ -30,12 +31,14 @@ import org.springframework.test.web.servlet.MockMvc;
 class EnrollmentControllerTest {
 
   @Mock private EnrollmentService enrollmentService;
+  @Mock private EnrollmentBatchService enrollmentBatchService;
 
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
-    EnrollmentController controller = new EnrollmentController(enrollmentService, new EnrollmentMapperImpl());
+    EnrollmentController controller =
+        new EnrollmentController(enrollmentService, enrollmentBatchService, new EnrollmentMapperImpl());
     mockMvc =
         standaloneSetup(controller)
             .setControllerAdvice(new GlobalExceptionHandler())

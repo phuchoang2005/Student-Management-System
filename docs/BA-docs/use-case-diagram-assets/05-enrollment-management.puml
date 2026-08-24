@@ -15,14 +15,18 @@ actor "Course Administrator" as CourseAdmin
 
 rectangle "Enrollment Management" {
   usecase "UC-11\nEnroll Student in Course" as UC11
+  usecase "UC-26\nEnroll Student in\nMultiple Courses" as UC26
   usecase "UC-12\nEnd Enrollment" as UC12
   usecase "UC-20\nLook Up Enrollments" as UC20
 }
 
+Registrar --> UC26
 Registrar --> UC11
 Registrar --> UC12
 Registrar --> UC20
 CourseAdmin --> UC20
+
+UC26 ..> UC11 : repeats per course,\nreporting each outcome
 
 note bottom of UC20
   Reads only. Filtered by a

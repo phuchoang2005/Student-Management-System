@@ -214,6 +214,51 @@ The roster is now its own endpoint, so its pagination cases live with it: see [e
 
 ---
 
+---
+
+## 6. Enrolled-student count (UC-15, UC-19)
+
+Covers the `enrolledCount` field on `CourseSummary`/`CourseDetail` (`api-specification.md` §5 decision #11).
+
+### TC-CRS-028 — The course list reports how many students are enrolled
+- **Related UC / Rule:** UC-15; `api-specification.md` §5 decision #11
+- **Priority:** P1 · **Type:** Functional
+- **Preconditions:** A course exists with two students enrolled.
+- **Steps:** As Registrar: `GET /api/v1/courses`.
+- **Expected Result:** `200 OK`; that course's `enrolledCount` is `2`.
+
+### TC-CRS-029 — A course nobody is enrolled in reports zero, and is still listed
+- **Related UC / Rule:** UC-15
+- **Priority:** P0 · **Type:** Boundary
+- **Steps:** Create a course, enroll nobody, then `GET /api/v1/courses` and `GET /api/v1/courses/{code}`.
+- **Expected Result:** `200 OK` both times, with `enrolledCount: 0` — **present and zero, not absent, and the course is not missing from the list.** This is the case a `JOIN` rather than a `LEFT JOIN` breaks, and it is the one that makes "no enrollments" distinguishable from "no such course".
+
+### TC-CRS-030 — The count moves when an enrollment is created or ended
+- **Related UC / Rule:** UC-15, UC-19
+- **Priority:** P1 · **Type:** Functional
+- **Steps:** Read a course's `enrolledCount`; enroll a student; read again; end that enrollment; read again.
+- **Expected Result:** The value increments then decrements. It is a live read, not a stored counter.
+
+### TC-CRS-031 — A Student sees the count but never the roster
+- **Related UC / Rule:** `04-authentication-authorization.md` §6.1; `api-specification.md` §5 decisions #10, #11
+- **Priority:** P0 · **Type:** Security-Positive
+- **Steps:** As a logged-in Student: `GET /api/v1/courses/{code}`; then `GET /api/v1/enrollments?courseCode={code}`.
+- **Expected Result:** `200 OK` with `enrolledCount` on the first; `403 Forbidden` on the second. This is the pair that shows the two are genuinely different disclosures — "how many" is safe for a Student browsing the catalogue, "who" is not.
+
+### TC-CRS-032 — Create and update responses carry no count
+- **Related UC / Rule:** `api-specification.md` §5 decision #11
+- **Priority:** P2 · **Type:** Functional
+- **Steps:** As Course Administrator: `POST /api/v1/courses`, then `PUT /api/v1/courses/{code}`.
+- **Expected Result:** `201`/`200` with no `enrolledCount` field on either body. A client needing the value refetches.
+
+### TC-CRS-033 — The count is one query for the whole page, not one per row
+- **Related UC / Rule:** `06-low-level-design.md` §5
+- **Priority:** P2 · **Type:** Performance
+- **Steps:** With 20+ courses, `GET /api/v1/courses?size=20` with SQL logging on.
+- **Expected Result:** Three statements — the page, its total, and one grouped count query — not 20 count queries. Guards against the N+1 the per-row form would have.
+
+---
+
 ## Traceability Summary
 
 | UC / US | Test Case IDs |
@@ -221,5 +266,5 @@ The roster is now its own endpoint, so its pagination cases live with it: see [e
 | UC-8 / US-3.1 | TC-CRS-001–007 |
 | UC-9 / US-3.2 | TC-CRS-008–013 |
 | UC-10 / US-3.3 | TC-CRS-014–016 |
-| UC-15 / US-5.3 | TC-CRS-017–019, TC-CRS-023–025 |
-| UC-19 / US-5.3, US-5.4 | TC-CRS-020–022, TC-CRS-026–027 |
+| UC-15 / US-5.3 | TC-CRS-017–019, TC-CRS-023–025, TC-CRS-028–030, TC-CRS-033 |
+| UC-19 / US-5.3, US-5.4 | TC-CRS-020–022, TC-CRS-026–027, TC-CRS-029–032 |

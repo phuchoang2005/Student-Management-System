@@ -9,7 +9,15 @@
  * data its own work needs and nothing else (02-component-diagram.md §4).
  */
 import type { LucideIcon } from 'lucide-react';
-import { BookOpen, ClipboardList, GraduationCap, KeyRound, ShieldCheck, Users } from 'lucide-react';
+import {
+  BookOpen,
+  ClipboardList,
+  GraduationCap,
+  KeyRound,
+  RadioTower,
+  ShieldCheck,
+  Users,
+} from 'lucide-react';
 
 import type { Role } from '@/lib/api/types';
 
@@ -33,6 +41,7 @@ export type Capability =
   | 'enrollments:write'
   | 'me:read'
   | 'staff:manage'
+  | 'sessions:manage'
   | 'password:change';
 
 /** Capability → roles that hold it. Keys are referenced by route guards and by button gating. */
@@ -50,6 +59,7 @@ const CAPABILITIES: Record<Capability, Role[]> = {
   'enrollments:write': ['REGISTRAR'],
   'me:read': ['STUDENT'],
   'staff:manage': ['SYSTEM_ADMINISTRATOR'],
+  'sessions:manage': ['SYSTEM_ADMINISTRATOR'],
   // Every authenticated role can change its own password.
   'password:change': [
     'REGISTRAR',
@@ -115,6 +125,12 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ['REGISTRAR', 'COURSE_ADMINISTRATOR'],
   },
   { href: '/staff-accounts', label: 'Staff Accounts', icon: ShieldCheck, roles: ['SYSTEM_ADMINISTRATOR'] },
+  {
+    href: '/sessions',
+    label: 'Active Sessions',
+    icon: RadioTower,
+    roles: ['SYSTEM_ADMINISTRATOR'],
+  },
   {
     href: '/change-password',
     label: 'Change Password',

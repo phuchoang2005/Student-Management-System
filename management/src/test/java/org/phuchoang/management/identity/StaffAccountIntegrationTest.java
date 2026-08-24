@@ -13,6 +13,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.phuchoang.management.identity.domain.Username;
 import org.phuchoang.management.identity.port.UserRepository;
+import org.phuchoang.management.shared.TestDatasource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -48,9 +49,7 @@ class StaffAccountIntegrationTest {
 
   @DynamicPropertySource
   static void datasourceProperties(DynamicPropertyRegistry registry) {
-    registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-    registry.add("spring.datasource.username", MYSQL::getUsername);
-    registry.add("spring.datasource.password", MYSQL::getPassword);
+    TestDatasource.bind(registry, MYSQL);
   }
 
   @Autowired private MockMvc mockMvc;

@@ -22,14 +22,18 @@ info:
     extension. **Read access is granted per resource, not as one blanket "domain read"** — each role
     reads what its own work needs, so a Registrar cannot read books and a Librarian cannot read
     courses or enrollments (see `../02-component-diagram.md` §4). Student principals are further
-    scoped to their own records where noted. System Administrator is scoped solely to
-    `/staff-accounts` — it has no access to any domain data.
+    scoped to their own records where noted. System Administrator is scoped to `/staff-accounts` and
+    `/sessions` — it has no access to any domain data. `/sessions` reports who is signed in, never
+    any student, book, course, or enrollment.
 
     **Identifiers:** every path, query parameter, and body field names a record by its business key
     — `studentCode`, `isbn`, `courseCode`. Surrogate database ids never cross this boundary, and no
-    response carries an id a caller could send back. The single exception is
-    `PATCH /staff-accounts/{id}/status`, whose target has no business key of its own; that id comes
-    from `GET /staff-accounts`.
+    response carries an id a caller could send back. There are two exceptions, both for resources
+    with no business key of their own, and both supplied by a prior listing rather than typed:
+    `PATCH /staff-accounts/{id}/status`, whose id comes from `GET /staff-accounts`; and
+    `DELETE /sessions/{handle}`, whose handle comes from `GET /sessions`. The session handle is not a
+    surrogate id but a SHA-256 digest of the session identifier — the identifier itself is a bearer
+    credential and is never emitted (see `../api-specification.md` §5 decisions #9 and #13).
 
     **must-change-password gate:** while `principal.mustChangePassword = true`, every
     endpoint except `POST /auth/password` responds 403 Forbidden.
@@ -49,6 +53,8 @@ tags:
     description: Login, password management, session lifecycle, and (dev/test only) demo accounts.
   - name: Staff Accounts
     description: Creating and deactivating Registrar/Librarian/Course Administrator accounts — owned by the System Administrator role.
+  - name: Sessions
+    description: Who is signed in right now, and ending a session — owned by the System Administrator role.
   - name: Students
     description: Student records — owned by the Registrar role.
   - name: Books
@@ -70,6 +76,10 @@ paths:
     $ref: './paths/staff-accounts.yaml#/collection'
   '/staff-accounts/{id}/status':
     $ref: './paths/staff-accounts.yaml#/status'
+  /sessions:
+    $ref: './paths/sessions.yaml#/collection'
+  '/sessions/{handle}':
+    $ref: './paths/sessions.yaml#/item'
   /students:
     $ref: './paths/students.yaml#/collection'
   '/students/{code}':
@@ -88,6 +98,8 @@ paths:
     $ref: './paths/courses.yaml#/item'
   /enrollments:
     $ref: './paths/enrollments.yaml#/collection'
+  /enrollments/batch:
+    $ref: './paths/enrollments.yaml#/batch'
   '/enrollments/{studentCode}/{courseCode}':
     $ref: './paths/enrollments.yaml#/item'
   /me/profile:
@@ -184,6 +196,16 @@ components:
       $ref: './components/schemas/enrollment.yaml#/EnrollmentDetail'
     EnrollmentPage:
       $ref: './components/schemas/enrollment.yaml#/EnrollmentPage'
+    BatchEnrollmentRequest:
+      $ref: './components/schemas/enrollment.yaml#/BatchEnrollmentRequest'
+    BatchEnrollmentStatus:
+      $ref: './components/schemas/enrollment.yaml#/BatchEnrollmentStatus'
+    BatchEnrollmentResult:
+      $ref: './components/schemas/enrollment.yaml#/BatchEnrollmentResult'
+    BatchEnrollmentResponse:
+      $ref: './components/schemas/enrollment.yaml#/BatchEnrollmentResponse'
+    ActiveSession:
+      $ref: './components/schemas/session.yaml#/ActiveSession'
   responses:
     BadRequest:
       $ref: './components/responses/errors.yaml#/BadRequest'

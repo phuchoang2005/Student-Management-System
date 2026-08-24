@@ -97,6 +97,78 @@ collection:
               message: Student 'S00123' is already enrolled in course 'CS101'.
               path: /api/v1/enrollments
 
+batch:
+  post:
+    operationId: enrollStudentInCourses
+    tags: [Enrollments]
+    summary: Enroll a student in several courses at once
+    description: |
+      **Roles:** Registrar. UC-26.
+
+      **Answers 200, and reports each course separately.** One rejected course does not cost the
+      others: unknown and already-enrolled courses come back as per-course outcomes while the rest
+      are enrolled. Even a request in which every course was rejected is a 200 — the request itself
+      succeeded, and the statuses are its answer.
+
+      Not `207 Multi-Status`: that is a WebDAV code defined against a `DAV:multistatus` XML body, so
+      using it for a bespoke JSON shape would be a status-code pun. Not `201` either — there is no
+      single `Location` and creation is partial by design. See api-specification.md §5 decision #12.
+
+      **An unknown student is still a whole-request 400.** The student is the subject of the request
+      rather than one of its items, so an unknown one leaves every course unanswerable — the same
+      answer `POST /enrollments` gives.
+
+      **This is the one endpoint in the API where a request is not a single transaction.** Each
+      course is committed on its own, so the courses reported as `ENROLLED` are already durable and
+      are not rolled back by a rejection later in the list. Retrying the whole request is safe: the
+      courses that succeeded come back as `ALREADY_ENROLLED`.
+    x-roles: [REGISTRAR]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/enrollment.yaml#/BatchEnrollmentRequest'
+    responses:
+      '200':
+        description: |
+          The request was processed. Each requested course carries its own outcome; check `enrolled`
+          and `failed` rather than the status code to learn what happened.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/enrollment.yaml#/BatchEnrollmentResponse'
+            example:
+              studentCode: S00123
+              requested: 3
+              enrolled: 2
+              failed: 1
+              results:
+                - courseCode: CS101
+                  status: ENROLLED
+                  enrolledAt: '2026-01-15T09:24:00Z'
+                  message: null
+                - courseCode: ZZ999
+                  status: UNKNOWN_COURSE
+                  enrolledAt: null
+                  message: Course 'ZZ999' does not exist.
+                - courseCode: MA201
+                  status: ENROLLED
+                  enrolledAt: '2026-01-15T09:24:00Z'
+                  message: null
+      '400':
+        description: |
+          The student does not exist, or the body failed validation — `courseCodes` empty, longer
+          than 50, or containing a blank/over-length code. Nothing is enrolled.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/ValidationError'
+      '401':
+        $ref: '../components/responses/errors.yaml#/Unauthorized'
+      '403':
+        $ref: '../components/responses/errors.yaml#/Forbidden'
+
 item:
   get:
     operationId: getEnrollment

@@ -173,6 +173,8 @@ A short checklist, each line traceable to a decision already made elsewhere in t
 | Student deleted → cascade cleanup | Domain Event | `StudentDeleted` → `BookService`, `EnrollmentService`, `IdentityService` listeners |
 | Course deleted → cascade cleanup | Domain Event | `CourseDeleted` → `EnrollmentService` listener |
 
+**A session is not modelled as a tactical construct, and `Identity.8` therefore has no row above.** UC-27/UC-28 act on HTTP sessions, which live in the servlet container and are read through Spring Security's `SessionRegistry` — there is no aggregate, no repository port, and no table (`04-authentication-authorization.md` §3c). Adding a `Session` entity would mean modelling something this application does not own the lifecycle of, and keeping it consistent with the container's real state. The rule is enforced instead in the application service that reads that registry (`06-low-level-design.md` §8.8), which is the honest placement for an invariant about infrastructure rather than about the domain.
+
 ## 13. Out of Scope
 
 - **Strategic DDD / context mapping** beyond what §10 needs to justify the module boundaries `02-component-diagram.md` already fixed — no Anti-Corruption Layer, Conformist, or Shared Kernel analysis, since there is exactly one codebase and one schema (`01-system-overview.md` §4.4).

@@ -1,0 +1,51 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|Registrar|
+start
+:Select a student;
+:Select one or more courses;
+:Submit;
+
+|System|
+if (Student exists?) then (no)
+  :Reject the whole request;
+  |Registrar|
+  :See rejection; nothing enrolled;
+  stop
+else (yes)
+endif
+:Drop courses named more than once,
+keeping the first occurrence;
+
+while (Another course to process?) is (yes)
+  if (Course exists?) then (no)
+    :Record "unknown course";
+  else (yes)
+    if (Already enrolled?) then (yes)
+      :Record "already enrolled";
+    else (no)
+      :Create the enrollment
+      and commit it on its own;
+      :Record "enrolled";
+    endif
+  endif
+endwhile (no)
+
+:Return every course's outcome;
+
+|Registrar|
+:See which courses were enrolled
+and why the others were not;
+stop
+@enduml

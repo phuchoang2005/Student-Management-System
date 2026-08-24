@@ -1,0 +1,51 @@
+@startuml
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F6F8FA
+  BorderColor #57606A
+  DiamondBackgroundColor #EEF2FF
+  DiamondBorderColor #3730A3
+}
+skinparam swimlane {
+  BorderColor #57606A
+  TitleBackgroundColor #EEF2FF
+}
+
+|System Administrator|
+start
+:Select a listed session;
+
+if (Own session?) then (yes)
+  |System|
+  :Reject; point at signing out instead;
+  |System Administrator|
+  stop
+else (no)
+endif
+
+:Confirm ending the session;
+
+|System|
+if (Session still present?) then (no)
+  :Reject as no longer present;
+  |System Administrator|
+  stop
+else (yes)
+endif
+:Revoke the session;
+
+|Session holder|
+:Make the next request;
+
+|System|
+:Refuse it and end the session;
+
+|Session holder|
+:Returned to sign-in;
+note right
+  The account is untouched --
+  signing in again is allowed
+  straight away.
+end note
+stop
+@enduml

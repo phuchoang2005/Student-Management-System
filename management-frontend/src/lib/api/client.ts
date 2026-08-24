@@ -8,6 +8,11 @@
  * backend — anonymous, wrong role, and must-change-password all produce one, and two of the three
  * carry no body. Resolving it needs the local auth state, which only `RequireAuth` and the pages
  * have.
+ *
+ * A 401 *is* handled here, and the difference is exactly that ambiguity. Outside the login call
+ * there is only one thing a 401 can mean — the server session is gone, because it expired or an
+ * administrator ended it — so no local state is needed to interpret it and every caller wants the
+ * same outcome. See `onSessionExpired`.
  */
 
 export interface FieldError {
@@ -49,6 +54,24 @@ export class ApiError extends Error {
   }
 }
 
+/** The login call, whose 401 means "wrong password" rather than "your session is gone". */
+const LOGIN_PATH = '/api/v1/auth/login';
+
+type SessionExpiredHandler = () => void;
+
+let sessionExpiredHandler: SessionExpiredHandler | null = null;
+
+/**
+ * Registers what to do when the server says the session is no longer valid — in practice
+ * `AuthProvider` clearing its stored session, which drops `RequireAuth` back to /login.
+ *
+ * A registration hook rather than a direct import so this module stays free of React and of the
+ * auth module, which imports it.
+ */
+export function onSessionExpired(handler: SessionExpiredHandler | null): void {
+  sessionExpiredHandler = handler;
+}
+
 type Params = Record<string, string | number | boolean | null | undefined>;
 
 /** Drops null/undefined/'' so `?query=&page=0` never sends an empty query the backend would match on. */
@@ -84,6 +107,12 @@ export async function request<T>(
 
   // Not every non-2xx has a body: the filter-chain 403s write a status and return.
   const payload = (await res.json().catch(() => null)) as T | ErrorBody | null;
+
+  // The session died under us — most often because a System Administrator ended it, which answers
+  // 401 from ConcurrentSessionFilter. The error is still thrown so the caller can render it; this
+  // only makes sure the stale local session goes with it.
+  if (res.status === 401 && path !== LOGIN_PATH) sessionExpiredHandler?.();
+
   if (!res.ok) throw new ApiError(res.status, payload as ErrorBody | null);
   return payload as T;
 }

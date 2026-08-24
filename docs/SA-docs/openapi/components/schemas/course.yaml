@@ -34,7 +34,13 @@ CourseUpdateRequest:
 
 CourseResponse:
   type: object
-  description: No surrogate `id` — a course is named by `courseCode` everywhere the API is reachable from (api-specification.md §5 decision #9).
+  description: |
+    No surrogate `id` — a course is named by `courseCode` everywhere the API is reachable from
+    (api-specification.md §5 decision #9).
+
+    Carries no `enrolledCount`: this is the shape returned by create and update, where the count is
+    either trivially zero or unchanged by the operation, and computing it would cost a query for a
+    value the caller did not ask about. Reads use `CourseDetail`.
   required: [courseCode, name, description, credits, createdAt, updatedAt]
   properties:
     courseCode:
@@ -56,7 +62,7 @@ CourseResponse:
 
 CourseSummary:
   type: object
-  required: [courseCode, name, credits]
+  required: [courseCode, name, credits, enrolledCount]
   properties:
     courseCode:
       type: string
@@ -65,6 +71,17 @@ CourseSummary:
     credits:
       type: integer
       format: int32
+    enrolledCount:
+      type: integer
+      format: int64
+      minimum: 0
+      description: |
+        How many students are enrolled. The one aggregate embedded in a summary rather than left to
+        its own endpoint (api-specification.md §5 decision #11) — a count is not a roster, and it
+        identifies nobody, which is what makes it safe on a shape a Student may read.
+
+        Read outside any enrolling transaction, so it is a snapshot rather than a guarantee: it must
+        not be used as a capacity check.
 
 CourseDetail:
   description: |
@@ -73,8 +90,19 @@ CourseDetail:
     Course Administrator but not to a Student browsing the catalogue), and folding it in here would
     hand every reader of a course record the names and email addresses of everyone taking it
     (api-specification.md §5 decision #10).
+
+    `enrolledCount` is not in tension with that. "How many" is not "who": the count answers what the
+    catalogue view needs and names nobody (decision #11).
   allOf:
     - $ref: '#/CourseResponse'
+    - type: object
+      required: [enrolledCount]
+      properties:
+        enrolledCount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: How many students are enrolled. A snapshot, not a capacity guarantee.
 
 CoursePage:
   description: A page of course summaries.

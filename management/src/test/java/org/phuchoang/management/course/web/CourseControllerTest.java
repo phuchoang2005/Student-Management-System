@@ -182,7 +182,7 @@ class CourseControllerTest {
   }
 
   private static final CourseService.CourseSummaryView A_SUMMARY =
-      new CourseService.CourseSummaryView("CS101", "Intro to CS", 3);
+      new CourseService.CourseSummaryView("CS101", "Intro to CS", 3, 12L);
 
   @Test
   void searchCoursesReturnsPagedSummaries() throws Exception {
@@ -194,7 +194,8 @@ class CourseControllerTest {
         .perform(get("/api/v1/courses").param("query", "cs101"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.totalElements").value(1))
-        .andExpect(jsonPath("$.content[0].courseCode").value("CS101"));
+        .andExpect(jsonPath("$.content[0].courseCode").value("CS101"))
+        .andExpect(jsonPath("$.content[0].enrolledCount").value(12));
   }
 
   @Test
@@ -211,7 +212,7 @@ class CourseControllerTest {
 
   private static CourseService.CourseDetailView aCourseDetailView() {
     Instant now = Instant.now();
-    return new CourseService.CourseDetailView("CS101", "Intro to CS", "Basics", 3, now, now);
+    return new CourseService.CourseDetailView("CS101", "Intro to CS", "Basics", 3, 12L, now, now);
   }
 
   @Test
@@ -222,6 +223,7 @@ class CourseControllerTest {
         .perform(get("/api/v1/courses/CS101"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.courseCode").value("CS101"))
+        .andExpect(jsonPath("$.enrolledCount").value(12))
         .andExpect(jsonPath("$.description").value("Basics"))
         .andExpect(jsonPath("$.credits").value(3))
         // The roster is its own endpoint (GET /api/v1/enrollments?courseCode=), not a field here.

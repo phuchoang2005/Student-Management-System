@@ -177,6 +177,8 @@ Every `req.md` §4 rule that constrains stored data maps to a schema-level const
 - **Surrogate keys**: always `id BIGINT AUTO_INCREMENT PRIMARY KEY`.
 - **Foreign keys**: named `<referenced_singular>_id` (`owner_id` is the one exception, named for its role rather than its target, since `books` has no other student reference to disambiguate from).
 - **Timestamps**: `DATETIME`, `created_at`/`updated_at` pair on every table, matching the pattern `04-authentication-authorization.md` §2.2 already specifies for `users`, applied consistently to the other four tables for the same audit purpose.
+  - **Every `DATETIME` in this schema holds a UTC wall clock**, and `DATE` columns hold a calendar date with no zone applied to it. `DATETIME` carries no zone of its own, so this is a convention the application has to uphold on both halves of every round trip rather than something the column can enforce — see `06-low-level-design.md` §9.1a, which is where it is upheld and which explains what went wrong while it was merely assumed. Two consequences worth stating here: `created_at` values are directly comparable across tables without a conversion, and a `DATETIME` read straight out of a SQL client is UTC, not local time.
+  - **Precision is whole seconds.** `DATETIME` without an explicit `(n)` is `DATETIME(0)`, so MySQL truncates the sub-second component an `Instant` carries. A timestamp read back therefore differs from the one submitted by up to a second; nothing in this system depends on finer resolution, and the columns are not widened for it.
 - **Character set**: `utf8mb4` throughout, matching the MySQL container's configured charset/collation (`docker-compose.yml`).
 - **Engine**: InnoDB (MySQL 8 default), required for FK and `CHECK` constraint enforcement.
 

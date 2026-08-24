@@ -142,6 +142,28 @@ The four backend items are deliberately ordered PM-020 → PM-021 → PM-019 →
 
 ---
 
+## 8b. Epic I — Registrar workflow and session oversight
+
+Added after Sprint 5, from a second pass over the running application. Three of the five items are things the Registrar's daily work asked for and one is a gap in the System Administrator's; the two bug fixes came out of the same pass and are folded in here rather than tracked separately, because they surfaced on the screens Epic I touches.
+
+Introduces the first new business rule since the original set — `Identity.8` — and the first new use cases since UC-25: UC-26, UC-27, UC-28. Sources: `req.md` §4 Identity.8, `use-cases.md` UC-26–28, `api-specification.md` §5 decisions #11–13.
+
+| ID | Item | Priority | Estimate | Source |
+| --- | --- | --- | --- | --- |
+| PM-025 | Timestamp and date correctness: symmetric UTC conversion for `Instant`/`LocalDate` against MySQL's zoneless `DATETIME`/`DATE`, plus the shared test-datasource binding that had been masking the defect | Must | 5h | Reported as "the time when registered student was incorrect"; `06-low-level-design.md` §9.1a |
+| PM-026 | Edit forms fetch the full record: `StudentFormDialog` and `CourseFormDialog` read the detail endpoint instead of the list summary, so `dateOfBirth` and `description` are populated rather than blank | Must | 2h | Reported as "when I change the information of student, the information doesn't change" |
+| US-4.3 | Enroll a student in several courses at once, with a per-course outcome | Must | 8h | UC-26; `api-specification.md` §5 decision #12 |
+| PM-027 | Enrolled-student count on the course list and detail, joined in SQL to avoid a module cycle | Should | 3h | UC-15/UC-19; `api-specification.md` §5 decision #11 |
+| US-7.3 | See who is signed in | Must | 5h | UC-27; Identity.8 |
+| US-7.4 | End someone's session | Must | 4h | UC-28; Identity.8 |
+| PM-028 | Session-fixation protection: rotate the session id on login | Must | 1h | Found while wiring US-7.3 — the login filter had silently kept a no-op session strategy |
+
+**Epic I subtotal: 28h**
+
+PM-025 is first and alone: it changes the JDBC converter graph and every integration test's datasource URL, and nothing else should be moving while that lands. PM-028 is last in the list but is not separable in practice — it is one line in the same `CompositeSessionAuthenticationStrategy` that US-7.3 has to add, and it is listed on its own only because it fixes a real vulnerability that was not part of any request.
+
+---
+
 ## 9. Ranked backlog (delivery order)
 
 Matches the sprint sequence in [02-sprint-plan.md](./02-sprint-plan.md); this is the order items are pulled off the backlog, not a strict one-at-a-time queue within a sprint.
@@ -192,5 +214,12 @@ Matches the sprint sequence in [02-sprint-plan.md](./02-sprint-plan.md); this is
 | 42 | PM-022 | Student self-service split | Sprint 5 |
 | 43 | PM-023 | Frontend rebuild (Next.js + TypeScript + Chakra) | Sprint 5 |
 | 44 | PM-024 | Generated docs HTML | Sprint 5 |
+| 45 | PM-025 | Timestamp/date UTC correctness | Sprint 6 |
+| 46 | PM-026 | Edit forms fetch the full record | Sprint 6 |
+| 47 | PM-027 | Enrolled-student count on courses | Sprint 6 |
+| 48 | US-4.3 | Enroll into several courses at once | Sprint 6 |
+| 49 | US-7.3 | See who is signed in | Sprint 6 |
+| 50 | US-7.4 | End someone's session | Sprint 6 |
+| 51 | PM-028 | Session-fixation protection | Sprint 6 |
 
-**Total: 197 ideal-hours across 44 backlog items** (22 user stories, 22 platform/hardening `PM-0xx` items), covering all 25 UCs identified in the Testing documentation. PM-016/017 and US-7.1/7.2 (13h) are a sudden mid-plan addition — see [02-sprint-plan.md](./02-sprint-plan.md) Sprint 3 for how this changed that sprint's capacity. PM-018 (3h) is a second, later addition — see Sprint 4 for how it closes a gap between `06-low-level-design.md` §13 and this backlog's original decomposition. Epic H (PM-019–024, 34h) is a third: it came out of walking the finished demo UI role by role, which surfaced access breadth and id exposure that reading the specification had not.
+**Total: 225 ideal-hours across 51 backlog items** (25 user stories, 26 platform/hardening `PM-0xx` items), covering all 28 UCs identified in the Testing documentation. PM-016/017 and US-7.1/7.2 (13h) are a sudden mid-plan addition — see [02-sprint-plan.md](./02-sprint-plan.md) Sprint 3 for how this changed that sprint's capacity. PM-018 (3h) is a second, later addition — see Sprint 4 for how it closes a gap between `06-low-level-design.md` §13 and this backlog's original decomposition. Epic H (PM-019–024, 34h) is a third: it came out of walking the finished demo UI role by role, which surfaced access breadth and id exposure that reading the specification had not. Epic I (PM-025–028, US-4.3, US-7.3/7.4, 28h) is a fourth, and the first to add a business rule (`Identity.8`) rather than only narrowing or re-keying existing ones — it came from using the application rather than demoing it, which is why two of its items are bug fixes for defects no walkthrough had caught.

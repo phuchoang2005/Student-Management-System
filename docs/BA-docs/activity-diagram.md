@@ -146,6 +146,14 @@ Extends UC-15 (search results) and UC-16 (a student's own course list). The rost
 
 Three validations, in that order: the supplied **student code** resolves to a student, the **course code** resolves to a course, and no duplicate enrollment already exists for the pair. Registrar-only — student self-service enrollment is out of scope. Note that both inputs are business codes; resolving the student code is simultaneously the "student exists" check.
 
+### UC-26 Enroll Student in Multiple Courses
+
+![UC-26 Enroll Student in Multiple Courses](./activity-diagram-assets/uc26-enroll-student-multiple-courses.svg)
+
+UC-11's three validations, applied once per course inside a loop. Two things the shape of the diagram is meant to make obvious. The student check sits *outside* the loop and rejects the entire request, because the student is the subject of the request rather than one of its items — an unknown student leaves every course unanswerable. The per-course checks sit *inside* it and record an outcome instead of aborting, so one duplicate or one bad code costs only itself. Each enrollment is committed on its own, which is why a course reported as enrolled stays enrolled even when a later course in the same request is rejected.
+
+Duplicate course codes within one request are collapsed before the loop: enrolling and then immediately reporting "already enrolled" for the same code would be accurate about what happened and indistinguishable from a defect to whoever read it.
+
 ### UC-12 End Enrollment
 
 ![UC-12 End Enrollment](./activity-diagram-assets/uc12-end-enrollment.svg)
@@ -202,6 +210,20 @@ System Administrator-only. Role is restricted server-side to the 3 staff roles �
 
 System Administrator-only. Enabling and disabling are symmetric — the same flow toggles the account's `enabled` state in either direction.
 
+### UC-27 View Active Sessions
+
+![UC-27 View Active Sessions](./activity-diagram-assets/uc27-view-active-sessions.svg)
+
+System Administrator-only, and a pure read. The one step worth its own box is replacing each session's identifier with a non-reversible handle: a session identifier is itself sufficient to impersonate its holder, so the view is built to be unable to leak one even onto a screen or into a screenshot. The empty branch is not only "nobody is signed in" — it is also the state immediately after a restart, since the record of who is signed in does not survive one, and nobody was signed out by it.
+
+### UC-28 End an Active Session
+
+![UC-28 End an Active Session](./activity-diagram-assets/uc28-end-active-session.svg)
+
+System Administrator-only. Two guards precede the act: the actor's own session is refused, since ending it from here is indistinguishable from the feature malfunctioning and signing out already does it deliberately; and a session that ended on its own between being listed and being confirmed is refused as no longer present.
+
+The final swimlane is the part that distinguishes this from UC-25. Revocation is *deferred* — it takes effect when the holder makes their next request, not at the instant it is confirmed. Nothing can be done with the session in the meantime, which is the guarantee that matters, but "the session is gone now" would overstate it. And the account is untouched: the holder may sign in again immediately, where UC-25 would have blocked exactly that while leaving their current session running.
+
 ---
 
 ## Use Case Coverage
@@ -219,6 +241,7 @@ System Administrator-only. Enabling and disabling are symmetric — the same flo
 | UC-9 Update Course | `uc09-update-course.svg` | Course Administrator |
 | UC-10 Remove Course | `uc10-remove-course.svg` | Course Administrator |
 | UC-11 Enroll Student in Course | `uc11-enroll-student.svg` | Registrar |
+| UC-26 Enroll Student in Multiple Courses | `uc26-enroll-student-multiple-courses.svg` | Registrar |
 | UC-12 End Enrollment | `uc12-end-enrollment.svg` | Registrar |
 | UC-13 View/Search Students | `uc13-search-students.svg` | Registrar |
 | UC-14 View/Search Books | `uc14-search-books.svg` | Librarian |
@@ -233,3 +256,5 @@ System Administrator-only. Enabling and disabling are symmetric — the same flo
 | UC-23 View Student's Initial Password | `uc23-view-initial-password.svg` | Registrar |
 | UC-24 Create Staff Account | `uc24-create-staff-account.svg` | System Administrator |
 | UC-25 Deactivate/Reactivate Staff Account | `uc25-deactivate-staff-account.svg` | System Administrator |
+| UC-27 View Active Sessions | `uc27-view-active-sessions.svg` | System Administrator |
+| UC-28 End an Active Session | `uc28-end-active-session.svg` | System Administrator |

@@ -126,6 +126,22 @@ flowchart LR
     StudentApp -- "provisions login account\n(Identity.1)" --> IdentityApi
 ```
 
+**One coupling is deliberately absent from that diagram: `course` → `enrollment`.** `CourseSummary`
+and `CourseDetail` carry an `enrolledCount` (`api-specification.md` §5 decision #11), which is data
+`enrollment` owns — but `course` does not call `enrollment` to get it. It cannot: `enrollment`
+already depends on `course` for Enrollment.2, so the reverse edge would close a cycle and
+`ApplicationModules.verify()` rejects it.
+
+Instead `course`'s own JDBC adapter joins the `enrollments` table in SQL. A SQL join is not a Java
+dependency, so no module edge is created and no cycle exists — the same escape
+`enrollment/internal/` already uses in the other direction to resolve a `courseCode` against the
+`courses` table (§9.1 of `06-low-level-design.md`). It is now used reciprocally, which is worth
+recording on both sides: the two modules are coupled at the schema, and only at the schema.
+
+That is a narrower coupling than the alternative but not a free one. It means the two modules cannot
+be given separate schemas without revisiting this, and a change to `enrollments`' shape can break a
+query owned by `course`.
+
 ### 2.3 Cross-module domain events
 
 The cleanup rules from req.md §5: when a `student` or `course` aggregate is deleted, dependent modules react asynchronously via a Spring Modulith event listener rather than a direct call. This now includes `identity`: removing a student also removes their user account (Identity — "when a student is removed"), so `identity` listens for `StudentDeleted` alongside `book` and `enrollment`. Dashed arrows only.
@@ -225,11 +241,15 @@ Spring Security's filter chain sits in front of every controller, not inside any
 
 | Role (principal) | Write access | Read access |
 | --- | --- | --- |
-| System Administrator | `identity` (staff accounts only, via UC-24/25) | none — no `student`/`book`/`course`/`enrollment` access |
+| System Administrator | `identity` (staff accounts via UC-24/25; live sessions via UC-28) | `identity` (live sessions, via UC-27) — still no `student`/`book`/`course`/`enrollment` access |
 | Registrar | `student`, `enrollment` | `student`, `course`, `enrollment` |
 | Librarian | `book` | `student`, `book` |
 | Course Administrator | `course` | `student`, `course`, `enrollment` |
 | Student | none | own records only — `student` and `book` scoped to `principal.studentId`, plus the course catalogue; no `enrollment` access |
+
+The System Administrator's read grant covers `identity` alone. Sessions say who is signed in and
+nothing about any student, book, course, or enrollment, so "no domain data" still describes the role
+exactly (`04-authentication-authorization.md` §3c, §6.1).
 
 **Read access is granted per module, not as one undifferentiated "domain read".** Each role reads
 what its own work needs and nothing more, which is a narrowing of an earlier version of this table

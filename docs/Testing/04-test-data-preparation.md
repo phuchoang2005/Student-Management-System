@@ -132,6 +132,10 @@ For tests that need data already persisted before the test runs (most `03-test-c
 
 Prefer the programmatic approach for aggregates with non-trivial creation side effects (`student`, since it auto-provisions an account) so the fixture creation itself stays honest about what the real flow does; prefer `@Sql` for simple, side-effect-free aggregates (`course`) where speed matters more.
 
+**Bind the container through `TestDatasource.bind`, never by hand.** Every `@DynamicPropertySource` must call the shared helper rather than repeating `registry.add("spring.datasource.url", MYSQL::getJdbcUrl)`. The helper appends `serverTimezone=UTC`, matching what `application.properties` pins in production.
+
+This is not tidiness. `MySQLContainer.getJdbcUrl()` carries no time-zone parameter, so Connector/J falls back to the JVM's zone — and because it then uses that same zone on *both* halves of a round trip, timestamps came back exactly as written and the whole suite stayed green while production drifted by the JVM's offset from UTC on every read (see [cross-cutting.md](./03-test-cases/cross-cutting.md) §10). A hand-bound URL silently reintroduces that blind spot, and nothing fails to warn you.
+
 ### 5.3 Data isolation & reset strategy
 
 | Test level | Isolation mechanism |
@@ -141,7 +145,27 @@ Prefer the programmatic approach for aggregates with non-trivial creation side e
 | API/contract (full `@SpringBootTest`) | Fresh Testcontainers MySQL instance per test class (or per test run, reused across classes for speed, migrated once) with a truncate-and-reseed step in `@BeforeEach`/`@AfterEach` — full `@Transactional` rollback doesn't cleanly cover HTTP-driven tests that may span multiple internal transactions (e.g. the cascade scenarios in [cross-cutting.md](./03-test-cases/cross-cutting.md) §4) |
 | Database integrity (direct SQL against constraints) | Same Testcontainers instance as API/contract level, truncate-and-reseed between test methods to avoid unique-constraint collisions across unrelated tests (`student_code`, `email`, `isbn`, `course_code`, `username` all carry `UNIQUE` constraints — see `05-database-schema.md` §4) |
 
+**Sessions are not covered by any of the above.** The active-session cases ([identity-auth.md](./03-test-cases/identity-auth.md) §9) act on Spring Security's in-memory `SessionRegistry`, which lives in the application context rather than in MySQL — truncating tables does not clear it, and a test transaction cannot roll it back. Two consequences for writing those tests:
+
+- **Log in for real.** `@WithMockUser` and the `user(...)` post-processor install a `SecurityContext` directly and never register a session, so a test using them sees an empty list no matter what the code does. Only `POST /api/v1/auth/login` populates the registry.
+- **Do not assert on the size of the list.** Sessions opened by earlier tests in the same class persist into later ones. Assert that a specific username is present or absent, never that the list has exactly *n* rows.
+
 **Why truncate-and-reseed rather than a fresh container per test:** spinning up a new MySQL container per test method is correct but slow; truncating all 5 tables (in FK-safe order: `enrollments`, `users`, `books`, `courses`, `students`) between tests within one container gives the same isolation guarantee at a fraction of the cost, and is safe here because every test fixture ID in this document is deterministic and self-contained (no fixture depends on state left over from a previous, unrelated test).
+
+### 5.3a Bulk-enrollment datasets (UC-26)
+
+The batch cases ([enrollment.md](./03-test-cases/enrollment.md) §6) need one student and at least three courses per test, with the student enrolled in none of them at the start. Build them per test rather than sharing one fixture: several cases enroll the student as a side effect, so a shared fixture would make them order-dependent — and the property under test is precisely which enrollments survive.
+
+Prepare, per test:
+
+| Fixture | Purpose |
+| --- | --- |
+| Three real course codes | The success path, and the two "valid neighbours" that must survive a rejected sibling |
+| One code naming no course | TC-ENR-023's mid-batch rejection |
+| One repeated code | TC-ENR-025's collapse |
+| A 51-element list | TC-ENR-027's cap |
+
+Generate the codes with a per-test counter rather than fixed literals: course code and student code both carry `UNIQUE` constraints, and these tests create records the truncate step is the only thing removing.
 
 ### 5.4 Realistic bulk data (for search/list test cases)
 

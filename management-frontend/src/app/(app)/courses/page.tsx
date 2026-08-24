@@ -103,6 +103,12 @@ function Courses() {
           },
           { key: 'name', header: 'Name', cell: (row) => row.name },
           { key: 'credits', header: 'Credits', width: '6rem', cell: (row) => row.credits },
+          {
+            key: 'enrolledCount',
+            header: 'Students',
+            width: '7rem',
+            cell: (row) => row.enrolledCount,
+          },
           ...(mayWrite
             ? [
                 {

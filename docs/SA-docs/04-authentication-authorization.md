@@ -2,7 +2,7 @@
 
 Solution Architecture Document — Part 4 of 6 ([System Overview](./01-system-overview.md) → [Component Diagram](./02-component-diagram.md) → [Sequence Diagram](./03-sequence-diagrams.md) → Authentication & Authorization → [Database Schema](./05-database-schema.md) → [Low-Level Design](./06-low-level-design.md)).
 
-Derived from [use-cases.md](../BA-docs/use-cases.md) (UC-1's account-provisioning step, UC-21 Login, UC-22 Change Password, UC-23 View Student's Initial Password, UC-24 Create Staff Account, UC-25 Deactivate/Reactivate Staff Account) and [req.md](../BA-docs/req.md) (the User Account entity and Identity.1–7 rules). This document settles what `01-system-overview.md` §4.2 and its Deployment Characteristics table originally left as "an implementation decision" — the authentication scheme, the identity/session model, and the `identity` module introduced in `02-component-diagram.md` §2.1/§2.4. It reuses the lifeline, arrow-style, and `alt`/`par` conventions defined once in `03-sequence-diagrams.md` §1 rather than restating them, and does not repeat request/response DTO shapes, which stay in the OpenAPI contract per `02-component-diagram.md` §5.
+Derived from [use-cases.md](../BA-docs/use-cases.md) (UC-1's account-provisioning step, UC-21 Login, UC-22 Change Password, UC-23 View Student's Initial Password, UC-24 Create Staff Account, UC-25 Deactivate/Reactivate Staff Account, UC-27 View Active Sessions, UC-28 End an Active Session) and [req.md](../BA-docs/req.md) (the User Account entity and Identity.1–8 rules). This document settles what `01-system-overview.md` §4.2 and its Deployment Characteristics table originally left as "an implementation decision" — the authentication scheme, the identity/session model, and the `identity` module introduced in `02-component-diagram.md` §2.1/§2.4. It reuses the lifeline, arrow-style, and `alt`/`par` conventions defined once in `03-sequence-diagrams.md` §1 rather than restating them, and does not repeat request/response DTO shapes, which stay in the OpenAPI contract per `02-component-diagram.md` §5.
 
 ---
 
@@ -13,8 +13,10 @@ Derived from [use-cases.md](../BA-docs/use-cases.md) (UC-1's account-provisionin
 | State management | **Session-based (stateful).** Spring Security's default HTTP session management issues a server-side session (`JSESSIONID` cookie) on successful login. | `01-system-overview.md` Deployment Characteristics "State" row, previously "Stateless"; §4.2, previously "an implementation decision... not fixed at this level." |
 | Authorization model | **RBAC**, using 5 roles: the 4 already named throughout the doc set (Registrar, Librarian, Course Administrator, Student) plus a new **System Administrator** role, scoped solely to staff-account provisioning (§3a) and deactivation (§3b) — it has no access to any domain module's data. | `02-component-diagram.md` §4's existing role/access table, which now has a concrete `role` column on `users` backing it instead of an abstract "authenticated principal," plus a new System Administrator row. |
 | Identity / SSO | **In-app identity.** A dedicated `users` table owned by a new `identity` module; login and password logic are built into the application itself. No external IdP, no OAuth/OIDC. | — (no prior decision existed; this scope was entirely unaddressed before). |
+| Session enumeration & revocation | **Spring Security's in-memory `SessionRegistry`**, populated by a `RegisterSessionAuthenticationStrategy` on the login filter and read by a System Administrator-only `/api/v1/sessions` (§3c). Revocation is `SessionInformation.expireNow()`, enforced by `ConcurrentSessionFilter` on the session's next request. | §9's "Force-terminating an already-open session" bullet, which deferred this entirely; §3b's claim that no session-by-user-id invalidation mechanism exists. Sessions can now be ended — deliberately, by a System Administrator — though still not automatically as a side effect of deactivation. |
+| Session fixation | **`ChangeSessionIdAuthenticationStrategy`**, composed ahead of session registration on the login filter (§3c). | — (no prior decision existed). The login filter is installed with `addFilterAt`, so no DSL configurer supplied a session strategy and it silently kept the framework's no-op default; the session id was therefore not rotated on login. |
 
-Single-process deployment (`01-system-overview.md` Deployment Characteristics, "Process topology") makes an in-memory session store sufficient for this scope — no distributed session store is designed here (see §9).
+Single-process deployment (`01-system-overview.md` Deployment Characteristics, "Process topology") makes an in-memory session store sufficient for this scope — no distributed session store is designed here (see §9). The session registry inherits that scope exactly: it lives in the same process as the sessions it describes, so it is emptied by a restart and, were the application ever run as more than one instance, each instance would see only its own sessions.
 
 ## 2. The `identity` module and the `users` table
 
@@ -146,7 +148,114 @@ sequenceDiagram
     Ctrl-->>SysAdmin: 200 OK {username, enabled}
 ```
 
-Deactivation does not force-terminate an already-open session for the target account — this single-process deployment has no distributed session store to invalidate against (§1), so an account disabled mid-session may retain access until that session naturally expires. This is called out explicitly as a limitation in §9, not silently assumed away.
+Deactivation does not by itself force-terminate an already-open session for the target account: it changes what happens at the *next* login, not what is happening now, so an account disabled mid-session retains access until that session ends. That is unchanged.
+
+What has changed is that the session can now be ended deliberately. §3c adds a System Administrator-only view of live sessions and the ability to revoke one, so the remedy for "disabled, but still working" is to disable the account (UC-25) and then end its session (UC-28) — two explicit acts rather than one implicit cascade. Keeping them separate is intentional: the two answer different questions (Identity.7 governs the next sign-in, Identity.8 the current session), and an administrator revoking a session usually does *not* want the account disabled as well.
+
+## 3c. Active sessions and revocation (UC-27, UC-28)
+
+System Administrator-only. Backed by Spring Security's `SessionRegistry` rather than by any table of this application's own: sessions live in the servlet container, so the registry is the only thing that knows they exist.
+
+### 3c.1 What makes the registry non-empty
+
+Three beans and one line on the login filter, and the last of these is the load-bearing one:
+
+| Piece | Why it is needed |
+| --- | --- |
+| `SessionRegistryImpl` as a `@Bean` | It is an `ApplicationListener`. Only a registry that is a bean receives `SessionDestroyedEvent`/`SessionIdChangedEvent` and prunes itself; one created privately by the DSL does not. |
+| `HttpSessionEventPublisher` as a `@Bean` | Bridges the container's `HttpSessionEvent`s into the application context. Without it nothing tells the registry that a session was logged out or timed out, and it accumulates dead session ids indefinitely. |
+| `sessionConcurrency(...)` with `SessionLimit.UNLIMITED` | Installs `ConcurrentSessionFilter`, which *is* the revocation mechanism (§3c.3). The limit is unlimited because concurrent logins are not being capped — the machinery is being switched on. |
+| `loginFilter.setSessionAuthenticationStrategy(...)` | **Required, not optional.** `.sessionManagement()` publishes its `SessionAuthenticationStrategy` as a shared object consumed only by `AbstractAuthenticationFilterConfigurer` — that is, by filters the DSL builds. The JSON login filter is installed with `addFilterAt` (§11.2 of `06-low-level-design.md`), so no configurer runs for it and it keeps the inherited `NullAuthenticatedSessionStrategy`. There is no fallback: `SessionManagementFilter` is not in the chain either. Left alone, the registry would be permanently empty. |
+
+The strategy is a `CompositeSessionAuthenticationStrategy` of `ChangeSessionIdAuthenticationStrategy` then `RegisterSessionAuthenticationStrategy`, in that order — rotation must precede registration or the id recorded is the pre-rotation one. Setting it also closes the session-fixation gap noted in §1, which existed for the same reason and had gone unnoticed because nothing else depended on the strategy being real.
+
+### 3c.2 What the view exposes, and what it does not
+
+Each row carries the account's username, its role, when the session was last seen, and whether it is the caller's own. Two deliberate omissions:
+
+- **The session id is never emitted.** A session id is a bearer credential: anything holding one can present it as a `JSESSIONID` cookie and become that user. The API publishes a SHA-256 digest of it instead — stable, so it addresses a session for revocation, and preimage-resistant, so it cannot be turned back into a cookie by an onlooker, a screenshot, or a log. See `api-specification.md` §5 decision #13.
+- **No `mustChangePassword` or `enabled`.** `AuthController` replaces the session principal after a password change (§5.1) without informing the registry, so the registry's copy of those flags can be stale. Account state belongs to `/staff-accounts`; this view is about sessions.
+
+That same staleness constrains the implementation: `AuthenticatedPrincipal` is a record with value-based equality and `SessionRegistryImpl` keys its map on the principal object, so a principal reconstructed in order to look one up may differ from the stored key by a field and match nothing. Every read here iterates `getAllPrincipals()` instead, which is insensitive to it.
+
+### 3c.3 Revocation is deferred, and answers 401
+
+`SessionInformation.expireNow()` sets a flag. It does not invalidate the `HttpSession`, and it has no effect on any request already in flight. `ConcurrentSessionFilter` is what notices the flag on the session's *next* request, invalidates it, and answers without continuing the chain. So the guarantee is "nothing further can be done with this session", not "this session no longer exists" — the difference matters only to how it is described, since no request can use it in the interval either way.
+
+`ConcurrentSessionFilter`'s default `SessionInformationExpiredStrategy` prints one plain-text sentence and never sets a status, which would answer **200 OK** with prose — indistinguishable from success to any client. It is replaced with one that answers **401** in the standard `Error` envelope (`api-specification.md` §3), written directly to the response because this filter runs ahead of `DispatcherServlet` and `GlobalExceptionHandler` can never see it.
+
+Filter ordering already places `ConcurrentSessionFilter` after the login filter and before `AuthorizationFilter`, and therefore before `MustChangePasswordFilter`, so a revoked session is turned away ahead of both authorization and the must-change gate.
+
+### 3c.4 Self-revocation
+
+Ending one's own session from this view is rejected (400), not merely discouraged. It is indistinguishable from the feature malfunctioning, and signing out already does it deliberately.
+
+### 3c.5 Sequence — listing (UC-27)
+
+```mermaid
+sequenceDiagram
+    actor SysAdmin as System Administrator
+    participant Ctrl as SessionController
+    participant Svc as SessionService
+    participant Reg as SessionRegistry
+
+    SysAdmin->>Ctrl: GET /api/v1/sessions
+    Ctrl->>Ctrl: read own session id (never creating one)
+    Ctrl->>Svc: listActiveSessions(currentSessionId)
+    Svc->>Reg: getAllPrincipals()
+    Reg-->>Svc: AuthenticatedPrincipal[]
+    loop for each principal
+        Svc->>Reg: getAllSessions(principal, false)
+        Reg-->>Svc: SessionInformation[]
+    end
+    Note over Svc: SHA-256 each session id into a handle;<br/>mark the caller's own; sort by lastRequest desc
+    Svc-->>Ctrl: ActiveSessionView[]
+    Ctrl-->>SysAdmin: 200 OK [{handle, username, role, lastRequest, current}]
+```
+
+`false` on `getAllSessions` excludes sessions already marked expired — listing one would invite an administrator to end something already ended. Iterating `getAllPrincipals()` rather than looking a principal up is the constraint from §3c.2.
+
+### 3c.6 Sequence — revocation (UC-28)
+
+The two participants that matter are on different requests. That is the whole shape of it.
+
+```mermaid
+sequenceDiagram
+    actor SysAdmin as System Administrator
+    participant Ctrl as SessionController
+    participant Svc as SessionService
+    participant Reg as SessionRegistry
+    actor Holder as Session holder
+    participant CSF as ConcurrentSessionFilter
+
+    SysAdmin->>Ctrl: DELETE /api/v1/sessions/{handle}
+    Ctrl->>Svc: revoke(handle, currentSessionId)
+    alt handle is the caller's own session
+        Svc-->>Ctrl: DomainValidationException
+        Ctrl-->>SysAdmin: 400 Bad Request — use sign out
+    else no live session matches
+        Svc->>Reg: scan principals x sessions, digesting each id
+        Reg-->>Svc: no match
+        Svc-->>Ctrl: NotFoundException
+        Ctrl-->>SysAdmin: 404 Not Found
+    else match
+        Svc->>Reg: scan principals x sessions, digesting each id
+        Reg-->>Svc: SessionInformation
+        Svc->>Reg: expireNow()
+        Note over Reg: sets a flag only — the HttpSession is untouched
+        Svc-->>Ctrl: OK
+        Ctrl-->>SysAdmin: 204 No Content
+    end
+
+    Note over Holder,CSF: later — the holder's next request
+    Holder->>CSF: any request carrying the revoked JSESSIONID
+    CSF->>Reg: getSessionInformation(sessionId)
+    Reg-->>CSF: expired = true
+    CSF->>CSF: invalidate the session, clear the context
+    CSF-->>Holder: 401 Unauthorized (Error envelope) — chain not continued
+```
+
+The gap between the 204 and the 401 is what "deferred" means in §3c.3. It is also why the account is unaffected: nothing in this flow touches `users`.
 
 ## 4. Login & the must-change-password gate
 
@@ -306,13 +415,17 @@ sequenceDiagram
 
 Extends `02-component-diagram.md` §4's role/access table with the `identity`-specific permissions that table deliberately excludes (§4's closing note):
 
-| Role | Can log in (UC-21) | Can change own password (UC-22) | Can view a student's initial password (UC-23) | Can create/deactivate staff accounts (UC-24/25) |
-| --- | --- | --- | --- | --- |
-| System Administrator | Yes | Yes | No | Yes |
-| Registrar | Yes | Yes | Yes | No |
-| Librarian | Yes | Yes | No | No |
-| Course Administrator | Yes | Yes | No | No |
-| Student | Yes | Yes | No | No |
+| Role | Can log in (UC-21) | Can change own password (UC-22) | Can view a student's initial password (UC-23) | Can create/deactivate staff accounts (UC-24/25) | Can view/end sessions (UC-27/28) |
+| --- | --- | --- | --- | --- | --- |
+| System Administrator | Yes | Yes | No | Yes | Yes³ |
+| Registrar | Yes | Yes | Yes | No | No |
+| Librarian | Yes | Yes | No | No | No |
+| Course Administrator | Yes | Yes | No | No | No |
+| Student | Yes | Yes | No | No | No |
+
+³ Every session, not only staff ones — a Student's session is as endable as a Registrar's. The one
+exception is the administrator's own session, refused so that ending it cannot be mistaken for the
+feature breaking (§3c.4).
 
 ### 6.1 Domain read access, per resource
 
@@ -327,6 +440,7 @@ absent from a row receives `403`, not an empty result:
 | `/api/v1/courses/**` | Yes | No | Yes | Yes | No |
 | `/api/v1/enrollments/**` | Yes | No | Yes | No | No |
 | `/api/v1/me/**` | No | No | No | Yes | No |
+| `/api/v1/sessions` | No | No | No | No | Yes |
 
 ¹ Course Administrator holds this grant only to open a student's profile from a course roster; the
 role has no student-browsing workflow, and its UI offers no Students destination.
@@ -339,6 +453,16 @@ A Student's own enrolled courses come from `GET /api/v1/me/courses`, scoped by t
 rather than by a student code the caller types — which is why the Student row on
 `/api/v1/enrollments/**` is a flat No rather than a scoped Yes. There is nothing on that surface for
 a Student to read that `/me` does not answer more safely.
+
+`/api/v1/sessions` is the first row where the System Administrator column is not `No`, and the first
+grant it holds outside `identity`'s own resources — but it is not a domain read: it exposes who is
+signed in, never any student, book, course, or enrollment. `02-component-diagram.md` §4's "no domain
+data" statement about the role therefore still holds.
+
+Like `/staff-accounts`, both matchers are explicit rather than inherited. The per-resource allow-list
+above does not cover `/sessions`, so without them a `GET` would fall through to
+`.anyRequest().authenticated()` and every signed-in role could enumerate — and end — everyone else's
+sessions.
 
 No role may view or change another principal's *changed* password — that is never possible for anyone, by construction (§2.2, §5.1). The System Administrator's own account is never created or deactivated through the application (§3a) — that column has no entry for its own row by construction, not by omission.
 
@@ -370,9 +494,10 @@ The frontend calls this once (e.g. on the login screen), renders one button per 
 - A "true" forgot-password flow for a user with no active session and no known current password (email/SMS/token-based reset) — not designed; an account holder who cannot authenticate at all must be handled operationally. This applies equally to a staff account created via UC-24 that loses its initial password — there is no UC-23-equivalent lookup for staff accounts (§3a).
 - Further System Administrator accounts — always pre-seeded/out-of-band, never created through the application (§2.2, §3a).
 - Self-service staff registration — a staff account can only come from UC-24; there is no "sign up" flow.
-- Force-terminating an already-open session when its account is deactivated mid-session (§3b) — the single-process, in-memory session store (§1) has no session-by-user-id invalidation mechanism designed here.
+- Force-terminating an already-open session *automatically*, as a side effect of deactivating its account (§3b). A System Administrator can now end a session deliberately (§3c, UC-28), which supersedes the previous blanket deferral; making deactivation cascade into it remains undesigned, and §3b explains why the two are kept separate.
+- Surviving a restart, or working across more than one application instance, for the session view (§3c) — the registry is in-process by the same single-process assumption as the session store itself (§1). A restart empties the list without signing anyone out, and a second instance would see only its own sessions.
 - The demo-accounts endpoint (§8) being reachable, or its seed accounts existing, in a production environment — treated as a P0 risk, not merely "out of scope," per `01-test-strategy.md` §6.
-- Horizontal scaling of the session store (Spring Session JDBC/Redis, sticky sessions) — the single-process deployment in `01-system-overview.md` makes this unnecessary for current scope.
+- Horizontal scaling of the session store (Spring Session JDBC/Redis, sticky sessions) — the single-process deployment in `01-system-overview.md` makes this unnecessary for current scope. This is the change that §3c would require first if the deployment ever became multi-instance.
 - Multi-factor authentication, password expiry/rotation, and password history beyond the single "must differ from current" check (§5.2).
 - AES key management/rotation for `initial_password_encrypted` — application configuration, a build/ops concern.
 - Flyway migration DDL and Java class implementation for the `identity` module — future build-phase work, same status as the rest of the schema (`01-system-overview.md` §4.4).

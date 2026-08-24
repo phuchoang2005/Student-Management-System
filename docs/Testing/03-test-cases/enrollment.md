@@ -96,13 +96,69 @@ Covers **UC-11** (Enroll Student in Course), **UC-12** (End Enrollment), **UC-20
 
 ---
 
+---
+
+## 6. Enroll a student in several courses at once (UC-26 / US-4.3)
+
+Covers **UC-26**. Endpoint: `POST /api/v1/enrollments/batch`.
+
+The cases below all exist to pin one property: **a rejected course costs only itself.** TC-ENR-023 is the load-bearing one — it is what fails if `EnrollmentBatchService` is ever folded back into `EnrollmentService` as a plain loop, because Spring's proxy would be bypassed by self-invocation and all courses would share one transaction.
+
+### TC-ENR-022 — Several courses are enrolled in one request
+- **Related UC / Rule:** UC-26; Enrollment.1–3
+- **Priority:** P0 · **Type:** Functional
+- **Preconditions:** A student and three courses exist; the student is enrolled in none of them.
+- **Test Data:** Registrar session (see [04-test-data-preparation.md](../04-test-data-preparation.md) §1)
+- **Steps:** `POST /api/v1/enrollments/batch` with `{"studentCode":"...","courseCodes":["A","B","C"]}`.
+- **Expected Result:** `200 OK`; `requested = 3`, `enrolled = 3`, `failed = 0`; every `results[].status` is `ENROLLED` with an `enrolledAt` and no `message`. A follow-up `GET /api/v1/enrollments?studentCode=` reports `totalElements = 3`.
+
+### TC-ENR-023 — A rejected course does not undo the ones that succeeded
+- **Related UC / Rule:** UC-26; `api-specification.md` §5 decision #12
+- **Priority:** P0 · **Type:** Functional
+- **Preconditions:** A student and two real courses exist.
+- **Steps:** `POST /api/v1/enrollments/batch` with `courseCodes` = `[<real>, <nonexistent>, <real>]`. Then read the enrollments back in a **separate** request.
+- **Expected Result:** `200 OK`; `enrolled = 2`, `failed = 1`; `results[1].status = UNKNOWN_COURSE` with a `message` and no `enrolledAt`. The separate read reports `totalElements = 2` — the two successful enrollments are committed and were not rolled back. Reading them back in a second request is the point: within the same response the counts could be reported by a transaction that later rolled back.
+
+### TC-ENR-024 — A course the student is already in is reported, not fatal
+- **Related UC / Rule:** UC-26; Enrollment.1
+- **Priority:** P0 · **Type:** Negative
+- **Steps:** Enroll the student in course A. Then `POST /api/v1/enrollments/batch` with `["A","B"]`.
+- **Expected Result:** `200 OK`; `enrolled = 1`, `failed = 1`; `results[0].status = ALREADY_ENROLLED`, `results[1].status = ENROLLED`. Note this is **not** the `409` the single-enrollment endpoint gives — a duplicate is an outcome inside a successful request here.
+
+### TC-ENR-025 — A course repeated within one request is collapsed
+- **Related UC / Rule:** UC-26
+- **Priority:** P1 · **Type:** Boundary
+- **Steps:** `POST /api/v1/enrollments/batch` with `["A","A"]`.
+- **Expected Result:** `200 OK`; `requested = 1`, `enrolled = 1`, `results` has exactly one entry. Reporting `ENROLLED` then `ALREADY_ENROLLED` for the same code would be accurate about what happened and indistinguishable from a defect.
+
+### TC-ENR-026 — An unknown student rejects the whole request
+- **Related UC / Rule:** UC-26; Enrollment.3; `api-specification.md` §5 decision #2
+- **Priority:** P0 · **Type:** Negative
+- **Steps:** `POST /api/v1/enrollments/batch` naming a student code that resolves to nothing, with one valid course.
+- **Expected Result:** `400 Bad Request` in the `Error` envelope, with **no** `results` field. Nothing is enrolled. The student is the subject of the request rather than one of its items, so an unknown one leaves every course unanswerable — unlike an unknown course, which is a per-course outcome (TC-ENR-023).
+
+### TC-ENR-027 — An empty or oversized course list is rejected
+- **Related UC / Rule:** UC-26
+- **Priority:** P1 · **Type:** Boundary
+- **Steps:** `POST /api/v1/enrollments/batch` with `courseCodes: []`; then again with 51 codes.
+- **Expected Result:** `400 Bad Request` both times, in the standard `ValidationError` envelope with `courseCodes` in `errors[]`. The cap is 50 because each course costs its own transaction and round trip.
+
+### TC-ENR-028 — Only the Registrar may enroll in bulk
+- **Related UC / Rule:** `04-authentication-authorization.md` §6
+- **Priority:** P0 · **Type:** Security-RBAC
+- **Steps:** As Course Administrator: `POST /api/v1/enrollments/batch`.
+- **Expected Result:** `403 Forbidden`. The existing `POST /api/v1/enrollments/**` matcher already covers `/batch`; this case pins that it does, so the sub-path cannot be added later without inheriting the rule.
+
+---
+
 ## Traceability Summary
 
 | UC / US | Test Case IDs |
 | --- | --- |
 | UC-11 / US-4.1 | TC-ENR-001–006 |
 | UC-12 / US-4.2 | TC-ENR-007–010 |
-| UC-20 / US-5.5 | TC-ENR-011–012 |
+| UC-20 / US-5.5 | TC-ENR-011–012, TC-ENR-016–021 |
+| UC-26 / US-4.3 | TC-ENR-022–028 |
 
 Cross-module cascade behavior — enrollments removed automatically when their student or course is deleted — is covered in [student.md](./student.md) TC-STU-023/025, [course.md](./course.md) TC-CRS-015, and [cross-cutting.md](./cross-cutting.md) §4, not repeated here.
 

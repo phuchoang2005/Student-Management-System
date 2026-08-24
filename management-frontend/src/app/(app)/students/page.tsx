@@ -97,8 +97,12 @@ function StudentRoll() {
 
   const confirmDelete = async () => {
     if (!deleting) return;
+    // `run` resolves to `undefined` only when it caught an error, and to the call's result
+    // otherwise -- `null` here, since DELETE answers 204. That return value is the whole success
+    // check: `removeAction.error` is the state captured by this render, so reading it back here
+    // would report the *previous* attempt's outcome.
     const result = await removeAction.run(deleting.studentCode);
-    if (result !== undefined || !removeAction.error) {
+    if (result !== undefined) {
       setDeleting(null);
       resource.refetch();
     }

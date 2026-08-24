@@ -1,7 +1,10 @@
 package org.phuchoang.management.enrollment.web;
 
 import jakarta.validation.Valid;
+import org.phuchoang.management.enrollment.application.EnrollmentBatchService;
 import org.phuchoang.management.enrollment.application.EnrollmentService;
+import org.phuchoang.management.enrollment.web.dto.BatchEnrollmentRequest;
+import org.phuchoang.management.enrollment.web.dto.BatchEnrollmentResponse;
 import org.phuchoang.management.enrollment.web.dto.EnrollmentCreateRequest;
 import org.phuchoang.management.enrollment.web.dto.EnrollmentDetailDto;
 import org.phuchoang.management.enrollment.web.dto.EnrollmentResponse;
@@ -28,10 +31,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class EnrollmentController {
 
   private final EnrollmentService enrollmentService;
+  private final EnrollmentBatchService enrollmentBatchService;
   private final EnrollmentMapper mapper;
 
-  public EnrollmentController(EnrollmentService enrollmentService, EnrollmentMapper mapper) {
+  public EnrollmentController(
+      EnrollmentService enrollmentService,
+      EnrollmentBatchService enrollmentBatchService,
+      EnrollmentMapper mapper) {
     this.enrollmentService = enrollmentService;
+    this.enrollmentBatchService = enrollmentBatchService;
     this.mapper = mapper;
   }
 
@@ -55,6 +63,23 @@ public class EnrollmentController {
   public EnrollmentResponse createEnrollment(@Valid @RequestBody EnrollmentCreateRequest request) {
     EnrollmentService.CreatedEnrollment created = enrollmentService.enroll(mapper.toCommand(request));
     return mapper.toResponse(created);
+  }
+
+  /**
+   * UC-26 — one student, several courses, one request.
+   *
+   * <p>200 rather than 207: the request itself succeeded, and the per-course outcomes are payload,
+   * not transport status. {@code 207 Multi-Status} is a WebDAV code defined against a {@code
+   * DAV:multistatus} body, so returning it with a bespoke JSON shape would be a pun. Nor 201 — there
+   * is no single {@code Location} and creation is partial by design.
+   *
+   * <p>An unknown student is still a whole-request 400: it is the subject of the request, not one of
+   * its items. An unknown or already-enrolled course is a per-course outcome. Enrolled courses are
+   * committed independently, so a rejection later in the list does not undo them.
+   */
+  @PostMapping("/batch")
+  public BatchEnrollmentResponse enrollBatch(@Valid @RequestBody BatchEnrollmentRequest request) {
+    return mapper.toResponse(enrollmentBatchService.enrollAll(mapper.toCommand(request)));
   }
 
   @GetMapping("/{studentCode}/{courseCode}")
