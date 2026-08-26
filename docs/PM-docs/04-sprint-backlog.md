@@ -623,7 +623,7 @@ One trap is documented in the code because it is invisible: `AuthenticatedPrinci
 
 Epic J, first half. See [01-product-backlog.md](./01-product-backlog.md) §8c and [02-sprint-plan.md](./02-sprint-plan.md)'s Sprints 7–8 addendum.
 
-**This sprint is specified and not executed.** Every section above it records work that has shipped, and Sprints 5–6 carry retrospective `**Status:**` notes saying what their estimates got wrong. Nothing here has been built: `bench/` does not exist, `management/pom.xml` carries neither actuator nor JMH, and `benchmark-strategy/result/` holds an index and no run records. The task hours below size a specification, in exactly the sense §2's Sprint 0 tasks once did.
+**PM-029/030/031 are executed; PM-032/033/034 are specified and not executed.** Sprints 5–6 carry retrospective `**Status:**` notes saying what their estimates got wrong — the same convention starts here for the three items that have shipped. `benchmark-strategy/result/` still holds an index and no run records, since a baseline (PM-034) needs PM-032/033 first.
 
 Ordering: **PM-029 first**, because it is a prerequisite rather than a hazard fix — without server-side metrics, `05-baseline-and-reporting.md` §4's escalation ladder stops at rung 1 and a slow scenario cannot be attributed to anything. Then PM-030 → PM-031 → PM-032 (harness, data, tooling), PM-033 (the read catalog), and PM-034 last, since a baseline is only meaningful once the four before it are stable.
 
@@ -638,6 +638,8 @@ Ordering: **PM-029 first**, because it is a prerequisite rather than a hazard fi
 
 Per `01-benchmark-strategy.md` §8; closes hazard H8, which degrades the benchmark rather than the system.
 
+**Status:** done. `management.endpoints.web.exposure.include=` is explicitly empty in `application.properties` and only `health,metrics,prometheus` in `application-benchmark.properties`; `SecurityConfig` gates `/actuator/health` `permitAll()` and everything else under `/actuator/**` behind `hasRole("SYSTEM_ADMINISTRATOR")`. Verified against a disposable, throwaway MySQL container (never the dev `management-mysql`): with the profile active, `/actuator/health` is 200 anonymously and `/actuator/prometheus`/`/actuator/metrics` are 200 for a `SYSTEM_ADMINISTRATOR` session and 403 for anonymous/wrong-role; without the profile, health still 200s (Spring Boot's own always-on default) but prometheus/metrics 404 even for an authenticated `SYSTEM_ADMINISTRATOR` — confirming the exposure gate, not just the RBAC gate, is what closes H8 outside a benchmark run. `./mvnw test` (275 tests, including ArchUnit and `ApplicationModules.verify()`) is unaffected.
+
 ### PM-030 — `bench/` k6 harness skeleton (6h)
 
 | Task | Layer | Est. |
@@ -649,6 +651,8 @@ Per `01-benchmark-strategy.md` §8; closes hazard H8, which degrades the benchma
 | Confirm the new top-level directory changes neither `./mvnw verify` timing nor ArchUnit / `ApplicationModules.verify()` results | Verification | 0.5h |
 
 Per `02-benchmark-plan.md` §1.1–1.2. `session.js` is the one piece the plan calls **not optional**: k6 was chosen over Gatling and JMeter precisely so this code could live in JS outside `management/`, where no architecture rule can reach it.
+
+**Status:** done, skeleton only — `bench/lib/{config,session,slo}.js` and `bench/README.md` exist; `bench/scenarios/*.js` (PM-033) and `make bench-*` targets (PM-032) deliberately do not yet. `session.js`'s `login()`/`assertLive()` pair was exercised end to end against a real running instance (not just read for review): logging in as each of the account-cohort roles PM-031 seeds and hitting each role's liveness path (`/api/v1/me/profile`, `/api/v1/students`, `/api/v1/books`, `/api/v1/courses`) all returned 200. `bench/` sits entirely outside `management/src/`, so `./mvnw test`/`verify` are unaffected by construction, not just by inspection.
 
 ### PM-031 — Deterministic dataset generator + scales S1–S4 (8h)
 
@@ -662,6 +666,10 @@ Per `02-benchmark-plan.md` §1.1–1.2. `session.js` is the one piece the plan c
 | Verify: `SELECT COUNT(*)` per table, a duplicate check on each unique key, RNG seed written into the run record | Verification | 0.5h |
 
 Per `04-workload-data-preparation.md` §§1–4. Distribution matters more than volume — a uniform S2 would make H1 and H2 look better than they are. PII rules are inherited verbatim from `Testing/04-test-data-preparation.md` §7: fabricated data only, `@example.test` addresses; the generator and its seed are committed, its output and any `mysqldump` are not.
+
+**Status:** done, with two implementation notes worth recording. First, the cohort size follows §4.2's prose ("a few hundred students... plus one staff account per role" — 20/300/300 across S1/S2/S3) rather than the summary table's approximate `users` column (~55/~5,010/~50,010), since the two are arithmetically inconsistent and the prose is the more deliberate spec. Second, each scale's enrollment-count mixture is tuned (not identical across scales) so the expected total lands near that scale's declared row count while keeping §2's shape (skewed, ~10% tail at 15–20 courses) — a single mixture tuned for S2 alone overshot S1's total by ~2× when tried directly.
+
+Verified end to end against disposable, throwaway MySQL containers (never the dev `management-mysql`), never through the app: S1, S2, and **S3 (50,000 students, 1,000 courses, 80,000 books, 401,209 enrollments)** all ran, matched their declared counts, and passed every unique-constraint check. S3 took 41.5s. Distribution shape confirmed empirically, not just by construction — at S3 the top course carries 38,567 enrollments against a ~30-enrollment tail; at S2 the top course carries 3,000+; book ownership NULL rate landed at 21–25% (target 20–30%) across runs. `student_code` insertion order was confirmed decorrelated from sort order by direct query (`id=1` did not map to the lexicographically-first code). Two same-seed runs produced byte-identical `students`/`enrollments` data (MD5-compared). The account cohort's bcryptjs-generated hash was confirmed — via both a direct `BCryptPasswordEncoder.matches()` call and a real `POST /api/v1/auth/login` against a running instance — to interoperate with Spring Security's encoder, not merely assumed compatible. The search-term hit-count table is genuinely observed (queried through each repository's exact `LIKE` shape post-load), and the three `neverUsed` vocabulary terms confirmed 0 hits everywhere, giving a true zero-hit search control.
 
 ### PM-032 — `make bench-*` targets (3h)
 
