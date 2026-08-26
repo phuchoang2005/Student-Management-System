@@ -23,7 +23,7 @@ This is documentation only — no k6 code is included here.
 
 Every scenario authenticates once per VU as the role its endpoint requires (`02-benchmark-plan.md` §1.1) — the RBAC allow-list is explicit per method and path, and a 403 measured at full speed is indistinguishable from a fast endpoint.
 
-Unless a scenario says otherwise, it runs at **20 VUs**, at **scale S2**, for the 300 s steady-state window in `02-benchmark-plan.md` §2.
+Unless a scenario says otherwise, it runs at **20 VUs**, at **scale S2**, for the steady-state window defined in `02-benchmark-plan.md` §2.1.
 
 ---
 

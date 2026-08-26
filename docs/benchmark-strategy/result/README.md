@@ -25,10 +25,12 @@ Newest first. Verdict is one of **baseline** (accepted as the reference for its 
 
 | Date | Scale | Git SHA | Verdict | File |
 | --- | --- | --- | --- | --- |
-| _(none yet)_ | | | | |
+| 2026-08-26 | S3 | 1587ed3 | baseline (P0 subset, stress probe — see file) | [2026-08-26-S3-1587ed3.md](./2026-08-26-S3-1587ed3.md) |
+| 2026-08-26 | S2 | 1587ed3 | baseline | [2026-08-26-S2-1587ed3.md](./2026-08-26-S2-1587ed3.md) |
+| 2026-08-26 | S1 | 1587ed3 | baseline | [2026-08-26-S1-1587ed3.md](./2026-08-26-S1-1587ed3.md) |
 
-<!-- Row shape, for the first real entry:
+<!-- Row shape, for the next entry:
 | 2026-09-03 | S2 | 8e099d4 | baseline | [2026-09-03-S2-8e099d4.md](./2026-09-03-S2-8e099d4.md) |
 -->
 
-No runs have been recorded. The first will be the **S1 baseline** — [`../02-benchmark-plan.md`](../02-benchmark-plan.md) §3, step 1.
+**Read all three records' Findings sections before trusting the numbers.** They were produced under a fast, single-repetition protocol (`02-benchmark-plan.md` §2, revised mid-Sprint-7 from an original 3-repetition/300s design that cost ~13h to run once) on a shared 4-core host, and every scenario in all three runs — including by-key controls expected to be flat — breached its SLO. The leading suspect is 20 VUs queuing against Hikari's default 10-connection pool, confounded with genuine per-row query cost; this first pass could not separate the two. Accepted as the first baselines per `../05-baseline-and-reporting.md` §1 (protocol followed, errors were 0% everywhere, configuration recorded) but flagged, not treated as clean hazard findings.

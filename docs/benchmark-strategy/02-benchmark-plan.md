@@ -69,21 +69,23 @@ Following the existing `docs` block in the root `Makefile`, which already establ
 
 ## 2. Run Protocol
 
-The protocol is what makes two runs comparable. It is not optional detail; skipping the warm-up produces numbers that are wrong in a specific and misleading direction.
+The protocol is what makes two runs comparable. Skipping the warm-up produces numbers that are wrong in a specific and misleading direction — that part is not negotiable. The *duration* and *repetition count* below are, and were deliberately cut down from an earlier, more rigorous draft of this document (60 s warm-up / 300 s steady-state / 3 repetitions) once that draft turned out to cost roughly 13 hours of continuous host-quiet execution to run once across S1/S2/S3 — impractical for a project at this scale to actually exercise, repeatedly, as behavior changes. **A protocol nobody runs measures nothing**, so this trades statistical rigor for a run that actually gets used. See §2.2 for what that trade costs and how it's covered.
 
 ### 2.1 The three phases
 
 | Phase | Duration | What is happening | Counted? |
 | --- | --- | --- | --- |
-| **Warm-up** | ≥ 60 s, or until p95 stabilizes | JIT compiles the hot paths from interpreted bytecode to optimized native code; the InnoDB buffer pool populates from disk; the Hikari pool opens its connections; class loading finishes | **No — discarded** |
-| **Steady state** | 300 s (60 s for the CI smoke run) | The measurement window. Fixed duration, fixed VU count. | **Yes** |
-| **Cool-down** | ~30 s | VUs ramp to zero; in-flight requests drain; async listeners finish | No |
+| **Warm-up** | ~15 s | JIT compiles the hot paths from interpreted bytecode to optimized native code; the InnoDB buffer pool populates from disk; the Hikari pool opens its connections; class loading finishes | **No — discarded** |
+| **Steady state** | 30 s | The measurement window. Fixed duration, fixed VU count. | **Yes** |
+| **Cool-down** | ~5 s | VUs ramp to zero; in-flight requests drain; async listeners finish | No |
 
-**Why the warm-up is not negotiable.** A cold JVM can be an order of magnitude slower than a warm one, and a cold InnoDB buffer pool turns every read into disk I/O. A run that includes its warm-up in the measurement reports a p99 dominated by startup and a p50 that drifts downward across the window — and, worse, the effect is *larger* for short runs, so it systematically punishes exactly the quick comparison runs someone will want to do most often.
+**Why a (short) warm-up is still not negotiable.** A cold JVM can be an order of magnitude slower than a warm one, and a cold InnoDB buffer pool turns every read into disk I/O. A run that includes its warm-up in the measurement reports a p99 dominated by startup and a p50 that drifts downward across the window — and the effect is *larger* for short windows, which is exactly what §2.1 now uses, so discarding it matters more here than it would at 300 s, not less.
+
+**What a 15s/30s window gives up.** 30 s of steady-state at 20 VUs is a few hundred to a couple thousand samples per scenario depending on latency — enough to read a p50/p95 off, thin enough that a p99 is a handful of samples and should be read as indicative rather than exact. This is the direct cost of §2.2's move to a single repetition: a longer window would partially compensate by sample count alone, and this protocol does not have one.
 
 ### 2.2 Repetition
 
-**Three repetitions per scenario per scale; report the median of the three.** Single runs on a shared host are not reproducible enough to act on, and the median is robust against the one repetition where a background process woke up. If the three repetitions spread by more than ~20% at p95, the host was too noisy — record that fact and re-run rather than reporting the median of noise.
+**One repetition per scenario per scale.** The original three-repetition/median design existed to protect against a single unlucky repetition (a background process waking up mid-run); dropping to one repetition removes that protection, and there is no median or p95-spread check left to catch a noisy run automatically. The mitigation is procedural, not statistical: keep the host quiet during the run (§7.2 still applies in full), and treat any single scenario's number that looks implausible against its neighbors as a signal to re-run that one scenario by hand — `make bench SCENARIO=<file> SCALE=<scale>` — rather than trusting it silently. A run record can still be superseded the same way §1.1 of `05-baseline-and-reporting.md` always allowed; it is just now the *only* noise safeguard rather than one of two.
 
 ### 2.3 Isolation rules
 
@@ -145,7 +147,7 @@ What *is* worth having is a narrow guard against catastrophic breakage:
 | **Trigger** | Manual (`workflow_dispatch`) plus optionally a nightly schedule on `main` — **not** on pull requests |
 | **Job** | Separate from the existing `verify` job in `.github/workflows/ci.yml`; must not gate it |
 | **Scale** | S1 only — it seeds in seconds |
-| **Duration** | 60 s steady state, after a 60 s warm-up |
+| **Duration** | The same §2.1 default (~15 s warm-up, 30 s steady state) — now that the "real" protocol is itself this light, CI does not need a separate, even-shorter smoke variant |
 | **Asserted** | `http_req_failed` rate < 1%; and a deliberately generous p95 ceiling — roughly 10× the S1 SLO |
 | **Not asserted** | Anything resembling the real SLOs in `01` §4.2 |
 

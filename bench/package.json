@@ -5,7 +5,8 @@
   "type": "module",
   "description": "k6 load-test harness and deterministic dataset generator for the benchmark suite (docs/benchmark-strategy/).",
   "scripts": {
-    "seed": "node seed/generate.js"
+    "seed": "node seed/generate.js",
+    "manifest": "node seed/manifest.js"
   },
   "dependencies": {
     "mysql2": "^3.11.0",

@@ -8,13 +8,13 @@ export const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 // pick scale-appropriate think-times/expectations, not to change which host they hit.
 export const SCALE = __ENV.SCALE || 'S1';
 
-export const VUS = Number(__ENV.VUS || 10);
-export const DURATION = __ENV.DURATION || '60s';
+export const VUS = Number(__ENV.VUS || 20);
+export const DURATION = __ENV.DURATION || '30s';
 
 // Warm-up/steady-state/cool-down shape from 02-benchmark-plan.md §2.1. A scenario file builds its
 // own `options.stages` from these rather than hardcoding phase lengths inline.
-export const WARMUP_DURATION = __ENV.WARMUP_DURATION || '60s';
-export const COOLDOWN_DURATION = __ENV.COOLDOWN_DURATION || '30s';
+export const WARMUP_DURATION = __ENV.WARMUP_DURATION || '15s';
+export const COOLDOWN_DURATION = __ENV.COOLDOWN_DURATION || '5s';
 
 // Staff usernames are fixed by the seed generator's account cohort (bench/seed/generate.js) — one
 // per role, free-form strings (Username has no format requirement for non-STUDENT accounts). A

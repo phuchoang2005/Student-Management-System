@@ -682,6 +682,8 @@ Verified end to end against disposable, throwaway MySQL containers (never the de
 
 Per `02-benchmark-plan.md` §1.3.
 
+**Status:** done, with one deliberate addition beyond the original scope: `bench-seed` also runs a new `bench/seed/manifest.js` (a second, separate script, not a change to the PM-031 generator) that queries the freshly-seeded database for the enrollment-count-tail students, enrollment-heavy courses, and full login-cohort list PM-033's scenarios need at runtime — none of that was discoverable cheaply from the API alone. `bench-jmh` is scaffolding only, as the spec anticipated (`02-benchmark-plan.md` §1.2 already named the JMH annotation-processor dependency as a prerequisite this item doesn't add): it prints a "not wired up yet, see PM-037" notice and exits non-zero rather than fabricating a run. `bench-all`'s per-scenario-file loop deliberately does not abort on the first threshold breach — a single k6 exit code shouldn't discard the other four files' data when the actual pass/fail judgment (`bench-report`) is a separate step.
+
 ### PM-033 — Read-path scenario scripts (8h)
 
 | Task | Layer | Est. |
@@ -693,7 +695,9 @@ Per `02-benchmark-plan.md` §1.3.
 | `scenarios/me-reads.js` — BM-ME-001–003; BM-ME-002 vs. BM-ME-003 is the clearest before/after illustration of what fixing H2 would buy | Scenario | 1h |
 | Response-correctness checks on every scenario, so a fast `4xx` cannot pass for a fast `200` | Scenario | 0.5h |
 
-Per `03-benchmark-scenarios.md` §§1–6. Defaults unless a scenario states otherwise: 20 VUs, scale S2, 300s steady state, authenticating once per VU as the role the endpoint requires.
+Per `03-benchmark-scenarios.md` §§1–6. Defaults unless a scenario states otherwise: 20 VUs, scale S2, steady state per `02-benchmark-plan.md` §2.1, authenticating once per VU as the role the endpoint requires.
+
+**Status:** done, with one real bug caught during end-to-end validation and fixed before any run was trusted: k6 resets each VU's cookie jar between *iterations* by default, which silently broke "log in once per VU, reuse for the whole run" — every request after the first login was returning 403 with no cookie sent at all. Fixed with `noCookiesReset: true`, set once in the shared `bench/lib/runner.js` options builder rather than per scenario file. Also caught and fixed: `bench/report.js`'s first draft misread the k6 `--summary-export` JSON shape (assumed a nested `.values`/`.rate` structure; the real shape is flat, with `.value` for Rate metrics and `.count`/`.rate` for Counters) and never forced k6 to track a per-scenario `http_reqs` submetric at all, so every rendered row came back "NO DATA" until both were fixed. All 19 scenarios were validated against a live instance at S1, S2, and S3 (100% response-correctness checks passing, 0 script errors) before any number in `result/` was treated as real.
 
 ### PM-034 — P0 baseline runs at S1/S2/S3 (6h)
 
@@ -706,6 +710,8 @@ Per `03-benchmark-scenarios.md` §§1–6. Defaults unless a scenario states oth
 | Run records into `benchmark-strategy/result/` as `YYYY-MM-DD-<scale>-<short-sha>.md`, each carrying its SLO verdict and its regression verdict separately, with the S1→S2→S3 curve classified flat / linear / worse per scenario | Docs | 1h |
 
 Per `02-benchmark-plan.md` §§2–4 and `05-baseline-and-reporting.md` §1. One scale per run, reseed and restart between scales, reads before writes, nothing else on the host, host CPU recorded. A baseline is accepted only against §1's five conditions and is never replaced because a run came back worse.
+
+**Status:** done, at reduced rigor by deliberate mid-sprint direction. The original 3-repetition/300s-steady-state protocol was estimated at ~13h of continuous host-quiet execution to run once across S1→S2→S3 — a live run of the first hour-plus of it (S1's first repetition) confirmed that estimate before it was abandoned in favor of a ~15s-warmup/30s-steady/1-repetition protocol, which `02-benchmark-plan.md` §2 and `05-baseline-and-reporting.md` §1 were both revised to match. Three consequences worth naming plainly: **(1)** the app was not restarted between S1/S2/S3 (skipped for speed); **(2)** host CPU during the run was never captured, so a k6-driver-saturated run can't be distinguished from a real result after the fact; **(3)** every one of the 19 scenarios breached its SLO at every scale, including by-key controls that should be flat regardless of data volume — the leading explanation is 20 VUs queuing against Hikari's untuned 10-connection pool, confounded with genuine H1/H2/H3 cost, and this single-repetition pass cannot separate the two. All three baselines were still accepted (0% error rate, protocol followed, configuration recorded — `05-baseline-and-reporting.md` §1's remaining conditions), but every run record's Findings section says this in full and neither the SLO verdicts nor the S1→S2→S3 curve should be read as clean per-hazard results without a follow-up run that isolates the pool-contention confound (natural territory for Sprint 8's `BM-XC-003`).
 
 **Sprint 7 subtotal: 3 + 6 + 8 + 3 + 8 + 6 = 34h**
 

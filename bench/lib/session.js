@@ -29,10 +29,12 @@ const LIVENESS_PATH = {
 };
 
 /**
- * Log in as `role` and return a session handle to pass to assertLive(). Call once per VU.
+ * Log in with an explicit username/password and return `{ username }`. Factored out of login()
+ * for scenarios that need a specific account rather than "the" account for a role -- BM-ME-*
+ * needs 20 *distinct* STUDENT logins (one per VU) drawn from the seeded account cohort
+ * (bench/seed/manifest.js), which credentialsFor()'s single-username-per-role model can't express.
  */
-export function login(role) {
-  const { username, password } = credentialsFor(role);
+export function loginAs(username, password) {
   const res = http.post(
     `${BASE_URL}/api/v1/auth/login`,
     JSON.stringify({ username, password }),
@@ -41,10 +43,19 @@ export function login(role) {
 
   const ok = check(res, { 'login succeeded': (r) => r.status === 200 });
   if (!ok) {
-    throw new Error(`login as ${role} (${username}) failed: HTTP ${res.status} ${res.body}`);
+    throw new Error(`login as ${username} failed: HTTP ${res.status} ${res.body}`);
   }
 
-  return { role, username };
+  return { username };
+}
+
+/**
+ * Log in as `role` and return a session handle to pass to assertLive(). Call once per VU.
+ */
+export function login(role) {
+  const { username, password } = credentialsFor(role);
+  const { username: loggedInAs } = loginAs(username, password);
+  return { role, username: loggedInAs };
 }
 
 /**

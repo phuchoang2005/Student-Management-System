@@ -16,11 +16,12 @@ There is one baseline per scale, not one for the project — S1, S2, and S3 resu
 
 A run becomes the baseline when it is **accepted**, which requires all of:
 
-1. The run protocol in `02-benchmark-plan.md` §2 was followed — warm-up discarded, three repetitions, median reported.
-2. The host was quiet and the k6 driver was not itself saturated (`01-benchmark-strategy.md` §7.2).
-3. The three repetitions agreed to within ~20% at p95. A wider spread means the host was too noisy to baseline from.
-4. Error rate was below 0.1% in every scenario. **A run with errors is not a slow run, it is a broken run**, and its latencies describe a system that was failing.
-5. The complete configuration in §3 was recorded.
+1. The run protocol in `02-benchmark-plan.md` §2 was followed — warm-up discarded, steady-state window measured at the documented duration.
+2. The host was quiet and the k6 driver was not itself saturated (`01-benchmark-strategy.md` §7.2). This matters more than it did under the old three-repetition protocol, since there is no median left to absorb one noisy repetition — see `02-benchmark-plan.md` §2.2.
+3. Error rate was below 0.1% in every scenario. **A run with errors is not a slow run, it is a broken run**, and its latencies describe a system that was failing.
+4. The complete configuration in §3 was recorded.
+
+(The original four-condition list had a fourth entry — "the three repetitions agreed to within ~20% at p95" — which no longer applies now that `02-benchmark-plan.md` §2.2 runs a single repetition per scenario. There is deliberately no automated replacement for it; a number that looks implausible against its neighbors is a re-run-it-by-hand signal, not a rejected baseline.)
 
 ### 1.1 When a baseline is replaced
 
@@ -50,7 +51,7 @@ Thresholds are **deltas against the baseline at the same scale and the same conc
 
 Three qualifications, each of which prevents a specific way of misusing the table:
 
-- **p99 moves are read alongside p95, not instead of it.** p99 on a 300 s run is a small number of samples and is legitimately noisier; a p99 regression with a flat p95 is usually GC or a scheduling artifact, not a code change. A p99 regression *with* a p95 regression is the same finding, seen twice.
+- **p99 moves are read alongside p95, not instead of it.** p99 on the 30 s steady-state window (`02-benchmark-plan.md` §2.1) is a small number of samples and is legitimately noisier; a p99 regression with a flat p95 is usually GC or a scheduling artifact, not a code change. A p99 regression *with* a p95 regression is the same finding, seen twice.
 - **The bands are per scenario, not per run.** One scenario at +60% is a block even if the run's other twenty are flat — an average across scenarios is exactly the kind of aggregation that hides the finding.
 - **CI smoke output is advisory and never produces a verdict from this table.** `02-benchmark-plan.md` §5 sets its thresholds an order of magnitude loose precisely because GitHub-hosted runners cannot support these bands.
 
@@ -89,7 +90,7 @@ The template:
 | MySQL | `mysql:8.4` via Colima, 4 CPU / 8 GB, `innodb_buffer_pool_size=4G` |
 | Spring profile | `benchmark` (actuator on, demo-accounts disabled) |
 | k6 | v0.5x.x |
-| Protocol | 60 s warm-up discarded, 300 s steady state, 3 repetitions, median reported |
+| Protocol | ~15 s warm-up discarded, 30 s steady state, 1 repetition (`02-benchmark-plan.md` §2) |
 | Baseline compared against | `2026-08-20-S2-5d360e6.md` |
 | Verdict | **2 regressions, 1 SLO breach** |
 
