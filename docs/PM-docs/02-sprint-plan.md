@@ -1,8 +1,8 @@
 # Sprint Plan
 
-Project Management Documentation — Part 2 of 4 ([Product Backlog](./01-product-backlog.md) → Sprint Plan → [Scrum Artifacts](./03-scrum-artifacts.md) → [Sprint Backlog](./04-sprint-backlog.md)).
+Project Management Documentation — Part 2 of 3 ([Product Backlog](./01-product-backlog.md) → Sprint Plan → [Sprint Backlog](./04-sprint-backlog.md)).
 
-Five 2-week sprints (Sprint 0 + Sprints 1–4), starting **Monday 2026-08-17**. The sequence is fixed by [Testing/02-test-plan.md](../Testing/02-test-plan.md) §2's build order — `shared` → `student`+`identity` provisioning → `course` → `book` → `enrollment` → `identity` auth → cross-cutting — since that ordering is already load-bearing for how the 141 test cases in [Testing/03-test-cases/](../Testing/03-test-cases/) get authored and automated. Delivery model: solo developer playing PO/SM/Dev (see [03-scrum-artifacts.md](./03-scrum-artifacts.md) §1); estimates below are ideal-hours, not team velocity.
+Five 2-week sprints (Sprint 0 + Sprints 1–4), starting **Monday 2026-08-17**. The sequence is fixed by [Testing/02-test-plan.md](../Testing/02-test-plan.md) §2's build order — `shared` → `student`+`identity` provisioning → `course` → `book` → `enrollment` → `identity` auth → cross-cutting — since that ordering is already load-bearing for how the 141 test cases in [Testing/03-test-cases/](../Testing/03-test-cases/) get authored and automated. Delivery model: solo developer playing PO/SM/Dev; estimates below are ideal-hours, not team velocity.
 
 **Capacity assumption:** ~20 ideal-hours/week (part-time pace alongside other commitments) → **40 ideal-hours per 2-week sprint**. This is a planning input, not a guarantee — adjust if actual pace differs after Sprint 0.
 
@@ -58,7 +58,7 @@ gantt
 
 **Scope:** PM-005, PM-006, US-1.1, US-1.2, US-1.3, US-5.1 — **36h / 40h capacity (90%)**. This is the heaviest sprint by design: it's the reference module (`06-low-level-design.md` §4 calls `student` out explicitly as the reference implementation) plus the two `shared`-layer pieces every later module depends on.
 
-**Sprint Definition of Done** (builds on the module-level DoD in [03-scrum-artifacts.md](./03-scrum-artifacts.md) §3):
+**Sprint Definition of Done:**
 - `student` module test suite matches the structure in `Testing/02-test-plan.md` §4 (`domain/`, `application/`, `web/`, `internal/`) and all of `Testing/03-test-cases/student.md`'s TC-STU-001–031 are automated and green.
 - `AccountProvisioning.provisionForStudent` is exercised by `Testing/03-test-cases/identity-auth.md`'s provisioning-relevant cases.
 - Global exception handler + error envelope shape match `06-low-level-design.md` §3 and are exercised by at least one negative test per validation rule (Student.1–4).
@@ -111,7 +111,7 @@ gantt
 - All of `Testing/03-test-cases/cross-cutting.md` (TC-XC-001–035) automated and green — RBAC matrix, must-change-password gate, optimistic locking, cascade/lifecycle scenarios, error envelope, all 7 `api-specification.md` §5 ambiguity resolutions, architecture conformance.
 - JaCoCo coverage report generated; living traceability matrix (`Testing/README.md` UC → File Index) has every UC-1–25 marked implemented and tested.
 - `mvn verify` green in CI on `main`.
-- **v1.0 release condition met:** all 25 UCs implemented and tested; see [03-scrum-artifacts.md](./03-scrum-artifacts.md) §5 for what stays explicitly out of scope.
+- **v1.0 release condition met:** all 25 UCs implemented and tested; see [Testing/01-test-strategy.md](../Testing/01-test-strategy.md) §1.3 for what stays explicitly out of scope — one item of which, load and performance testing, was later reversed by [benchmark-strategy/01-benchmark-strategy.md](../benchmark-strategy/01-benchmark-strategy.md) §2.1 and is scheduled here as Epic J (Sprints 7–8).
 
 ---
 
@@ -139,3 +139,23 @@ Two consequences worth recording for planning purposes rather than for the code:
 
 - **The two bug fixes (PM-025, PM-026) cost 7h of the 28h**, and neither was visible from the specification, the test suite, or a demo script. The test suite in particular was actively hiding PM-025: it bound its database without a time zone, so both halves of every round trip used the same wrong one and every assertion passed.
 - **Epic I adds the first new business rule since the original set** (`Identity.8`) and the first new use cases since UC-25. Previous unplanned work had only narrowed or re-keyed what already existed, so this is also the first addendum that required editing `req.md`.
+
+---
+
+## Addendum — Sprints 7 and 8 (unplanned)
+
+Epic J (PM-029–039, 55h) was added after Sprint 6, and follows the same rule as the two addenda above: it is scoped in [01-product-backlog.md](./01-product-backlog.md) §8c and decomposed in [04-sprint-backlog.md](./04-sprint-backlog.md) §10 and §11, not retrofitted into the four planned sprints.
+
+It is split across two sprints because 55h does not fit the 40h capacity this plan sizes everything against, and the split is not arbitrary — [benchmark-strategy/02-benchmark-plan.md](../benchmark-strategy/02-benchmark-plan.md) §3 already names its own minimum viable milestone:
+
+- **Sprint 7 — benchmark harness and P0 baseline (PM-029–034, 34h).** Metrics endpoint, `bench/` harness, dataset generator, `make` targets, the read-path scenario catalog, and baseline runs at S1, S2, S3. This is steps 0–2 and 6 of the execution sequence — the set that, in its own words, everything else "can be deferred without making uninterpretable."
+- **Sprint 8 — full scenario catalog, microbenchmarks, regression gate (PM-035–039, 21h).** Write and auth paths, the cross-cutting scenarios, the JMH suite, the CI smoke job, and the regression bands.
+
+**These two sprints are specified and not executed.** That is what separates them from Sprints 0–6, whose items carry retrospective status notes in the Sprint Backlog recording what each estimate got wrong. `bench/` does not exist, `management/pom.xml` has neither actuator nor JMH, and `benchmark-strategy/result/` contains an index and no run records. The posture is the one this whole document set had before Sprint 0, and the estimates should be read with the same suspicion: they size work against a specification that has never been executed.
+
+Two constraints govern every number here, and neither is a scheduling risk that better estimation would remove.
+
+- **There is no requirement to answer to.** No non-functional requirements exist anywhere in `BA-docs/req.md` or `SA-docs/` — not a latency target, not a throughput figure. Every SLO in `01-benchmark-strategy.md` §4.2 is therefore a proposal, and no sprint here can have a Definition of Done phrased as "meets the SLO." What Sprint 7 can commit to is that a baseline exists and is reproducible; what Sprint 8 can commit to is that a regression against it would be detected.
+- **The developer workstation is the only real environment.** JVM, MySQL under Colima, and the k6 driver all share one host, and the dedicated benchmark host in §7 is explicitly not provisioned. The currency is relative change — across scales and across commits — not absolute latency, and PM-034's three-repetitions-and-take-the-median protocol exists because of it.
+
+Sprint 7 is also the first sprint since Sprint 0 whose work is entirely prerequisite: PM-029 closes hazard H8, which is not a property of the system at all but the absence of the instrumentation needed to diagnose the other seven.

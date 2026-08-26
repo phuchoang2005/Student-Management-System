@@ -60,3 +60,5 @@ Two things that look like hazards and are **not** — a redundant index and a no
 ## Status
 
 Nothing has been measured yet. This set is the design; the first run establishes the S1 baseline ([02](./02-benchmark-plan.md) §3, step 1) and is recorded in [`result/`](./result/), which is empty until then.
+
+Scheduling and estimates for building the harness live in [`PM-docs/01-product-backlog.md`](../PM-docs/01-product-backlog.md) §8c (Epic J, PM-029–039, 55h), decomposed into tasks in [`PM-docs/04-sprint-backlog.md`](../PM-docs/04-sprint-backlog.md) §§10–11 as Sprints 7 and 8. If the hazard register or the scenario catalog here changes, review those two sections for drift.
