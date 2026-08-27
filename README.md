@@ -44,9 +44,9 @@ One demo UI, five logins — each role sees only its own slice of the system.
 
 | | |
 | --- | --- |
-| ![Sign-in screen listing one demo account per role](docs/UI-UX/images-demo/login.png) | ![Registrar view of the course catalog](docs/UI-UX/images-demo/registrar-role.png) |
-| **Sign in** — a demo account per role, so anyone can try all five without a real registration. | **Registrar** — courses, enrollment counts, and (elsewhere in the app) the student register. |
-| ![Librarian view of the book catalog with ownership status](docs/UI-UX/images-demo/librarian-role.png) | ![System Administrator view of staff account provisioning](docs/UI-UX/images-demo/system-admin-role.png) |
+| ![Sign-in screen listing one demo account per role](assests/images-demo/login.png) | ![registrar view of the course catalog](assests/images-demo/registrar-role.png) |
+| **sign in** — a demo account per role, so anyone can try all five without a real registration. | **Registrar** — courses, enrollment counts, and (elsewhere in the app) the student register. |
+| ![Librarian view of the book catalog with ownership status](assests/images-demo/librarian-role.png) | ![System Administrator view of staff account provisioning](assests/images-demo/system-admin-role.png) |
 | **Librarian** — the book catalog, who currently holds each book, and adding/removing books. | **System Administrator** — provisioning and deactivating Registrar/Librarian/Course Administrator accounts, and (elsewhere) ending active sessions. |
 
 ## How is it built? (for technical readers)
