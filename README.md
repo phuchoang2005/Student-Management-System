@@ -42,12 +42,20 @@ If someone tries to do something that doesn't make sense — like enrolling in t
 
 One demo UI, five logins — each role sees only its own slice of the system.
 
-| | |
-| --- | --- |
-| ![Sign-in screen listing one demo account per role](assests/images-demo/login.png) | ![registrar view of the course catalog](assests/images-demo/registrar-role.png) |
-| **sign in** — a demo account per role, so anyone can try all five without a real registration. | **Registrar** — courses, enrollment counts, and (elsewhere in the app) the student register. |
-| ![Librarian view of the book catalog with ownership status](assests/images-demo/librarian-role.png) | ![System Administrator view of staff account provisioning](assests/images-demo/system-admin-role.png) |
-| **Librarian** — the book catalog, who currently holds each book, and adding/removing books. | **System Administrator** — provisioning and deactivating Registrar/Librarian/Course Administrator accounts, and (elsewhere) ending active sessions. |
+ ![Sign-in screen listing one demo account per role](assests/images-demo/login.png)
+
+ **Sign in** — a demo account per role, so anyone can try all five without a real registration.
+
+![registrar view of the course catalog](assests/images-demo/registrar-role.png) 
+**Registrar** — courses, enrollment counts, and (elsewhere in the app) the student register.
+
+![Librarian view of the book catalog with ownership status](assests/images-demo/librarian-role.png)
+
+**Librarian** — the book catalog, who currently holds each book, and adding/removing books. 
+
+![System Administrator view of staff account provisioning](assests/images-demo/system-admin-role.png)
+
+**System Administrator** — provisioning and deactivating Registrar/Librarian/Course Administrator accounts, and (elsewhere) ending active sessions.
 
 ## How is it built? (for technical readers)
 
