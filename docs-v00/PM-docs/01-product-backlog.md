@@ -1,6 +1,6 @@
 # Product Backlog
 
-Project Management Documentation — Part 1 of 4 (Product Backlog → [Sprint Plan](./02-sprint-plan.md) → [Scrum Artifacts](./03-scrum-artifacts.md) → [Sprint Backlog](./04-sprint-backlog.md)).
+Project Management Documentation — Part 1 of 3 (Product Backlog → [Sprint Plan](./02-sprint-plan.md) → [Sprint Backlog](./04-sprint-backlog.md)).
 
 Turns the completed specification ([BA-docs](../BA-docs/), [SA-docs](../SA-docs/), [Testing](../Testing/)) into a ranked, estimated backlog. No new business rules, roles, or endpoints are introduced here — every functional item reuses the existing `US-x.x` / `UC-x` IDs verbatim from [user-stories.md](../BA-docs/user-stories.md) and [use-cases.md](../BA-docs/use-cases.md). Items with no user story (build/tooling prerequisites) are numbered `PM-0xx` and sourced from the gaps already flagged in [Testing/02-test-plan.md](../Testing/02-test-plan.md) §5 and §8.
 
@@ -164,6 +164,32 @@ PM-025 is first and alone: it changes the JDBC converter graph and every integra
 
 ---
 
+## 8c. Epic J — Performance benchmarking
+
+Added after Sprint 6, and unlike every epic before it, sourced from a document set written **after** the code it describes: [benchmark-strategy/](../benchmark-strategy/01-benchmark-strategy.md). Its eight-item hazard register (H1–H8) is not a list of risks a designer anticipated — each entry cites a file and a line of shipped code. No new UC and no new user story: nothing here changes behaviour, it measures it.
+
+Two things make this epic different from the other nine, and both are load-bearing for how its estimates should be read. It **reverses a documented decision** — `Testing/01-test-strategy.md` §1.3 put load and performance testing out of scope, and `01-benchmark-strategy.md` §2.1 reverses it with a stated rationale. And it has **no requirement to answer to**: `req.md` and `SA-docs/` state no non-functional requirements anywhere, so every SLO these items are measured against is a proposal rather than a target, and the deliverable is relative change — across scales and across commits — not an absolute latency number.
+
+| ID | Item | Priority | Estimate | Source |
+| --- | --- | --- | --- | --- |
+| PM-029 | Close H8 (no server-side metrics): add `spring-boot-starter-actuator` + `micrometer-registry-prometheus`, exposed only under a `benchmark` profile and given their own matcher in `SecurityConfig`'s fall-through-free allow-list — profile-conditional in the style PM-017 already established | Must | 3h | `01-benchmark-strategy.md` §8, hazard H8 |
+| PM-030 | `bench/` k6 harness skeleton as a fourth top-level directory beside `management/`, `management-frontend/`, `docs/`, `util/`: `lib/session.js` (log in once per VU, carry `JSESSIONID` explicitly, assert liveness), `lib/slo.js` (the §4.2 SLO classes as reusable threshold objects), `lib/config.js`, `bench/README.md`. A JS harness outside `management/` cannot trip ArchUnit, `ApplicationModules.verify()`, or the naming rules, and cannot slow `./mvnw verify` | Must | 6h | `02-benchmark-plan.md` §1.1–1.2 |
+| PM-031 | Deterministic dataset generator and the S1–S4 scale definitions (`bench/seed/`): recorded RNG seed, Zipf-skewed enrollments per course, skewed enrollments per student, 20–30% NULL `books.owner_id`, a search vocabulary with a recorded term→hit-count table, and insertion order shuffled so it does not match `student_code` order | Must | 8h | `04-workload-data-preparation.md` §§1–4 |
+| PM-032 | `make bench-seed` / `bench` / `bench-all` / `bench-report` / `bench-jmh` targets, with `make bench` deliberately *not* depending on `make up` | Must | 3h | `02-benchmark-plan.md` §1.3 |
+| PM-033 | Read-path scenario scripts — BM-STU-001–005, BM-BK-001–004, BM-CRS-001–003, BM-ENR-001–004, BM-ME-001–003 — the P0 catalog that exposes H1 (unindexable `LIKE '%…%'` search, scanned twice per request), H2 (N+1 on enrollment listing), and H3 (deep `OFFSET` paging) | Must | 8h | `03-benchmark-scenarios.md` §§1–6 |
+| PM-034 | P0 baseline runs at S1 → S2 → S3 under the §2 run protocol (60s warm-up discarded, 300s steady, three repetitions, median reported), accepted as baselines and recorded in `benchmark-strategy/result/` | Must | 6h | `02-benchmark-plan.md` §§2–4; `05-baseline-and-reporting.md` §1 |
+| PM-035 | Write- and auth-path scenario scripts — BM-STU-006/007, BM-BK-005, BM-CRS-004, BM-ENR-005–008, BM-IDN-001–004 — covering H4 (batch enrollment as N transactions) and H5 (login CPU-bound on BCrypt); the login ramp runs alone, and BM-IDN-002's timing delta is treated as a security finding, not a latency one | Must | 6h | `03-benchmark-scenarios.md` §§1–5 |
+| PM-036 | Cross-cutting scenarios BM-XC-001–004: bulk-delete cascade with wall-clock to `event_publication` drain (H6), the 30-minute mixed-role soak measuring heap bytes per active session (H7), the Hikari pool sweep spanning the default of 10, and the S1/S2/S3 scale sweep of the six P0 scenarios | Must | 5h | `03-benchmark-scenarios.md` §7 |
+| PM-037 | JMH suite BM-JMH-001–004, with `jmh-core`/`jmh-generator-annprocess` added to the **existing explicit** `annotationProcessorPaths` beside Lombok and MapStruct — omitting that step generates nothing, silently | Should | 5h | `03-benchmark-scenarios.md` §8; `01-benchmark-strategy.md` §8 |
+| PM-038 | CI benchmark smoke: `workflow_dispatch` plus an optional nightly on `main`, S1 only, in a job separate from `verify` that never gates it and never runs on PRs. A smoke alarm, not a thermometer | Should | 3h | `02-benchmark-plan.md` §5 |
+| PM-039 | Regression bands and the performance-defect workflow: render raw k6 output into the §3 run-record template, apply the −10% / +20% / +50% bands per scenario, and open GitHub issues that cite a `BM-*` id, a hazard id, and the attribution rung. No code change on a benchmark finding without a linked issue | Should | 2h | `05-baseline-and-reporting.md` §§2–5; `01-benchmark-strategy.md` §10 |
+
+**Epic J subtotal: 55h** — split across two sprints rather than one, since 55h exceeds the 40h sprint capacity every other sprint is measured against.
+
+PM-029 is first and is a prerequisite rather than a hazard fix: without server-side metrics, `05-baseline-and-reporting.md` §4's escalation ladder cannot get past rung 1, and a red run cannot be attributed to anything. The Sprint 7 / Sprint 8 split follows the execution sequence's own judgement — `02-benchmark-plan.md` §3 names steps 1, 2 and 6 (the read catalog at S1, S2, S3) as the minimum viable milestone, because "everything else can be deferred without making those three uninterpretable." That is exactly Sprint 7. PM-037 through PM-039 are *Should* for the same reason the epic exists: a JMH result may never justify a code change on its own, and a CI smoke job that asserts nothing resembling a real SLO buys regression detection, not measurement.
+
+---
+
 ## 9. Ranked backlog (delivery order)
 
 Matches the sprint sequence in [02-sprint-plan.md](./02-sprint-plan.md); this is the order items are pulled off the backlog, not a strict one-at-a-time queue within a sprint.
@@ -221,5 +247,16 @@ Matches the sprint sequence in [02-sprint-plan.md](./02-sprint-plan.md); this is
 | 49 | US-7.3 | See who is signed in | Sprint 6 |
 | 50 | US-7.4 | End someone's session | Sprint 6 |
 | 51 | PM-028 | Session-fixation protection | Sprint 6 |
+| 52 | PM-029 | Actuator + Micrometer under a `benchmark` profile | Sprint 7 |
+| 53 | PM-030 | `bench/` k6 harness skeleton | Sprint 7 |
+| 54 | PM-031 | Deterministic dataset generator + scales S1–S4 | Sprint 7 |
+| 55 | PM-032 | `make bench-*` targets | Sprint 7 |
+| 56 | PM-033 | Read-path scenario scripts (H1/H2/H3) | Sprint 7 |
+| 57 | PM-034 | P0 baseline runs at S1/S2/S3 | Sprint 7 |
+| 58 | PM-035 | Write- and auth-path scenario scripts (H4/H5) | Sprint 8 |
+| 59 | PM-036 | Cross-cutting scenarios (H6/H7) + scale sweep | Sprint 8 |
+| 60 | PM-037 | JMH microbenchmark suite | Sprint 8 |
+| 61 | PM-038 | CI benchmark smoke job | Sprint 8 |
+| 62 | PM-039 | Regression bands + performance-defect workflow | Sprint 8 |
 
-**Total: 225 ideal-hours across 51 backlog items** (25 user stories, 26 platform/hardening `PM-0xx` items), covering all 28 UCs identified in the Testing documentation. PM-016/017 and US-7.1/7.2 (13h) are a sudden mid-plan addition — see [02-sprint-plan.md](./02-sprint-plan.md) Sprint 3 for how this changed that sprint's capacity. PM-018 (3h) is a second, later addition — see Sprint 4 for how it closes a gap between `06-low-level-design.md` §13 and this backlog's original decomposition. Epic H (PM-019–024, 34h) is a third: it came out of walking the finished demo UI role by role, which surfaced access breadth and id exposure that reading the specification had not. Epic I (PM-025–028, US-4.3, US-7.3/7.4, 28h) is a fourth, and the first to add a business rule (`Identity.8`) rather than only narrowing or re-keying existing ones — it came from using the application rather than demoing it, which is why two of its items are bug fixes for defects no walkthrough had caught.
+**Total: 280 ideal-hours across 62 backlog items** (25 user stories, 37 platform/hardening/benchmark `PM-0xx` items), covering all 28 UCs identified in the Testing documentation. PM-016/017 and US-7.1/7.2 (13h) are a sudden mid-plan addition — see [02-sprint-plan.md](./02-sprint-plan.md) Sprint 3 for how this changed that sprint's capacity. PM-018 (3h) is a second, later addition — see Sprint 4 for how it closes a gap between `06-low-level-design.md` §13 and this backlog's original decomposition. Epic H (PM-019–024, 34h) is a third: it came out of walking the finished demo UI role by role, which surfaced access breadth and id exposure that reading the specification had not. Epic I (PM-025–028, US-4.3, US-7.3/7.4, 28h) is a fourth, and the first to add a business rule (`Identity.8`) rather than only narrowing or re-keying existing ones — it came from using the application rather than demoing it, which is why two of its items are bug fixes for defects no walkthrough had caught. Epic J (PM-029–039, 55h) is a fifth, and came from none of those routes — not from demoing the product and not from using it, but from *reading the code that resulted*, which is why it is the only epic sourced from a document set written after implementation, and the only one that reverses a decision an earlier set had recorded.

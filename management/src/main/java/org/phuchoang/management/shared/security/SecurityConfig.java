@@ -130,6 +130,14 @@ public class SecurityConfig {
             // PM-017 — public so it's callable before login; only reachable at all when
             // app.demo-accounts.enabled=true registers DemoAccountsController's bean (§11.4).
             .requestMatchers(HttpMethod.GET, "/api/v1/auth/demo-accounts").permitAll()
+            // PM-029 — actuator is only ever exposed under the benchmark profile
+            // (application-benchmark.properties); management.endpoints.web.exposure.include is
+            // empty everywhere else, so these matchers are inert elsewhere. Health stays public so
+            // liveness tooling doesn't need a session; everything else under /actuator/** is
+            // metrics/introspection and is admin-only. Order matters between these two lines --
+            // the broad matcher would otherwise shadow the health one.
+            .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
+            .requestMatchers(HttpMethod.GET, "/actuator/**").hasRole("SYSTEM_ADMINISTRATOR")
             .requestMatchers(HttpMethod.POST, "/api/v1/auth/password").authenticated()
             .requestMatchers(HttpMethod.GET, "/api/v1/students/*/initial-password").hasRole("REGISTRAR")
             .requestMatchers(HttpMethod.POST, "/api/v1/students/**").hasRole("REGISTRAR")

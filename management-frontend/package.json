@@ -3,8 +3,8 @@
   "private": true,
   "version": "0.2.0",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev -p 3001",
+    "build": "next build -p 3001",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"

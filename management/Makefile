@@ -1,12 +1,20 @@
--include .env
+# Backend infrastructure -- the MySQL container the app runs against. Split out of the former
+# root Makefile so each toolchain (management/, bench/, docs-v00/) owns its own targets. Invoke
+# from the repo root as `make -C management <target>`, or `cd management && make <target>`.
+#
+# .env and docker-compose.yml stay at the repo root (docker-compose.yml has no bind mounts, so
+# nothing else needs to move with them); every path below is relative to this Makefile's
+# directory, one level under the repo root.
+
+-include ../.env
 export
 
-DC := docker compose
+DC := docker compose -f ../docker-compose.yml --project-directory ..
 MYSQL_USER ?= management
 MYSQL_DATABASE ?= management
 CONTAINER := management-mysql
 
-.PHONY: help env up down restart logs ps mysql clean reset docs docs-watch docs-clean
+.PHONY: help env up down_temp down restart logs ps mysql clean reset
 
 help:
 	@echo "make up       - start the mysql container (creates .env from .env.example if missing)"
@@ -17,12 +25,9 @@ help:
 	@echo "make mysql    - open a mysql shell inside the container"
 	@echo "make clean    - stop the container and delete its data volume"
 	@echo "make reset    - clean + up (fresh database)"
-	@echo "make docs     - compile docs/**/*.md to HTML (util/md-to-html.js)"
-	@echo "make docs-watch - same, rebuilding on every save"
-	@echo "make docs-clean - delete the generated HTML"
 
 env:
-	@test -f .env || cp .env.example .env
+	@test -f ../.env || cp ../.env.example ../.env
 
 up: env
 	colima start
@@ -51,18 +56,3 @@ clean:
 	$(DC) down -v
 
 reset: clean up
-
-# --- Documentation -----------------------------------------------------------------
-# docs/**/*.html is generated, not committed (docs/.gitignore). Sources are the .md
-# files and the PlantUML .svg assets they inline.
-
-docs:
-	@test -d util/node_modules || (cd util && npm install --silent)
-	node util/md-to-html.js
-
-docs-watch:
-	@test -d util/node_modules || (cd util && npm install --silent)
-	node util/md-to-html.js --watch
-
-docs-clean:
-	node util/md-to-html.js --clean

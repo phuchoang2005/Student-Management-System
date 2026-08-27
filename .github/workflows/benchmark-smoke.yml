@@ -1,0 +1,98 @@
+name: Benchmark Smoke
+
+# PM-038 (02-benchmark-plan.md §5): a narrow guard against catastrophic breakage (a full-scan-in-
+# a-loop, a missing index), not a latency thermometer. A separate workflow file, not a job inside
+# ci.yml, so "never triggered by a pull_request" is structural rather than a job-level `if:` that
+# could be misconfigured -- and this job never gates `verify`, which has no dependency on it.
+on:
+  workflow_dispatch: {}
+  schedule:
+    # Nightly on the default branch -- schedule events always run against main, never a PR ref.
+    - cron: '0 3 * * *'
+
+jobs:
+  benchmark-smoke:
+    runs-on: ubuntu-latest
+
+    # Mirrors ci.yml's verify job's service exactly -- same credentials the app's own
+    # application.properties defaults to (spring.datasource.*) and bench/seed/db.js defaults to,
+    # so no MYSQL_*/DB_HOST/DB_PORT overrides are needed anywhere in this job.
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: management
+          MYSQL_USER: management
+          MYSQL_PASSWORD: management
+          MYSQL_ROOT_PASSWORD: management
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -umanagement -pmanagement"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: management/pom.xml
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Package the app (tests already covered by verify)
+        working-directory: management
+        run: ./mvnw --batch-mode --no-transfer-progress -DskipTests package
+
+      - name: Start the app under the benchmark profile
+        working-directory: management
+        run: |
+          JAR=$(ls target/management-*.jar | grep -v original | head -1)
+          nohup java -jar "$JAR" --spring.profiles.active=benchmark --server.port=8080 > app.log 2>&1 &
+          echo $! > app.pid
+
+      - name: Wait for /actuator/health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
+              echo "App is healthy."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "App did not become healthy in time -- see app.log below." >&2
+          cat management/app.log || true
+          exit 1
+
+      - name: Seed S1
+        working-directory: bench
+        run: make bench-seed SCALE=S1
+
+      - name: Run the smoke scenario
+        working-directory: bench
+        run: make bench-ci-smoke SCALE=S1
+
+      - name: Upload k6 output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-smoke-k6-output
+          path: bench/out/ci-smoke-*.json
+
+      - name: Stop the app
+        if: always()
+        working-directory: management
+        run: '[ -f app.pid ] && kill "$(cat app.pid)" 2>/dev/null || true'

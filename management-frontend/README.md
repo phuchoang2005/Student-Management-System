@@ -11,7 +11,7 @@ in turn, and walk the use cases end to end in a browser. See
 ## Running it
 
 ```bash
-make up                                    # MySQL, from the repo root
+make -C management up                      # MySQL, from the repo root
 cd management && ./mvnw spring-boot:run    # :8080, seeds the 4 staff demo accounts
 cd management-frontend && npm install && npm run dev   # :3000
 ```

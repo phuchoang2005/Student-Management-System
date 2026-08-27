@@ -1,6 +1,6 @@
 # Sprint Backlog
 
-Project Management Documentation — Part 4 of 4 ([Product Backlog](./01-product-backlog.md) → [Sprint Plan](./02-sprint-plan.md) → [Scrum Artifacts](./03-scrum-artifacts.md) → Sprint Backlog).
+Project Management Documentation — Part 3 of 3 ([Product Backlog](./01-product-backlog.md) → [Sprint Plan](./02-sprint-plan.md) → Sprint Backlog).
 
 Decomposes every item [02-sprint-plan.md](./02-sprint-plan.md) pulls into a sprint down to the concrete implementation sub-tasks needed to deliver it — the classic Scrum Sprint Backlog artifact, one level more granular than the Sprint Plan's per-sprint scope list. No new scope is introduced here: every task is sourced from a class, method, or DDL statement already fixed in [SA-docs/06-low-level-design.md](../SA-docs/06-low-level-design.md) (LLD), or from the specific gap/risk citation [01-product-backlog.md](./01-product-backlog.md) already gives each `PM-0xx` platform item.
 
@@ -357,7 +357,7 @@ Per `06-low-level-design.md` §11.4, `04-authentication-authorization.md` §8. *
 
 ---
 
-## 6. Sprint 4 — Cross-cutting, hardening, v1.0 (31h)
+## 6. Sprint 4 — Cross-cutting, hardening, v1.0 (34h)
 
 ### PM-010 — RBAC matrix integration tests (8h)
 
@@ -531,9 +531,11 @@ Ordering matters here and is deliberate: **PM-020 → PM-021 → PM-019 → PM-0
 | Sprint 4 | 34h | 34h | ✓ |
 | Sprint 5 | 34h | — (added after the plan) | n/a |
 | Sprint 6 | 28h | — (added after the plan) | n/a |
-| **Total** | **225h** | **163h planned + 62h added** | ✓ |
+| Sprint 7 | 34h | — (added after the plan) | n/a |
+| Sprint 8 | 21h | — (added after the plan) | n/a |
+| **Total** | **280h** | **163h planned + 117h added** | ✓ |
 
-Every one of the 51 items in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears exactly once above, decomposed into 2–6 tasks apiece. Sprints 5 and 6 have no counterpart rows in [02-sprint-plan.md](./02-sprint-plan.md): that document plans the four sprints scoped up front, and Epics H and I were both added afterwards — H from the demo walkthrough, I from using the application. Both are recorded as addenda there rather than folded into the timeline. If a source document changes (LLD, test cases, or the Product Backlog's estimates), review this set for drift the same way [README.md](./README.md) already flags for the other three PM docs.
+Every one of the 62 items in [01-product-backlog.md](./01-product-backlog.md) §9's ranked list appears exactly once above, decomposed into 2–6 tasks apiece. Sprints 5 through 8 have no counterpart rows in [02-sprint-plan.md](./02-sprint-plan.md): that document plans the four sprints scoped up front, and Epics H, I, and J were all added afterwards — H from the demo walkthrough, I from using the application, J from reading the code both produced. All three are recorded as addenda there rather than folded into the timeline. If a source document changes (LLD, test cases, or the Product Backlog's estimates), review this set for drift the same way [README.md](./README.md) already flags for the other three PM docs.
 
 ---
 
@@ -614,3 +616,224 @@ That same gap turned out to be **PM-028 already**: with a no-op strategy the ses
 Two more defaults needed replacing rather than accepting. `ConcurrentSessionFilter`'s expired-session strategy prints a sentence and never sets a status, so a revoked session's next request would have answered `200 OK` with prose — indistinguishable from success. And session ids are never emitted: they are bearer credentials, so the API publishes a SHA-256 digest as an opaque handle (decision #13).
 
 One trap is documented in the code because it is invisible: `AuthenticatedPrincipal` is a record with value-based equality and the registry keys its map on the principal object, while `AuthController.changePassword` swaps that object mid-session without telling the registry. Looking a principal up by reconstructing one therefore matches nothing, silently. Every read iterates `getAllPrincipals()` instead.
+
+---
+
+## 10. Sprint 7 — Benchmark harness and P0 baseline (34h)
+
+Epic J, first half. See [01-product-backlog.md](./01-product-backlog.md) §8c and [02-sprint-plan.md](./02-sprint-plan.md)'s Sprints 7–8 addendum.
+
+**PM-029/030/031 are executed; PM-032/033/034 are specified and not executed.** Sprints 5–6 carry retrospective `**Status:**` notes saying what their estimates got wrong — the same convention starts here for the three items that have shipped. `benchmark-strategy/result/` still holds an index and no run records, since a baseline (PM-034) needs PM-032/033 first.
+
+Ordering: **PM-029 first**, because it is a prerequisite rather than a hazard fix — without server-side metrics, `05-baseline-and-reporting.md` §4's escalation ladder stops at rung 1 and a slow scenario cannot be attributed to anything. Then PM-030 → PM-031 → PM-032 (harness, data, tooling), PM-033 (the read catalog), and PM-034 last, since a baseline is only meaningful once the four before it are stable.
+
+### PM-029 — Actuator + Micrometer under a `benchmark` profile (3h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `management/pom.xml`: `spring-boot-starter-actuator` + `micrometer-registry-prometheus` | Build config | 0.5h |
+| `application-benchmark.properties` exposing `health`, `metrics`, `prometheus` only — profile-conditional in the style PM-017 already established for `app.demo-accounts.enabled` | Config | 1h |
+| `SecurityConfig` matcher for `/actuator/**` under the same profile — the allow-list has no `.anyRequest().authenticated()` fall-through, so an unmatched path is unreachable rather than open | Security config | 1h |
+| Verify `/actuator/prometheus` scrapes with the profile active and is absent without it | Verification | 0.5h |
+
+Per `01-benchmark-strategy.md` §8; closes hazard H8, which degrades the benchmark rather than the system.
+
+**Status:** done. `management.endpoints.web.exposure.include=` is explicitly empty in `application.properties` and only `health,metrics,prometheus` in `application-benchmark.properties`; `SecurityConfig` gates `/actuator/health` `permitAll()` and everything else under `/actuator/**` behind `hasRole("SYSTEM_ADMINISTRATOR")`. Verified against a disposable, throwaway MySQL container (never the dev `management-mysql`): with the profile active, `/actuator/health` is 200 anonymously and `/actuator/prometheus`/`/actuator/metrics` are 200 for a `SYSTEM_ADMINISTRATOR` session and 403 for anonymous/wrong-role; without the profile, health still 200s (Spring Boot's own always-on default) but prometheus/metrics 404 even for an authenticated `SYSTEM_ADMINISTRATOR` — confirming the exposure gate, not just the RBAC gate, is what closes H8 outside a benchmark run. `./mvnw test` (275 tests, including ArchUnit and `ApplicationModules.verify()`) is unaffected.
+
+### PM-030 — `bench/` k6 harness skeleton (6h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `bench/lib/session.js` — log in **once per VU, never per iteration**; carry `JSESSIONID` explicitly and assert liveness; every VU is a session, which is what makes H7 measurable at all | Harness | 2.5h |
+| `bench/lib/slo.js` — the five §4.2 SLO classes as reusable k6 threshold objects | Harness | 1h |
+| `bench/lib/config.js` — base URL, scale selection, VU profiles, all from env vars | Harness | 1h |
+| `bench/README.md` — prerequisites, how to run, and why the harness sits outside `management/` | Docs | 1h |
+| Confirm the new top-level directory changes neither `./mvnw verify` timing nor ArchUnit / `ApplicationModules.verify()` results | Verification | 0.5h |
+
+Per `02-benchmark-plan.md` §1.1–1.2. `session.js` is the one piece the plan calls **not optional**: k6 was chosen over Gatling and JMeter precisely so this code could live in JS outside `management/`, where no architecture rule can reach it.
+
+**Status:** done, skeleton only — `bench/lib/{config,session,slo}.js` and `bench/README.md` exist; `bench/scenarios/*.js` (PM-033) and `make bench-*` targets (PM-032) deliberately do not yet. `session.js`'s `login()`/`assertLive()` pair was exercised end to end against a real running instance (not just read for review): logging in as each of the account-cohort roles PM-031 seeds and hitting each role's liveness path (`/api/v1/me/profile`, `/api/v1/students`, `/api/v1/books`, `/api/v1/courses`) all returned 200. `bench/` sits entirely outside `management/src/`, so `./mvnw test`/`verify` are unaffected by construction, not just by inspection.
+
+### PM-031 — Deterministic dataset generator + scales S1–S4 (8h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `bench/seed/scales.*` — row counts and distribution parameters for S1 (50/20/100/150) through S4 | Seed data | 1h |
+| Generator core: seeded RNG, bulk `INSERT`/`LOAD DATA` for `students`/`courses`/`books`/`users` against the Flyway-migrated schema (V1→V4). No DDL in the generator, no benchmark-only migration | Seed data | 2.5h |
+| Enrollment pairs with `uq_enrollments_student_course` deduplicated **in the generator** — `INSERT IGNORE` would silently change the row count and break determinism | Seed data | 1.5h |
+| Distributions: Zipf-like per course, skewed per student (mean ~6 with a 15–20 tail), 20–30% NULL `books.owner_id`, and a search vocabulary whose term→hit-count table ships beside the dataset. Shuffle before assigning `student_code`, so insertion order does not match key order | Seed data | 1.5h |
+| Account cohort: a few hundred `STUDENT` users drawn from the middle of the enrollment distribution with real BCrypt hashes at the application's strength and `must_change_password=FALSE`, plus one staff account per role; demo accounts fixed off and recorded as off | Seed data | 1h |
+| Verify: `SELECT COUNT(*)` per table, a duplicate check on each unique key, RNG seed written into the run record | Verification | 0.5h |
+
+Per `04-workload-data-preparation.md` §§1–4. Distribution matters more than volume — a uniform S2 would make H1 and H2 look better than they are. PII rules are inherited verbatim from `Testing/04-test-data-preparation.md` §7: fabricated data only, `@example.test` addresses; the generator and its seed are committed, its output and any `mysqldump` are not.
+
+**Status:** done, with two implementation notes worth recording. First, the cohort size follows §4.2's prose ("a few hundred students... plus one staff account per role" — 20/300/300 across S1/S2/S3) rather than the summary table's approximate `users` column (~55/~5,010/~50,010), since the two are arithmetically inconsistent and the prose is the more deliberate spec. Second, each scale's enrollment-count mixture is tuned (not identical across scales) so the expected total lands near that scale's declared row count while keeping §2's shape (skewed, ~10% tail at 15–20 courses) — a single mixture tuned for S2 alone overshot S1's total by ~2× when tried directly.
+
+Verified end to end against disposable, throwaway MySQL containers (never the dev `management-mysql`), never through the app: S1, S2, and **S3 (50,000 students, 1,000 courses, 80,000 books, 401,209 enrollments)** all ran, matched their declared counts, and passed every unique-constraint check. S3 took 41.5s. Distribution shape confirmed empirically, not just by construction — at S3 the top course carries 38,567 enrollments against a ~30-enrollment tail; at S2 the top course carries 3,000+; book ownership NULL rate landed at 21–25% (target 20–30%) across runs. `student_code` insertion order was confirmed decorrelated from sort order by direct query (`id=1` did not map to the lexicographically-first code). Two same-seed runs produced byte-identical `students`/`enrollments` data (MD5-compared). The account cohort's bcryptjs-generated hash was confirmed — via both a direct `BCryptPasswordEncoder.matches()` call and a real `POST /api/v1/auth/login` against a running instance — to interoperate with Spring Security's encoder, not merely assumed compatible. The search-term hit-count table is genuinely observed (queried through each repository's exact `LIKE` shape post-load), and the three `neverUsed` vocabulary terms confirmed 0 hits everywhere, giving a true zero-hit search control.
+
+### PM-032 — `make bench-*` targets (3h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `bench-seed SCALE=` — drop, re-migrate, regenerate at the named scale, record the seed | Build tooling | 1h |
+| `bench SCENARIO= SCALE=` and `bench-all SCALE=` — raw k6 output into `bench/out/` | Build tooling | 1h |
+| `bench-report` and `bench-jmh` | Build tooling | 0.5h |
+| `make help` entries; confirm `make bench` does **not** implicitly depend on `make up` | Verification | 0.5h |
+
+Per `02-benchmark-plan.md` §1.3.
+
+**Status:** done, with one deliberate addition beyond the original scope: `bench-seed` also runs a new `bench/seed/manifest.js` (a second, separate script, not a change to the PM-031 generator) that queries the freshly-seeded database for the enrollment-count-tail students, enrollment-heavy courses, and full login-cohort list PM-033's scenarios need at runtime — none of that was discoverable cheaply from the API alone. `bench-jmh` is scaffolding only, as the spec anticipated (`02-benchmark-plan.md` §1.2 already named the JMH annotation-processor dependency as a prerequisite this item doesn't add): it prints a "not wired up yet, see PM-037" notice and exits non-zero rather than fabricating a run. `bench-all`'s per-scenario-file loop deliberately does not abort on the first threshold breach — a single k6 exit code shouldn't discard the other four files' data when the actual pass/fail judgment (`bench-report`) is a separate step.
+
+### PM-033 — Read-path scenario scripts (8h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `scenarios/student-search.js` — BM-STU-001–005: the H3 paging floor, H1 search at default and `size=100`, a deep page from the last decile, and `GET /students/{code}` as the control | Scenario | 2h |
+| `scenarios/book-search.js` — BM-BK-001–004, including BM-BK-003's check of the per-page owner memo, which `01-benchmark-strategy.md` records as a deliberate **non-hazard** | Scenario | 1.5h |
+| `scenarios/course-list.js` — BM-CRS-001–003, with the grouped `LEFT JOIN` list as the reference point for what "H2 fixed" would look like | Scenario | 1h |
+| `scenarios/enrollment-list.js` — BM-ENR-001–004; BM-ENR-002 at `size=100` is the headline H2 measurement, ~101 statements per request | Scenario | 2h |
+| `scenarios/me-reads.js` — BM-ME-001–003; BM-ME-002 vs. BM-ME-003 is the clearest before/after illustration of what fixing H2 would buy | Scenario | 1h |
+| Response-correctness checks on every scenario, so a fast `4xx` cannot pass for a fast `200` | Scenario | 0.5h |
+
+Per `03-benchmark-scenarios.md` §§1–6. Defaults unless a scenario states otherwise: 20 VUs, scale S2, steady state per `02-benchmark-plan.md` §2.1, authenticating once per VU as the role the endpoint requires.
+
+**Status:** done, with one real bug caught during end-to-end validation and fixed before any run was trusted: k6 resets each VU's cookie jar between *iterations* by default, which silently broke "log in once per VU, reuse for the whole run" — every request after the first login was returning 403 with no cookie sent at all. Fixed with `noCookiesReset: true`, set once in the shared `bench/lib/runner.js` options builder rather than per scenario file. Also caught and fixed: `bench/report.js`'s first draft misread the k6 `--summary-export` JSON shape (assumed a nested `.values`/`.rate` structure; the real shape is flat, with `.value` for Rate metrics and `.count`/`.rate` for Counters) and never forced k6 to track a per-scenario `http_reqs` submetric at all, so every rendered row came back "NO DATA" until both were fixed. All 19 scenarios were validated against a live instance at S1, S2, and S3 (100% response-correctness checks passing, 0 script errors) before any number in `result/` was treated as real.
+
+### PM-034 — P0 baseline runs at S1/S2/S3 (6h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| Per-run MySQL config: slow log on, `performance_schema` digests reset | Config | 0.5h |
+| S1 seed, full read catalog, accepted as the first baseline | Run | 1h |
+| S2 seed, app restart, full read catalog — three repetitions, median reported, >~20% p95 spread means the host is too noisy and the run is recorded and repeated | Run | 2h |
+| S3 seed, app restart, P0 read scenarios only | Run | 1.5h |
+| Run records into `benchmark-strategy/result/` as `YYYY-MM-DD-<scale>-<short-sha>.md`, each carrying its SLO verdict and its regression verdict separately, with the S1→S2→S3 curve classified flat / linear / worse per scenario | Docs | 1h |
+
+Per `02-benchmark-plan.md` §§2–4 and `05-baseline-and-reporting.md` §1. One scale per run, reseed and restart between scales, reads before writes, nothing else on the host, host CPU recorded. A baseline is accepted only against §1's five conditions and is never replaced because a run came back worse.
+
+**Status:** done, at reduced rigor by deliberate mid-sprint direction. The original 3-repetition/300s-steady-state protocol was estimated at ~13h of continuous host-quiet execution to run once across S1→S2→S3 — a live run of the first hour-plus of it (S1's first repetition) confirmed that estimate before it was abandoned in favor of a ~15s-warmup/30s-steady/1-repetition protocol, which `02-benchmark-plan.md` §2 and `05-baseline-and-reporting.md` §1 were both revised to match. Three consequences worth naming plainly: **(1)** the app was not restarted between S1/S2/S3 (skipped for speed); **(2)** host CPU during the run was never captured, so a k6-driver-saturated run can't be distinguished from a real result after the fact; **(3)** every one of the 19 scenarios breached its SLO at every scale, including by-key controls that should be flat regardless of data volume — the leading explanation is 20 VUs queuing against Hikari's untuned 10-connection pool, confounded with genuine H1/H2/H3 cost, and this single-repetition pass cannot separate the two. All three baselines were still accepted (0% error rate, protocol followed, configuration recorded — `05-baseline-and-reporting.md` §1's remaining conditions), but every run record's Findings section says this in full and neither the SLO verdicts nor the S1→S2→S3 curve should be read as clean per-hazard results without a follow-up run that isolates the pool-contention confound (natural territory for Sprint 8's `BM-XC-003`).
+
+**Sprint 7 subtotal: 3 + 6 + 8 + 3 + 8 + 6 = 34h**
+
+---
+
+## 11. Sprint 8 — Full scenario catalog, microbenchmarks, regression gate (21h)
+
+Epic J, second half — everything `02-benchmark-plan.md` §3 says can be deferred without making Sprint 7's three runs uninterpretable. **All five items are executed** as of this writing — the same convention `04-sprint-backlog.md` §10 established for Sprint 7.
+
+### PM-035 — Write- and auth-path scenario scripts (6h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `scenarios/writes.js` — BM-STU-006/007, BM-BK-005, BM-CRS-004. BM-STU-006 carries a hidden BCrypt cost: registration provisions an account | Scenario | 1.5h |
+| `scenarios/enrollment-batch.js` — BM-ENR-005–008, characterizing H4 at 1, 10, and 50 courses against BM-ENR-005's single-enrollment unit | Scenario | 1.5h |
+| `scenarios/auth-login.js` — BM-IDN-001 ramping 1→10→25→50→100 VUs, **run alone**; the deliverable is the knee of the curve, not a single number | Scenario | 1.5h |
+| BM-IDN-002 wrong-password login, BM-IDN-003 staff-account control, BM-IDN-004 `/sessions` read during the BM-XC-002 soak | Scenario | 1h |
+| Reseed between write repetitions; BM-CRS-004 ordered last within its module since it destroys the dataset | Run | 0.5h |
+
+Per `03-benchmark-scenarios.md` §§1–5. H4's cost is deliberate (`api-specification.md` §5 decision #12) — quantifying it produces client guidance for the API docs, not a defect. BM-IDN-002 is the exception to this whole set's framing: a measurable timing difference between a known and an unknown username is a user-enumeration finding and goes to the security channel, not the performance one.
+
+**Status:** done. `scenarios/writes.js` (BM-STU-006/007, BM-BK-005, BM-CRS-004), `scenarios/enrollment-batch.js` (BM-ENR-005–008), and `scenarios/auth-login.js` (BM-IDN-001's five-VU ramp plus BM-IDN-002/003) all exist and are wired into `bench/lib/scenarios.js`'s `SCENARIOS`/`SCENARIO_FILES` registries, `make bench SCENARIO=writes|enrollment-batch|auth-login`, and a dedicated `make bench-auth-ramp` target that pins `BM_ONLY` to just the five ramp stages, per the ramp's "must run alone" requirement.
+
+Two pieces of shared infrastructure were added beyond any single file's own scope, because the first file to need them (`writes.js`) exposed a real gap the others then depended on being fixed. `bench/lib/vuShard.js` (`shardFor`/`uniqueCode`) gives every write scenario a deterministic, collision-free partition of targets across concurrent VUs — without it, two VUs updating the same student or enrolling the same pair would manufacture contention that has nothing to do with the endpoint's real cost. And `writes.js`, being the first file to authenticate as three different roles in one file (REGISTRAR for BM-STU-006/007, LIBRARIAN for BM-BK-005, COURSE_ADMINISTRATOR for BM-CRS-004), exposed a latent bug in `bench/lib/vuSession.js`: `ensureLoggedIn` only asserted the cached session was *live*, not that it matched the *requested* role, so a role switch mid-file silently kept using the stale role's session while every subsequent request under the new role 403'd. Fixed by comparing the requested role against the cached one and forcing a real re-login on mismatch, shipped alongside `writes.js` rather than as a separate item — every later Sprint 8 file that spans roles depends on the corrected version.
+
+BM-IDN-002's wrong-password scenario needed its own threshold override: every request it fires is *supposed* to return 401 (a rejection is success here, not failure), which the LOGIN class's inherited error-rate threshold would otherwise read as a 100% failure rate on every single run — `auth-login.js`'s own header comment describes catching this live before trusting the file. `auth-login.js` also fires a companion `BM_IDN_002_UNKNOWN_USER`-tagged call for the known-vs-unknown-username timing comparison (03-benchmark-scenarios.md §6); that delta has no automated threshold and is read manually off the two numbers in the export, since it is a security finding rather than a performance verdict.
+
+Known, documented scale constraints carry over unresolved from the design rather than being silently worked around: BM-CRS-004 (course delete) and BM-ENR-008 (50-course batch) need more courses/students than S1 provides (20 courses, 50 students total) and no-op quickly once their shard is exhausted rather than error — a meaningful sample needs S2/S3, exactly as `03-benchmark-scenarios.md` specifies. BM-CRS-004 is destructive and, like BM-XC-001, requires a full dataset restore before the next `bench-*` run at that scale.
+
+Verification: the wrong-password-threshold fix and the role-switch fix are both directly evidenced by their respective files' own header comments describing a live run that caught them, not just design review. No `bench/out/writes-*`/`enrollment-batch-*`/`auth-login-*` exports exist yet, so a full end-to-end `make bench SCENARIO=writes|enrollment-batch|auth-login SCALE=S1` pass has not been re-confirmed as part of writing this note — recommended as a short follow-up before this item is read with PM-033's level of confidence.
+
+### PM-036 — Cross-cutting scenarios and the scale sweep (5h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `scenarios/cascade-delete.js` — BM-XC-001 at N = 10/50/200, reporting **two** numbers: HTTP latency, and wall-clock until `event_publication` drains (H6, against `AsyncConfig`'s core-2/max-4 pool and 50-slot queue) | Scenario | 1.5h |
+| `scenarios/mixed-soak.js` — BM-XC-002, 30 minutes at ~70% reads / ~20% writes / ~10% logins; the deliverable is heap bytes per active session (H7) | Scenario | 1.5h |
+| BM-XC-003 — connection-pool saturation at 5/10/20/40 VUs spanning the default Hikari pool of 10, driven through BM-ENR-002 | Scenario | 1h |
+| BM-XC-004 — scale sweep of the six P0 scenarios at S1/S2/S3, plotted per scenario | Run | 1h |
+
+Per `03-benchmark-scenarios.md` §7. BM-XC-004 is what `01-benchmark-strategy.md` calls the single most valuable artifact the set produces: growth classified as flat, linear, or worse is the finding, and it is the one output that does not depend on the absolute latency of this particular host.
+
+**Status:** done. `scenarios/cascade-delete.js` (BM-XC-001 at N=10/50/200, hand-built `shared-iterations` executors since a fixed-count burst doesn't fit `buildOptions()`'s constant-vus/duration model), `scenarios/mixed-soak.js` (BM-XC-002 + BM-IDN-004, four role-partitioned executors at a ~70/20/10 read/write/login mix), `bench/xc003-report.js` (BM-XC-003, looping `enrollment-list.js`'s BM-ENR-002 at VUS=5/10/20/40 via the existing `BM_ONLY` filter, exported under distinct `enrollment-list-<scale>-vu<N>-*.json` names so the four runs don't conflate under `report.js`'s plain naming convention), and `bench/scale-sweep.js` (BM-XC-004, classifying the six P0 scenarios' S1→S2→S3 growth from PM-034's existing `bench/out/` exports rather than re-running k6) all exist, along with their `make bench-cascade-delete`/`bench-xc-003`/`bench-scale-sweep`/`bench-mixed-soak` targets and `bench/README.md`'s Sprint 8 table.
+
+Two companion Node scripts carry the halves of these scenarios k6 cannot measure on its own, both deliberately kept outside `bench/lib/` (npm-free) rather than given a k6-side equivalent. `bench/seed/cascade-drain.js` polls `EVENT_PUBLICATION` (case-sensitive on MySQL/Linux, per `V4__add_event_publication_table.sql`'s own comment) for the two `StudentDeleted` listeners' rows to reach `COMPLETION_DATE IS NOT NULL`, since the HTTP 204 returns before `AsyncConfig`'s core-2/max-4/queue-50 pool has actually finished the cascade — the wall-clock half of H6 the k6 file alone only half-measures. `bench/monitor-soak.js` samples `/actuator/metrics/jvm.memory.used` every 30s for the whole soak via Node's native `fetch`, hand-carrying its own `Set-Cookie`→`Cookie` thread since `fetch` has no cookie jar of its own — this is the actual BM-XC-002 deliverable, heap bytes per active session (H7), which no `k6 --summary-export` captures. `make bench-mixed-soak` backgrounds it around the k6 run and stops it afterward.
+
+A deliberate design deviation worth recording: `mixed-soak.js`'s read-path executors reuse the PM-033 files' exec functions directly by import (`bmStu002`, `bmBk001`, `bmCrs001`, `bmMe002`), safe because those only depend on module-top-level state populated at import. The write-path executors do **not** reuse `writes.js`'s exec functions the same way, since those depend on target lists populated inside `writes.js`'s own `warmup()` — which a 30-minute soak with no shared warm-up phase never calls — so `mixed-soak.js` instead primes its own small per-VU target and tags calls with the same BM-STU-007/BM-BK-005 ids to keep the numbers comparable. This required extending `bench/lib/slo.js`'s `sloThresholds()` with a `dimension` parameter (defaulting to `'scenario'`, unchanged for every PM-033 file) so reused-function thresholds can key on `'name'` instead — reused requests carry k6's auto-tag `scenario:<executor>` (e.g. `registrar_mix`), not `scenario:BM_STU_002`, and keep only their own `name:BM_STU_002`-shaped tag from the file they came from. `bench/lib/reportStats.js`'s `extractStats()` was extended the same way (tries the `scenario` dimension first, then falls back to `name`), which is also why it was pulled out of `report.js` into a shared module this sprint, for `scale-sweep.js` and `xc003-report.js` to reuse without re-deriving the same parsing.
+
+`mixed-soak.js` is deliberately absent from `bench/lib/scenarios.js`'s `SCENARIO_FILES` registry — `bench-report`'s one-row-per-(BM-id, scale) model doesn't fit a 30-minute soak's shape — so its numbers are read directly off the raw `--summary-export` JSON and `monitor-soak.js`'s own output.
+
+Verification: two of the four deliverables have direct evidence of a live run already on disk — `bench/out/cascade-drain-S3-*.json` (×3, one per N=10/50/200 stage) and `bench/out/monitor-soak-S3-*.json` are real output from `cascade-drain.js` and `monitor-soak.js` against a live S3 instance. `scale-sweep.js` was exercised against PM-034's existing S1/S2/S3 exports, which is its whole design point — no new k6 run needed for it. The two k6 scenario files themselves — a full `cascade-delete.js` burst and a full (or shortened, `SOAK_DURATION=2m`) `mixed-soak.js` run — have not been confirmed end-to-end as part of writing this note; recommended as a short follow-up, same bar as PM-035's.
+
+### PM-037 — JMH microbenchmark suite (5h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `jmh-core` + `jmh-generator-annprocess` at test scope, added to the **existing explicit** `annotationProcessorPaths` beside Lombok and MapStruct — a bare `<dependency>` generates nothing, silently | Build config | 0.5h |
+| First benchmark class under `management/src/test/java/.../benchmark/`; run `./mvnw test` immediately to confirm ArchUnit and `ApplicationModules.verify()` accept it, falling back to a separate minimal Maven project if either objects | Tests | 1h |
+| BM-JMH-001 — BCrypt `encode`/`matches` at strengths 4–14, the cost curve behind H5 | Tests | 1.5h |
+| BM-JMH-002 `AesPasswordCipher` as-written vs. a reused `Cipher`; BM-JMH-004 MapStruct page mapping at 20 and 100 rows | Tests | 1.5h |
+| BM-JMH-003 — `Email`/`StudentCode`/`Isbn`/`Credits` construction, expected to be noise. The null result is recorded as the deliverable rather than treated as a failed measurement | Tests | 0.5h |
+
+Per `03-benchmark-scenarios.md` §8 and `01-benchmark-strategy.md` §8. The guardrail is stated twice in the source and is repeated here because it is what keeps this item at *Should*: **a JMH result may never justify a code change on its own.**
+
+**Status:** done. `jmh-core`/`jmh-generator-annprocess` (test scope) are in `management/pom.xml`, and `jmh-generator-annprocess` was added as a third `<path>` in **both** `maven-compiler-plugin` executions' `annotationProcessorPaths` blocks, not just `default-testCompile` — the task table's own instruction, since the two blocks are otherwise kept textually identical (Lombok/MapStruct are duplicated across both too). `BcryptBenchmark`/`ValueObjectBenchmark`/`MapperBenchmark` live under `management/src/test/java/.../benchmark/`; `AesPasswordCipherBenchmark` lives in `identity.internal` instead, because `AesPasswordCipher` and its constructor are package-private and Java's access rule requires an exact package match — the same reason `AesPasswordCipherTest` already lives there. `./mvnw test` was run immediately after the first class landed (before the other three existed), per the task table: all 275 unit/architecture tests stayed green, including `ModuleBoundaryTest`'s `ApplicationModules.verify()` and the three ArchUnit rules — unsurprising in hindsight since all three (`LayeringRulesTest`/`NamingConventionsTest`/`DomainPurityTest`) run with `ImportOption.DoNotIncludeTests.class` and structurally cannot see test-scope classes at all. No fallback to a separate Maven project was needed.
+
+`make bench-jmh` runs the suite via JMH's own `org.openjdk.jmh.Main` CLI entry point against a classpath assembled by `mvn dependency:build-classpath` — no `jmh-maven-plugin`/`exec-maven-plugin` addition, since `build-classpath` resolves through Maven's default plugin-prefix mapping without a `pom.xml` declaration. Result: `management/target/jmh-result.json`, deliberately outside `bench/out/` (that directory's convention is k6 exports, and a JMH result is never itself a comparable baseline artifact per the guardrail above).
+
+One real bug caught before any number was trusted: `AesPasswordCipherBenchmark` initially shipped without explicit `@Fork`/`@Warmup`/`@Measurement` annotations (unlike the other three classes), so it silently ran under JMH's much heavier defaults — a first live run sat at 3 CPU-seconds over 11+ minutes of wall clock before it was caught via `jstack` and killed; the forked child JVM was legitimately working, just under a ~24-minute default schedule for three tiny methods. Fixed by matching the other three classes' `@Fork(1)`/`@Warmup(3×1s)`/`@Measurement(5×1s)` profile, after which the same benchmark completed in 26 seconds.
+
+All four classes were run individually and then together (`make bench-jmh` with no filter) against a live run, not just compiled — real numbers, not assumed ones:
+
+- **BM-JMH-001 (BCrypt):** a clean, roughly-doubling-per-strength curve, strength 4 → 14. Strength 10 — the app's actual default (`SecurityConfig.java`'s no-arg `BCryptPasswordEncoder()`) — costs ≈124–217ms/`encode` and ≈103–125ms/`matches` across repeated runs; strength 14 costs ≈1.9–2.2s. This is the first time that cost has been measured rather than inherited, and it sets the floor under the Login SLO (400ms p95) and BM-IDN-001's knee.
+- **BM-JMH-002 (AesPasswordCipher):** the reused-`Cipher` variant measurably beats the as-written per-call `Cipher.getInstance` path (≈1.4µs vs. ≈4.7µs `encrypt`, ≈3.6µs `decrypt` as-written) — a real, non-noise difference, but three orders of magnitude below BCrypt's cost on the same registration request, exactly as `01-benchmark-strategy.md` §5.1 expected ("small in absolute terms, but cheap to know").
+- **BM-JMH-003 (value objects):** confirmed noise on the *valid* path, as predicted — 2–16ns for `Credits`/`StudentCode`/`Isbn`, ≈800ns for `Email` (the regex match, still negligible). The *invalid* path costs ≈2,200–7,900ns, which is not validation cost but JVM exception-`fillInStackTrace` overhead — worth naming so nobody misreads it as expensive validation logic; the null result the scenario exists to prove is on the valid-construction path, and that held.
+- **BM-JMH-004 (mapper page mapping):** near-linear growth 20→100 rows (`mapEnrollmentPage`: ≈0.36–0.39µs → ≈2.1–2.3µs; `mapStudentPage`: ≈0.16–0.49µs → ≈0.8–1.3µs), microseconds even at 100 rows — confirms mapping is not where BM-ENR-002's k6-measured cost goes when H2 is suspected.
+
+No code change has been made on any of these — per the guardrail, none of these results alone justifies one; they're recorded as the diagnostic inputs `01-benchmark-strategy.md` §5.1 describes them as.
+
+### PM-038 — CI benchmark smoke job (3h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| A `benchmark-smoke` job in `.github/workflows/ci.yml` on `workflow_dispatch` plus an optional nightly `main` schedule — separate from `verify`, never gating it, never triggered by a PR | CI | 1.5h |
+| S1 seed, 60s warm-up discarded, 60s steady state | CI | 1h |
+| Assertions: `http_req_failed` < 1% and a p95 ceiling ~10× the S1 SLO — and nothing that resembles a real SLO | CI | 0.5h |
+
+Per `02-benchmark-plan.md` §5. A shared GitHub runner cannot produce a latency number worth comparing; this job exists to catch a change that breaks the harness or the seed, and its output is advisory. It is a smoke alarm, not a thermometer.
+
+**Status:** done, as a **separate workflow file** (`.github/workflows/benchmark-smoke.yml`), not a second job inside `ci.yml` — that makes "never triggered by a `pull_request`" structural (no shared `on:` block to misconfigure) rather than a job-level `if:` someone could get wrong later. Triggers are `workflow_dispatch` plus a nightly `schedule` (`0 3 * * *`, which GitHub always runs against the default branch). `ci.yml` itself has zero edits — the two workflows share no `on:`/`needs:` relationship, so `verify`'s own behavior is provably unaffected.
+
+`bench/scenarios/ci-smoke.js` reuses `bmStu002` (H1) and `bmEnr002` (H2) directly by import from their own PM-033 files — the same reuse pattern `mixed-soak.js` (PM-036) already established — rather than the real `SLO_CLASSES` thresholds from `bench/lib/slo.js`: a shared runner can't support those bands, so this file carries its own deliberately loose ones (`http_req_failed`<1%, p95<1500ms, ≈10× the Read-list SLO) keyed on the `name:BM_STU_002`/`name:BM_ENR_002` tags those reused functions already carry, via `sloThresholds`'s `dimension` parameter the same way `mixed-soak.js` uses it. 15s warm-up discarded / 30s steady per scenario, following `02-benchmark-plan.md` §5's own "the same §2.1 default, CI doesn't need a separate even-shorter variant" — **not** the sprint-backlog task table's "60s/60s" figure above, which predates that revision; flagged here in case that number was meant to win instead. `make bench-ci-smoke SCALE=S1` gives local dry-run parity with exactly what the CI job runs.
+
+The job itself: checkout → JDK 21 → Node 20 → `grafana/setup-k6-action@v1` → `mysql:8.4` service (identical credentials to `ci.yml`'s, which happen to already match `application.properties`'s own datasource defaults and `bench/seed/db.js`'s defaults, so no `MYSQL_*`/`DB_HOST` overrides are needed anywhere in the job) → `./mvnw -DskipTests package` → start the repackaged jar in the background under `--spring.profiles.active=benchmark` (reuses the `spring-boot-maven-plugin` already in `pom.xml`, no plugin addition) → poll `/actuator/health` (PM-029's `permitAll()` gate) until `UP` → `make bench-seed SCALE=S1` → `make bench-ci-smoke SCALE=S1` → upload the k6 JSON as a build artifact → kill the app PID in an `if: always()` step. Pass/fail is k6's own nonzero exit code on threshold breach, the same mechanism every other `bench-*` target already relies on — no wrapper script.
+
+Verification so far is necessarily partial: `ci-smoke.js`'s `options` and resolved thresholds were confirmed correct via `k6 inspect` against a real S1 manifest/search-terms export (no live server needed for that check), and the workflow YAML was validated for structural correctness. **A live `workflow_dispatch` run has not been triggered** — that requires pushing this branch and dispatching the workflow from GitHub, which wasn't done as part of this session's local work. That first live run (confirming `/actuator/health` comes up, the smoke scenario passes at 0% errors well under the 1500ms ceiling, and `verify` on an open PR is untouched) is the recommended next step before trusting this job in anger.
+
+### PM-039 — Regression bands + performance-defect workflow (2h)
+
+| Task | Layer | Est. |
+| --- | --- | --- |
+| `make bench-report` rendering raw k6 output into the §3 run-record template, carrying SLO verdict and regression verdict **separately** for every scenario | Build tooling | 1h |
+| The band table applied per scenario rather than per run: better than −10% improvement, −10%→+20% no change, +20%→+50% investigate, above +50% block, and error rate ≥0.1% blocks regardless of latency. CI output marked advisory and excluded from verdicts | Docs | 0.5h |
+| GitHub issue template carrying the `BM-*` id, the hazard id, baseline vs. observed with scale and concurrency, the attribution rung reached, and the hypothesis | Docs | 0.5h |
+
+Per `05-baseline-and-reporting.md` §§2–5 and `01-benchmark-strategy.md` §10. Two rules travel with this item: **no code change on a benchmark finding without a linked issue**, and before concluding anything, rule out the benchmark itself against §4.1's five-item checklist — a saturated driver, an uncounted warm-up, a dataset that isn't what it claims, wrong responses, or pinned config that moved.
+
+**Status:** done. `bench/lib/baseline.js` (new) parses a prior run record's committed `## Results` Markdown table under `docs/benchmark-strategy/result/` — deliberately not raw `bench/out/*.json`, since that directory is gitignored and not guaranteed to survive to the next run, while the committed run-record file is what `05-baseline-and-reporting.md` §1 defines as "the baseline." It exposes `regressionVerdict(deltaPct, errRate)` implementing §2's band table exactly (Improvement below −10%, No change through +20%, Investigate through +50%, Block above, and an error rate ≥0.1% blocking regardless of latency, checked first). `bench/report.js` gained `--baseline=<path>`: when given, the trailing column becomes `Δ p95 vs. baseline` (bolded for anything other than Improvement/No change); when absent, it falls back to a `Hazard` column read from `bench/lib/scenarios.js`'s already-existing `hazard` field — which also closes a small pre-existing gap, since that's the shape every one of the three accepted Sprint 7 baseline files already shows (their last column was `Hazard`, not `reps`, meaning someone had been hand-editing the raw output every time). `make bench-report` gained an optional `BASELINE=` variable passed through as `--baseline=`.
+
+Verification ran entirely offline, against files already on disk — no live server needed, matching PM-039's own "rule out the benchmark itself" discipline by construction:
+
+- **Self-diff:** `make bench-report SCALE=S1 BASELINE=docs/benchmark-strategy/result/2026-08-26-S1-1587ed3.md` against the exact `bench/out/` exports that produced that file rendered `+0%`/`-0%` (rounding) on every row — the parser round-trips the numbers it produced.
+- **Band boundaries:** direct calls at −15/−10.1/−9.9/−5/0/20/20.1/50/50.1% and at an elevated error rate all matched §2's table exactly, including the edge cases (−10.1% is still Improvement, 20.1% is already Investigate).
+- **Cross-scale guard:** passing an S2 baseline file against `--scale=S1` now prints an explicit warning ("results at different scales are never comparable... every Δ below is meaningless") rather than silently rendering a misleading number.
+- **New-id-with-no-baseline:** `BM_STU_006` (a Sprint 8 id, absent from every Sprint 7 baseline) renders `--` rather than crashing or showing a false verdict.
+
+One real bug was caught and fixed during this pass, not just designed around: the S2 baseline file's `Dataset scale` cell reads `S2 — Institution (5,000 students / ...)`, not a bare `S2`, so the first version of the scale-parsing regex (which required the cell to be exactly `S1`–`S4`) silently failed to match and the cross-scale warning never fired on the first attempt. Fixed by matching the leading `S[1-4]` token instead of the whole cell.
+
+`.github/ISSUE_TEMPLATE/performance-finding.md` is new (no prior template existed to match a convention against, so this sets one) — classic Markdown front-matter, matching this repo's hand-written-Markdown-everywhere style rather than the YAML issue-form alternative. Carries the `BM-*` id, hazard id, scale/concurrency, a baseline-vs-observed table, the `05-baseline-and-reporting.md` §4 escalation-ladder checklist (with its own "rule out the benchmark first" reminder), the hypothesis, and the `01-benchmark-strategy.md` §10 severity scale, closing with the "no code change without a linked issue" rule restated.
+
+Not yet exercised against a genuinely new (post-baseline) live run, since Sprint 8's write/auth/cross-cutting scenarios haven't been run live yet either (see PM-035/036's own notes) — the offline checks above establish the tool is correct; the first real regression comparison is a natural follow-up once a second S1/S2/S3 pass exists to compare against the Sprint 7 baselines.
+
+**Sprint 8 subtotal: 6 + 5 + 5 + 3 + 2 = 21h**
+
+Not every finding these two sprints produce is a defect. A quantified deliberate cost (H4) belongs in the API documentation as client guidance; a confirmed non-hazard (BM-BK-003, BM-JMH-003) is recorded as a null result; and BM-IDN-002's timing delta leaves the performance channel entirely.
