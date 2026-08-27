@@ -38,6 +38,17 @@ Everything is addressed by a code a person can read out loud — a student code,
 
 If someone tries to do something that doesn't make sense — like enrolling in the same course twice, or looking up a student that doesn't exist — the system rejects the request with a clear explanation rather than silently doing the wrong thing.
 
+## Screenshots
+
+One demo UI, five logins — each role sees only its own slice of the system.
+
+| | |
+| --- | --- |
+| ![Sign-in screen listing one demo account per role](docs/UI-UX/images-demo/login.png) | ![Registrar view of the course catalog](docs/UI-UX/images-demo/registrar-role.png) |
+| **Sign in** — a demo account per role, so anyone can try all five without a real registration. | **Registrar** — courses, enrollment counts, and (elsewhere in the app) the student register. |
+| ![Librarian view of the book catalog with ownership status](docs/UI-UX/images-demo/librarian-role.png) | ![System Administrator view of staff account provisioning](docs/UI-UX/images-demo/system-admin-role.png) |
+| **Librarian** — the book catalog, who currently holds each book, and adding/removing books. | **System Administrator** — provisioning and deactivating Registrar/Librarian/Course Administrator accounts, and (elsewhere) ending active sessions. |
+
 ## How is it built? (for technical readers)
 
 Under the hood, this is a Java/Spring Boot REST API, with a Next.js demo UI over it. It's built as a portfolio-grade example of clean, modular backend architecture, with layered code, input validation, proper error handling, and a real relational database (MySQL) enforcing data integrity.
@@ -48,6 +59,33 @@ Under the hood, this is a Java/Spring Boot REST API, with a Next.js demo UI over
 - `util/` — build tooling; currently the docs Markdown → HTML compiler.
 
 For architecture details, module boundaries, database design, and the technical roadmap, see the documentation: [Document](docs/).
+
+## Engineering Highlights
+
+This project is built the way a specification-driven team would build it — business rules and use cases written down first, code and tests traced back to them by ID, and nothing marked "done" without evidence.
+
+- **Every requirement is traceable, both ways.** The chain runs business rule (`req.md`) → use case (`UC-1`…`UC-28`) → user story (`US-1.1`…`US-7.4`) → test case (`TC-*`), and code/Javadoc cite the same IDs back. Read [`docs/BA-docs/`](docs/BA-docs/) for the rules and flows, or [`docs/Testing/README.md`](docs/Testing/README.md) for the UC → test-case index.
+- **All 28 use cases are implemented and covered by 211 automated test cases** — unit tests, Spring-Modulith Testcontainers integration tests against a real MySQL instance, and architecture-conformance tests, with 0 known gaps against `req.md`'s invariants.
+- **The module architecture is enforced, not just documented.** ArchUnit and `ApplicationModules.verify()` fail the build if a module reaches into another module's internals, if a layer is skipped, or if a class is named or placed outside convention — the boundaries in [`docs/SA-docs/02-component-diagram.md`](docs/SA-docs/02-component-diagram.md) are guarantees, not diagrams someone forgot to update.
+- **Role-based access is centralized and exhaustively tested.** Five roles (System Administrator, Registrar, Librarian, Course Administrator, Student), one authorization gateway, and a full RBAC matrix test that pins what every role can and cannot reach.
+- **Referential integrity is automatic, not procedural.** Deleting a student cascades — books are unassigned, enrollments end, the account is removed — as one guaranteed outcome of a domain event, not a checklist a person has to remember.
+- **Every pull request runs the whole suite for real**, not against a mock: architecture rules, module-boundary verification, and full integration tests against a live MySQL 8 service container, plus a JaCoCo coverage report — see [Continuous Integration](#continuous-integration) below.
+
+## Performance
+
+Most portfolio projects assert performance; this one measures it and writes down what it finds — including when the finding is inconvenient.
+
+[`docs/benchmark-strategy/`](docs/benchmark-strategy/) documents a hazard-driven benchmarking practice: **eight specific, expensive code paths were identified by reading the shipped implementation** — not guessed — each cited by file and line (e.g. a leading-wildcard search that scans its table twice per request, an N+1 course lookup while listing enrollments, deep `OFFSET` pagination). Each hazard was then given a load-testing scenario and measured with **k6** against the real API and a real MySQL 8 database, at three generated dataset sizes:
+
+| Scale | Students | Courses | Books | Enrollments |
+| --- | --- | --- | --- | --- |
+| S1 — smoke | 50 | 20 | 100 | ~150 |
+| S2 — Institution (the scale the targets are written for) | 5,000 | 300 | 8,000 | 30,000 |
+| S3 — stress probe | 50,000 | 1,000 | 80,000 | ~400,000 |
+
+The first baseline runs (2026-08-26, recorded in [`docs/benchmark-strategy/result/`](docs/benchmark-strategy/result/)) came back with **0% errors and 100% of response-correctness checks passing** — tens of thousands of assertions across every scenario, at every scale. Latency is where it gets honest: on the shared 4-core laptop the runs were taken on, every scenario missed its proposed response-time target, including simple by-key lookups that should be flat — and the record says so plainly, rather than reporting only the numbers that looked good. The leading cause, documented rather than hidden, is a confound between genuine per-row query cost and 20 simulated users queuing against a connection pool left at its framework default of 10; isolating the two is a named follow-up ([`BM-XC-003`](docs/benchmark-strategy/03-benchmark-scenarios.md)), not a swept-under-the-rug gap.
+
+What the data *does* already show cleanly is the shape of the curve, which is exactly what this exercise was designed to find: search/list endpoints grow sharply between the 5,000-row and 50,000-row datasets — e.g. for student search, the response time faster than 95% of all requests goes from 263 ms at the 5,000-student scale to 1.65 s at the 50,000-student scale — consistent with the full-table-scan hazard the code review flagged before a single request was fired against it. That match — predicted from reading the code, then confirmed under load — is the actual point of the exercise, more than any individual millisecond figure.
 
 ## Getting Started
 
