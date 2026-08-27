@@ -12,13 +12,16 @@
 // earlier 3-repetition/median design). Pass --reps=N to render a median across N runs if you've
 // deliberately re-run a scenario more than once (e.g. to double-check a suspicious number).
 //
+// The metric-extraction/median/verdict logic lives in bench/lib/reportStats.js (PM-036) so
+// bench/scale-sweep.js and bench/xc003-report.js can reuse it without re-deriving the same
+// hard-won k6 export parsing.
+//
 // Usage: node report.js --scale=S2 [--reps=1]
 
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SCENARIOS, SCENARIO_FILES, officialId } from './lib/scenarios.js';
-import { SLO_CLASSES, MAX_ERROR_RATE } from './lib/slo.js';
+import { latestExports, median, extractStats, verdict, fmtMs } from './lib/reportStats.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.join(__dirname, 'out');
@@ -33,73 +36,12 @@ function parseArgs(argv) {
   return args;
 }
 
-// Summary-export files are named `<scenarioFile>-<scale>-<timestamp>.json` (see the `bench`
-// Makefile target) -- lexicographic sort on that timestamp suffix is also chronological.
-function latestExports(scenarioFile, scale, reps) {
-  const prefix = `${scenarioFile}-${scale}-`;
-  if (!fs.existsSync(OUT_DIR)) return [];
-  return fs
-    .readdirSync(OUT_DIR)
-    .filter((f) => f.startsWith(prefix) && f.endsWith('.json'))
-    .sort()
-    .reverse()
-    .slice(0, reps)
-    .map((f) => JSON.parse(fs.readFileSync(path.join(OUT_DIR, f), 'utf8')));
-}
-
-function median(numbers) {
-  const clean = numbers.filter((n) => n !== null && n !== undefined);
-  if (clean.length === 0) return null;
-  const sorted = [...clean].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-}
-
-// k6's --summary-export JSON keys every metric (including tag-filtered submetrics) directly under
-// `metrics` -- each entry's stats are flat fields on the metric object itself, not nested under a
-// `.values` key (confirmed against a real export while validating PM-033; the k6 docs' example
-// layout is easy to misread as nested). --summary-trend-stats (set by the `bench` Makefile target)
-// guarantees med/p(95)/p(99) are present on trend metrics like http_req_duration regardless of
-// whether a threshold happens to reference that percentile.
-//
-// http_req_failed is a Rate metric: `value` IS the error rate (0..1) -- `passes`/`fails` are
-// generic true/false sample counts for the underlying boolean (true = request counted as failed),
-// not literal "test passed/failed". http_reqs is a Counter: `count` and `rate` (already per-second,
-// computed by k6 from the run's actual elapsed time) are both present once something references
-// the tag-filtered submetric, which bench/lib/runner.js does via a permissive threshold.
-function extractStats(summaryJson, bmId) {
-  const duration = summaryJson.metrics?.[`http_req_duration{scenario:${bmId}}`];
-  const reqs = summaryJson.metrics?.[`http_reqs{scenario:${bmId}}`];
-  const failed = summaryJson.metrics?.[`http_req_failed{scenario:${bmId}}`];
-  if (!duration) return null;
-
-  return {
-    p50: duration['med'],
-    p95: duration['p(95)'],
-    p99: duration['p(99)'],
-    reqPerSec: reqs ? reqs['rate'] : null,
-    errRate: failed ? failed['value'] : 0,
-  };
-}
-
-function verdict(stats, sloClass) {
-  if (!stats || stats.p95 === undefined || stats.p95 === null) return 'NO DATA';
-  if (stats.errRate > MAX_ERROR_RATE) return 'BREACH (errors)';
-  const slo = SLO_CLASSES[sloClass];
-  if (stats.p95 > slo.p95 || (stats.p99 !== null && stats.p99 > slo.p99)) return 'BREACH';
-  return 'PASS';
-}
-
-function fmtMs(n) {
-  return n === null || n === undefined ? '--' : `${n.toFixed(0)} ms`;
-}
-
 function main() {
   const { scale, reps } = parseArgs(process.argv.slice(2));
   const rows = [];
 
   for (const [scenarioFile, bmIds] of Object.entries(SCENARIO_FILES)) {
-    const exports = latestExports(scenarioFile, scale, reps);
+    const exports = latestExports(OUT_DIR, scenarioFile, scale, reps);
     if (exports.length === 0) {
       console.warn(`No exports found for ${scenarioFile} at ${scale} in ${OUT_DIR} -- skipping.`);
       continue;
@@ -138,14 +80,18 @@ function main() {
   console.log(`| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |`);
   for (const row of rows) {
     const id = officialId(row.bmId);
+    // SCENARIOS[bmId].vus is the VU count 03-benchmark-scenarios.md specifies for that id -- Sprint
+    // 8 added entries with counts other than the PM-033 read-path default of 20 (BM-STU-006's 5,
+    // BM-IDN-001's 1/10/25/50/100 ramp, ...), so this can no longer be a hardcoded literal.
+    const vus = SCENARIOS[row.bmId].vus ?? 20;
     if (!row.stats) {
-      console.log(`| ${id} | 20 | -- | -- | -- | -- | -- | ${row.sloClass} | **${row.verdict}** | 0 |`);
+      console.log(`| ${id} | ${vus} | -- | -- | -- | -- | -- | ${row.sloClass} | **${row.verdict}** | 0 |`);
       continue;
     }
     const errPct = (row.stats.errRate * 100).toFixed(2);
     const verdictStr = row.verdict === 'PASS' ? row.verdict : `**${row.verdict}**`;
     console.log(
-      `| ${id} | 20 | ${fmtMs(row.stats.p50)} | ${fmtMs(row.stats.p95)} | ${fmtMs(row.stats.p99)} | ` +
+      `| ${id} | ${vus} | ${fmtMs(row.stats.p50)} | ${fmtMs(row.stats.p95)} | ${fmtMs(row.stats.p99)} | ` +
         `${row.stats.reqPerSec !== null ? row.stats.reqPerSec.toFixed(1) : '--'} | ${errPct} | ` +
         `${row.sloClass} | ${verdictStr} | ${row.reps} |`,
     );

@@ -27,15 +27,22 @@ export const MAX_ERROR_RATE = 0.001;
  *   sloThresholds('student_search', 'READ_LIST')
  * A scenario file merges these into its own `options.thresholds` (see mergeThresholds below)
  * rather than hardcoding percentile targets inline.
+ *
+ * `dimension` defaults to 'scenario' (k6's auto-tag from an `options.scenarios` key, what every
+ * PM-033 file keys its thresholds on via buildOptions()). mixed-soak.js (Sprint 8) needs 'name'
+ * instead: it reuses other files' exec functions inside its own role-partitioned executors, so
+ * every request there is auto-tagged `scenario:<executor>` (e.g. `registrar_mix`), not
+ * `scenario:BM_STU_002` -- only the reused function's own `tags: { name: 'BM_STU_002' }` still
+ * identifies which endpoint shape a request belongs to.
  */
-export function sloThresholds(tag, className) {
+export function sloThresholds(tag, className, dimension = 'scenario') {
   const slo = SLO_CLASSES[className];
   if (!slo) {
     throw new Error(`Unknown SLO class: ${className}. Valid classes: ${Object.keys(SLO_CLASSES)}`);
   }
   return {
-    [`http_req_duration{scenario:${tag}}`]: [`p(95)<${slo.p95}`, `p(99)<${slo.p99}`],
-    [`http_req_failed{scenario:${tag}}`]: [`rate<${MAX_ERROR_RATE}`],
+    [`http_req_duration{${dimension}:${tag}}`]: [`p(95)<${slo.p95}`, `p(99)<${slo.p99}`],
+    [`http_req_failed{${dimension}:${tag}}`]: [`rate<${MAX_ERROR_RATE}`],
   };
 }
 
