@@ -3,25 +3,30 @@
 // --summary-export JSON per BM-* id, against the SLO classes in bench/lib/scenarios.js, into the
 // Results table shape from 05-baseline-and-reporting.md §3.
 //
-// Deliberately stops at rendering: it does NOT compare against a prior baseline or apply the
-// regression bands (-10%/+20%/+50%) from 05 §2 -- that comparison logic is PM-039 (Sprint 8).
-// This only computes a PASS/BREACH verdict against the SLO class target, which is all PM-034's
-// first baselines need (there is nothing yet to regress against).
-//
 // Default reps=1, matching the current protocol (02-benchmark-plan.md §2.2 -- cut down from an
 // earlier 3-repetition/median design). Pass --reps=N to render a median across N runs if you've
 // deliberately re-run a scenario more than once (e.g. to double-check a suspicious number).
+//
+// --baseline=<path> (PM-039, Sprint 8) compares against a prior *committed* run-record file under
+// docs/benchmark-strategy/result/ -- not raw bench/out/ exports, which are gitignored and not
+// guaranteed to survive to the next run (result/README.md); the committed run-record file is what
+// 05-baseline-and-reporting.md §1 defines as "the baseline." The trailing column renders the
+// per-scenario Δp95-vs-baseline regression verdict from 05 §2's band table (parsing/verdict logic
+// in bench/lib/baseline.js). Without --baseline, the trailing column falls back to the scenario's
+// hazard id (bench/lib/scenarios.js) -- the shape every accepted Sprint 7 baseline file already
+// uses for a first run, which has nothing yet to regress against.
 //
 // The metric-extraction/median/verdict logic lives in bench/lib/reportStats.js (PM-036) so
 // bench/scale-sweep.js and bench/xc003-report.js can reuse it without re-deriving the same
 // hard-won k6 export parsing.
 //
-// Usage: node report.js --scale=S2 [--reps=1]
+// Usage: node report.js --scale=S2 [--reps=1] [--baseline=docs/benchmark-strategy/result/<file>.md]
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SCENARIOS, SCENARIO_FILES, officialId } from './lib/scenarios.js';
 import { latestExports, median, extractStats, verdict, fmtMs } from './lib/reportStats.js';
+import { loadBaseline, loadBaselineScale, regressionVerdict } from './lib/baseline.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.join(__dirname, 'out');
@@ -31,14 +36,28 @@ function parseArgs(argv) {
   for (const arg of argv) {
     if (arg.startsWith('--scale=')) args.scale = arg.slice('--scale='.length);
     else if (arg.startsWith('--reps=')) args.reps = Number(arg.slice('--reps='.length));
+    else if (arg.startsWith('--baseline=')) args.baseline = arg.slice('--baseline='.length);
   }
   if (!args.scale) throw new Error('Missing --scale=S1|S2|S3');
   return args;
 }
 
 function main() {
-  const { scale, reps } = parseArgs(process.argv.slice(2));
+  const { scale, reps, baseline: baselinePath } = parseArgs(process.argv.slice(2));
   const rows = [];
+
+  let baseline = null;
+  if (baselinePath) {
+    const baselineScale = loadBaselineScale(baselinePath);
+    if (baselineScale && baselineScale !== scale) {
+      console.warn(
+        `--baseline=${baselinePath} was recorded at ${baselineScale}, not ${scale} -- ` +
+          '05-baseline-and-reporting.md §1: results at different scales are never comparable. ' +
+          'Every Δ below is meaningless; pass a baseline file recorded at the same scale.',
+      );
+    }
+    baseline = loadBaseline(baselinePath);
+  }
 
   for (const [scenarioFile, bmIds] of Object.entries(SCENARIO_FILES)) {
     const exports = latestExports(OUT_DIR, scenarioFile, scale, reps);
@@ -76,7 +95,8 @@ function main() {
     }
   }
 
-  console.log(`\n| BM ID | VUs | p50 | p95 | p99 | req/s | err % | SLO class | SLO | reps |`);
+  const lastColumnHeader = baseline ? 'Δ p95 vs. baseline' : 'Hazard';
+  console.log(`\n| BM ID | VUs | p50 | p95 | p99 | req/s | err % | SLO class | SLO | ${lastColumnHeader} |`);
   console.log(`| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |`);
   for (const row of rows) {
     const id = officialId(row.bmId);
@@ -84,8 +104,9 @@ function main() {
     // 8 added entries with counts other than the PM-033 read-path default of 20 (BM-STU-006's 5,
     // BM-IDN-001's 1/10/25/50/100 ramp, ...), so this can no longer be a hardcoded literal.
     const vus = SCENARIOS[row.bmId].vus ?? 20;
+    const lastCell = baseline ? deltaCell(baseline[row.bmId], row.stats) : SCENARIOS[row.bmId].hazard;
     if (!row.stats) {
-      console.log(`| ${id} | ${vus} | -- | -- | -- | -- | -- | ${row.sloClass} | **${row.verdict}** | 0 |`);
+      console.log(`| ${id} | ${vus} | -- | -- | -- | -- | -- | ${row.sloClass} | **${row.verdict}** | ${lastCell} |`);
       continue;
     }
     const errPct = (row.stats.errRate * 100).toFixed(2);
@@ -93,14 +114,29 @@ function main() {
     console.log(
       `| ${id} | ${vus} | ${fmtMs(row.stats.p50)} | ${fmtMs(row.stats.p95)} | ${fmtMs(row.stats.p99)} | ` +
         `${row.stats.reqPerSec !== null ? row.stats.reqPerSec.toFixed(1) : '--'} | ${errPct} | ` +
-        `${row.sloClass} | ${verdictStr} | ${row.reps} |`,
+        `${row.sloClass} | ${verdictStr} | ${lastCell} |`,
     );
   }
   console.log(
     `\n(Paste into docs/benchmark-strategy/result/YYYY-MM-DD-${scale}-<short-sha>.md's Results ` +
-      'table per 05-baseline-and-reporting.md §3. No Δ-vs-baseline column: PM-039 [Sprint 8] adds ' +
-      'the regression comparison. Saturation/Findings/Actions still need filling in by hand.)',
+      'table per 05-baseline-and-reporting.md §3. SLO verdict and regression verdict are carried ' +
+      'separately per 05 §2.1 -- neither substitutes for the other. Saturation/Findings/Actions ' +
+      'still need filling in by hand.)',
   );
+}
+
+// Renders the SLO-verdict-independent regression verdict for one scenario's Δp95 vs. baseline
+// (05-baseline-and-reporting.md §2). '--' when there's no baseline entry for this id (e.g. a
+// Sprint 8 id absent from a Sprint 7 baseline file) or no observed data to compare.
+function deltaCell(baselineStats, observedStats) {
+  if (!baselineStats || baselineStats.p95 == null || !observedStats || observedStats.p95 == null) {
+    return '--';
+  }
+  const deltaPct = ((observedStats.p95 - baselineStats.p95) / baselineStats.p95) * 100;
+  const verdict = regressionVerdict(deltaPct, observedStats.errRate);
+  const sign = deltaPct >= 0 ? '+' : '';
+  const text = `${sign}${deltaPct.toFixed(0)}%`;
+  return verdict === 'No change' || verdict === 'Improvement' ? text : `**${text} (${verdict})**`;
 }
 
 main();

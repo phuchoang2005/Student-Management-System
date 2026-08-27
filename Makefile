@@ -7,7 +7,7 @@ MYSQL_DATABASE ?= management
 CONTAINER := management-mysql
 
 .PHONY: help env up down restart logs ps mysql clean reset docs docs-watch docs-clean \
-	bench-node-modules bench-seed bench bench-all bench-report bench-jmh \
+	bench-node-modules bench-seed bench bench-all bench-report bench-jmh bench-ci-smoke \
 	bench-auth-ramp bench-cascade-delete bench-xc-003 bench-scale-sweep bench-mixed-soak
 
 help:
@@ -25,8 +25,9 @@ help:
 	@echo "make bench-seed SCALE=S1|S2|S3 [SEED=..] - reseed the dataset at that scale, write bench/out/<scale>-manifest.json, reset MySQL diagnostics"
 	@echo "make bench SCENARIO=<name> SCALE=S1|S2|S3 - run one k6 scenario (bench/scenarios/<name>.js), raw output to bench/out/"
 	@echo "make bench-all SCALE=S1|S2|S3 [BM_ONLY=..] - run every PM-033 scenario file in sequence"
-	@echo "make bench-report SCALE=S1|S2|S3 [REPS=3] - render the median of the last REPS runs into the run-record Results table"
-	@echo "make bench-jmh - JMH suite (not wired up yet, see PM-037)"
+	@echo "make bench-report SCALE=S1|S2|S3 [REPS=3] [BASELINE=docs/benchmark-strategy/result/<file>.md] - render the median of the last REPS runs into the run-record Results table, with a Δp95-vs-baseline regression verdict per scenario if BASELINE is given"
+	@echo "make bench-jmh [JMH_REGEX=..] - run the JMH microbenchmark suite (BM-JMH-001..004), result to management/target/jmh-result.json"
+	@echo "make bench-ci-smoke SCALE=S1 - BM-STU-002+BM-ENR-002 with loose thresholds; what .github/workflows/benchmark-smoke.yml runs"
 	@echo "make bench-auth-ramp SCALE=S1|S2|S3 - BM-IDN-001's login ramp, isolated (BM_ONLY-pinned) per its 'runs alone' requirement"
 	@echo "make bench-cascade-delete SCALE=S2|S3 - BM-XC-001 bulk-delete burst + event_publication drain wait; destructive, restore after"
 	@echo "make bench-xc-003 SCALE=S1|S2|S3 - BM-XC-003 pool-saturation sweep (BM-ENR-002 at VUS=5,10,20,40)"
@@ -100,6 +101,8 @@ COOLDOWN_DURATION ?= 5s
 REPS ?= 1
 BM_ONLY ?=
 SOAK_DURATION ?= 30m
+BASELINE ?=
+JMH_REGEX ?=
 # Read-only PM-033 files only, deliberately -- PM-035/036's writes.js, enrollment-batch.js,
 # auth-login.js, cascade-delete.js and mixed-soak.js all mutate or destroy data, or (auth-login's
 # ramp) must run in isolation, so a blind "run everything" loop is wrong for any of them. Each has
@@ -140,13 +143,35 @@ bench-all:
 	done
 
 bench-report:
-	@test -n "$(SCALE)" || (echo "Usage: make bench-report SCALE=S1|S2|S3 [REPS=3]"; exit 1)
-	node bench/report.js --scale=$(SCALE) --reps=$(REPS)
+	@test -n "$(SCALE)" || (echo "Usage: make bench-report SCALE=S1|S2|S3 [REPS=3] [BASELINE=docs/benchmark-strategy/result/<file>.md]"; exit 1)
+	node bench/report.js --scale=$(SCALE) --reps=$(REPS) $(if $(BASELINE),--baseline=$(BASELINE))
 
+# PM-038: exactly what .github/workflows/benchmark-smoke.yml runs, for local dry-run parity.
+# ci-smoke.js carries its own hardcoded 15s-warmup/30s-steady durations and loose thresholds, so
+# unlike `bench`, VUS/DURATION/BM_ONLY are irrelevant here -- only SCALE and BASE_URL matter.
+bench-ci-smoke: bench-node-modules
+	@mkdir -p bench/out
+	k6 run \
+		--env BASE_URL=$(BENCH_BASE_URL) \
+		--env SCALE=$(SCALE) \
+		--summary-export=bench/out/ci-smoke-$(SCALE)-$(shell date +%Y%m%dT%H%M%S).json \
+		bench/scenarios/ci-smoke.js
+
+# PM-037: the four BM-JMH-* classes under management/src/test/java/.../benchmark/ (plus
+# AesPasswordCipherBenchmark, which has to live in identity/internal -- see that class's own
+# comment) run via JMH's own CLI entry point rather than a jmh-maven-plugin/exec-maven-plugin
+# addition. dependency:build-classpath resolves via Maven's default plugin-prefix mapping, so no
+# new plugin declaration is needed. JMH_REGEX filters by class/method name (e.g.
+# JMH_REGEX=BcryptBenchmark); empty runs every discovered @Benchmark. A JMH result may never
+# justify a code change on its own (01-benchmark-strategy.md §5.1) -- it can only support a change
+# whose effect is also visible in a k6 BM-* scenario.
 bench-jmh:
-	@echo "bench-jmh: no JMH suite exists yet -- jmh-core/jmh-generator-annprocess and the"
-	@echo "annotationProcessorPaths entry are PM-037 (Sprint 8). Nothing to run."
-	@exit 1
+	cd management && ./mvnw --batch-mode --no-transfer-progress test-compile
+	cd management && ./mvnw --batch-mode --no-transfer-progress dependency:build-classpath \
+		-Dmdep.outputFile=target/jmh-classpath.txt -DincludeScope=test
+	cd management && java -cp "target/classes:target/test-classes:$$(cat target/jmh-classpath.txt)" \
+		org.openjdk.jmh.Main -rf json -rff target/jmh-result.json $(JMH_REGEX)
+	@echo "Result: management/target/jmh-result.json."
 
 # --- Sprint 8 (PM-035/036) targets --------------------------------------------------------------
 
