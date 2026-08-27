@@ -43,7 +43,7 @@ import { Marked } from 'marked';
 import { renderPage } from './docs-template.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DOCS_ROOT = path.join(REPO_ROOT, 'docs');
+const DOCS_ROOT = path.join(REPO_ROOT, 'docs-v00');
 
 // ---------------------------------------------------------------------------------------------
 // Small helpers
@@ -405,7 +405,7 @@ function main(argv) {
       [
         'Usage: node util/md-to-html.js [options] [files...]',
         '',
-        '  (no args)   compile every Markdown file under docs/',
+        '  (no args)   compile every Markdown file under docs-v00/',
         '  files...    compile only those files',
         '  --watch     compile, then recompile on change',
         '  --clean     delete generated HTML and exit',
@@ -424,7 +424,7 @@ function main(argv) {
   compileAll(files);
 
   if (flags.has('--watch')) {
-    console.log('md-to-html: watching docs/ (Ctrl-C to stop)');
+    console.log('md-to-html: watching docs-v00/ (Ctrl-C to stop)');
     let pending = null;
     fs.watch(DOCS_ROOT, { recursive: true }, (_event, filename) => {
       // Editors save in bursts (write, rename, chmod); one debounced rebuild covers the burst.

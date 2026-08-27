@@ -55,7 +55,7 @@ Under the hood, this is a Java/Spring Boot REST API, with a Next.js demo UI over
 
 - `management/` — the API. Spring Boot 4 / Spring Modulith, MySQL 8, Flyway.
 - `management-frontend/` — the demo UI. Next.js 16, TypeScript, Chakra UI v3.
-- `docs/` — Markdown sources for the BA, PM, SA, Testing, and UI-UX document sets. The HTML is generated (`make docs`), not committed.
+- `docs/` — Markdown sources for the BA, PM, SA, Testing, and UI-UX document sets. The HTML is generated (`make -C docs-v00 docs`), not committed.
 - `util/` — build tooling; currently the docs Markdown → HTML compiler.
 
 For architecture details, module boundaries, database design, and the technical roadmap, see the documentation: [Document](docs/).
@@ -83,9 +83,13 @@ Most portfolio projects assert performance; this one measures it and writes down
 | S2 — Institution (the scale the targets are written for) | 5,000 | 300 | 8,000 | 30,000 |
 | S3 — stress probe | 50,000 | 1,000 | 80,000 | ~400,000 |
 
-The first baseline runs (2026-08-26, recorded in [`docs/benchmark-strategy/result/`](docs/benchmark-strategy/result/)) came back with **0% errors and 100% of response-correctness checks passing** — tens of thousands of assertions across every scenario, at every scale. Latency is where it gets honest: on the shared 4-core laptop the runs were taken on, every scenario missed its proposed response-time target, including simple by-key lookups that should be flat — and the record says so plainly, rather than reporting only the numbers that looked good. The leading cause, documented rather than hidden, is a confound between genuine per-row query cost and 20 simulated users queuing against a connection pool left at its framework default of 10; isolating the two is a named follow-up ([`BM-XC-003`](docs/benchmark-strategy/03-benchmark-scenarios.md)), not a swept-under-the-rug gap.
+The first baseline runs (2026-08-26, recorded in [`docs/benchmark-strategy/result/`](docs/benchmark-strategy/result/)) came back with **0% errors and 100% of response-correctness checks passing** — tens of thousands of assertions across every scenario, at every scale. Latency is where it gets honest: on the shared 4-core laptop the runs were taken on, every scenario missed its proposed response-time target, including simple by-key lookups that should be flat — and the record says so plainly, rather than reporting only the numbers that looked good. The leading cause, documented rather than hidden, was a confound between genuine per-row query cost and 20 simulated users queuing against a connection pool left at its framework default of 10.
 
 What the data *does* already show cleanly is the shape of the curve, which is exactly what this exercise was designed to find: search/list endpoints grow sharply between the 5,000-row and 50,000-row datasets — e.g. for student search, the response time faster than 95% of all requests goes from 263 ms at the 5,000-student scale to 1.65 s at the 50,000-student scale — consistent with the full-table-scan hazard the code review flagged before a single request was fired against it. That match — predicted from reading the code, then confirmed under load — is the actual point of the exercise, more than any individual millisecond figure.
+
+A second pass (2026-08-27, same result folder) finished the job: write, login, batch, cascade-delete, and a 30-minute mixed-role soak, closing out every remaining hazard. `BM-XC-003` — a connection-pool sweep held back specifically to answer the confound above — resolved it cleanly: throughput plateaus at ~34 req/s starting at exactly 10 concurrent users (the pool size), while latency keeps climbing past that point. The 2026-08-26 numbers were real query cost *plus* pool queueing, and the two are now separable. The same pass put a number on the hazards nobody had measured yet: BCrypt at the framework's own strength-10 default costs **≈91 ms per hash** (JMH curve, doubling per strength level as the algorithm predicts), which is the floor under every login and registration number recorded; a 200-course batch enrollment costs **~2.95 s p95** against ~660 ms for 10 courses, pricing the documented trade-off in `api-specification.md` rather than arguing with it; and a 200-student bulk delete leaves **the majority of its async cascade-cleanup events permanently unresolved** in Spring Modulith's own event-publication log, even though the data itself stays consistent (the foreign keys enforce it synchronously, independent of the async listener) — a real finding about the audit trail, not about data integrity, and exactly the failure mode the hazard register predicted before a single delete was fired.
+
+Two of those runs also found bugs in the *benchmark harness itself* — a seed-data column that silently broke every write scenario, and a signal-handling bug that silently dropped a companion script's output — both root-caused from a stack trace or a direct reproduction, fixed in the same sitting, and written up next to the numbers they affected rather than quietly patched away. That's the same standard the rest of this project holds itself to, applied to the measurement tooling too.
 
 ## Getting Started
 
@@ -99,12 +103,12 @@ What the data *does* already show cleanly is the shape of the curve, which is ex
 ### 1. Start the database
 
 ```sh
-make up
+make -C management up
 ```
 
-This creates `.env` from `.env.example` if missing (see `.env.example` for the MySQL credentials/port and the `INITIAL_PASSWORD_KEY` used to encrypt students' initial passwords), starts Colima if needed, then brings up the `management-mysql` container defined in `docker-compose.yml`.
+This creates `.env` from `.env.example` if missing (see `.env.example` for the MySQL credentials/port and the `INITIAL_PASSWORD_KEY` used to encrypt students' initial passwords), starts Colima if needed, then brings up the `management-mysql` container defined in `docker-compose.yml`. The database targets live in `management/Makefile` — run them from the repo root with `-C management`, or `cd management` first.
 
-Other useful targets: `make down` (stop), `make logs` (tail MySQL logs), `make mysql` (open a MySQL shell), `make reset` (wipe the data volume and start fresh). Run `make help` to list them all.
+Other useful targets: `make -C management down` (stop), `make -C management logs` (tail MySQL logs), `make -C management mysql` (open a MySQL shell), `make -C management reset` (wipe the data volume and start fresh). Run `make -C management help` to list them all.
 
 ### 2. Run the app
 
@@ -135,7 +139,7 @@ cd management
 ./mvnw verify     # same, plus packaging and the JaCoCo coverage report
 ```
 
-The integration tests (`*IntegrationTest`) spin up their own throwaway MySQL container per class via Testcontainers — they don't need `make up` to be running, just a working Docker daemon.
+The integration tests (`*IntegrationTest`) spin up their own throwaway MySQL container per class via Testcontainers — they don't need `make -C management up` to be running, just a working Docker daemon.
 
 > **Colima users:** if a test run fails immediately with `Container startup failed for image testcontainers/ryuk:0.14.0` / `error while creating mount source path '.../docker.sock'`, Testcontainers is trying to bind-mount the host-side socket path into the Ryuk cleanup sidecar, which Colima's VM cannot do. Point it at the socket's path *inside* the VM instead:
 > ```sh
@@ -173,9 +177,9 @@ To run the same check locally, see [Getting Started](#getting-started) above.
 The Markdown under [`docs/`](docs/) is the source. To read it as a linked HTML site — with the mermaid and PlantUML diagrams rendered and click-to-zoom — generate it:
 
 ```sh
-make docs         # compile docs/**/*.md → .html
-make docs-watch   # ...and rebuild on every save
-make docs-clean   # remove the generated HTML
+make -C docs-v00 docs         # compile docs/**/*.md → .html
+make -C docs-v00 docs-watch   # ...and rebuild on every save
+make -C docs-v00 docs-clean   # remove the generated HTML
 ```
 
-The generated HTML is gitignored; edit the Markdown and regenerate. The compiler is [`util/md-to-html.js`](util/md-to-html.js).
+The generated HTML is gitignored; edit the Markdown and regenerate. The compiler is [`util/md-to-html.js`](util/md-to-html.js), and the docs targets live in [`docs-v00/Makefile`](docs-v00/Makefile).

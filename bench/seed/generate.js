@@ -234,7 +234,12 @@ async function main() {
       connection,
       'courses',
       ['id', 'course_code', 'name', 'description', 'credits', 'version'],
-      courses.map((c) => [c.id, c.code, c.name, null, c.credits, 0]),
+      // version=1, not 0: StudentRow.java's @Version comment explains why -- Spring Data JDBC's
+      // default IsNewStrategy for a primitive `long version` treats 0 as "never persisted," which
+      // makes the app's first UPDATE/DELETE against a bulk-seeded row issue an INSERT instead and
+      // collide on the row's own PK (discovered running BM-CRS-004/BM-STU-007/BM-BK-005 for the
+      // first time). 1 matches what the app itself sets after a real first insert.
+      courses.map((c) => [c.id, c.code, c.name, null, c.credits, 1]),
       BATCH_SIZE.courses,
     );
     console.log(`  courses: ${courses.length} inserted`);
@@ -246,7 +251,8 @@ async function main() {
       connection,
       'students',
       ['id', 'student_code', 'first_name', 'last_name', 'email', 'date_of_birth', 'version'],
-      students.map((s) => [s.id, s.studentCode, s.firstName, s.lastName, s.email, s.dob, 0]),
+      // version=1 -- see the comment on the courses insert above.
+      students.map((s) => [s.id, s.studentCode, s.firstName, s.lastName, s.email, s.dob, 1]),
       BATCH_SIZE.students,
     );
     console.log(`  students: ${students.length} inserted`);
@@ -258,7 +264,8 @@ async function main() {
       connection,
       'books',
       ['isbn', 'title', 'author', 'published_date', 'owner_id', 'version'],
-      books.map((b) => [b.isbn, b.title, b.author, b.publishedDate, b.ownerId, 0]),
+      // version=1 -- see the comment on the courses insert above.
+      books.map((b) => [b.isbn, b.title, b.author, b.publishedDate, b.ownerId, 1]),
       BATCH_SIZE.books,
     );
     console.log(`  books: ${books.length} inserted`);
@@ -283,7 +290,9 @@ async function main() {
 
     const cohort = selectCohort(students, countByStudent, scale.cohortSize);
     const userRows = [
-      ...cohort.map((s) => [s.email, passwordHash, null, 'STUDENT', s.id, false, true, 0]),
+      // version=1 -- see the comment on the courses insert above (identity's UserRow uses the same
+      // primitive `long version` convention).
+      ...cohort.map((s) => [s.email, passwordHash, null, 'STUDENT', s.id, false, true, 1]),
       ...Object.entries(STAFF_USERNAMES).map(([role, username]) => [
         username,
         passwordHash,
@@ -292,7 +301,7 @@ async function main() {
         null,
         false,
         true,
-        0,
+        1,
       ]),
     ];
     await insertBatched(

@@ -78,9 +78,11 @@ jobs:
           exit 1
 
       - name: Seed S1
+        working-directory: bench
         run: make bench-seed SCALE=S1
 
       - name: Run the smoke scenario
+        working-directory: bench
         run: make bench-ci-smoke SCALE=S1
 
       - name: Upload k6 output

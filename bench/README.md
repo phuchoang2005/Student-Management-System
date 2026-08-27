@@ -57,7 +57,7 @@ built-ins (plus `mysql2` for `cascade-drain.js`, via `seed/db.js`), no new depen
 
 - [k6](https://k6.io/) installed (`brew install k6`).
 - Node.js 18+ (for the dataset generator only).
-- A MySQL instance with the schema fully Flyway-migrated (`make up` + `./mvnw spring-boot:run`
+- A MySQL instance with the schema fully Flyway-migrated (`make -C management up` + `./mvnw spring-boot:run`
   once, or any equivalent — the generator never runs DDL and never adds a benchmark-only
   migration).
 - The API running with `-Dspring-boot.run.profiles=benchmark` (see
@@ -146,22 +146,22 @@ Configure a run with env vars, e.g.:
 
 ```sh
 k6 run --env BASE_URL=http://localhost:8080 --env SCALE=S2 bench/scenarios/student-search.js
-# normally: make bench SCENARIO=student-search SCALE=S2
+# normally: make -C bench bench SCENARIO=student-search SCALE=S2
 ```
 
 ## Sprint 8 (PM-035/036): write, auth, and cross-cutting scenarios
 
-Beyond `make bench SCENARIO=<name>` (works for `writes`, `enrollment-batch`, and, for a quick dev
-smoke test, `auth-login` too), five scenarios need their own Makefile targets because they mutate
-data, must run isolated, or need a companion process k6 itself can't be:
+Beyond `make -C bench bench SCENARIO=<name>` (works for `writes`, `enrollment-batch`, and, for a
+quick dev smoke test, `auth-login` too), five scenarios need their own Makefile targets because
+they mutate data, must run isolated, or need a companion process k6 itself can't be:
 
-| Target | Covers | Why it's not a plain `make bench` |
+| Target | Covers | Why it's not a plain `make -C bench bench` |
 | --- | --- | --- |
-| `make bench-auth-ramp SCALE=..` | BM-IDN-001 | Must run alone — pins `BM_ONLY` to just the 5 ramp stages |
-| `make bench-cascade-delete SCALE=..` | BM-XC-001 | Destructive; waits for `seed/cascade-drain.js` to confirm the async cascade drained before returning |
-| `make bench-xc-003 SCALE=..` | BM-XC-003 | Loops `enrollment-list.js`'s `BM_ENR_002` at VUS=5,10,20,40 — 4 runs, not 1 |
-| `make bench-scale-sweep` | BM-XC-004 | No k6 run at all — classifies existing `bench/out/` exports |
-| `make bench-mixed-soak SCALE=.. [SOAK_DURATION=30m]` | BM-XC-002 + BM-IDN-004 | Backgrounds `monitor-soak.js` around the k6 run for the H7 heap-bytes-per-session sample |
+| `make -C bench bench-auth-ramp SCALE=..` | BM-IDN-001 | Must run alone — pins `BM_ONLY` to just the 5 ramp stages |
+| `make -C bench bench-cascade-delete SCALE=..` | BM-XC-001 | Destructive; waits for `seed/cascade-drain.js` to confirm the async cascade drained before returning |
+| `make -C bench bench-xc-003 SCALE=..` | BM-XC-003 | Loops `enrollment-list.js`'s `BM_ENR_002` at VUS=5,10,20,40 — 4 runs, not 1 |
+| `make -C bench bench-scale-sweep` | BM-XC-004 | No k6 run at all — classifies existing `bench/out/` exports |
+| `make -C bench bench-mixed-soak SCALE=.. [SOAK_DURATION=30m]` | BM-XC-002 + BM-IDN-004 | Backgrounds `monitor-soak.js` around the k6 run for the H7 heap-bytes-per-session sample |
 
 None of `writes`, `enrollment-batch`, `auth-login`, `cascade-delete`, or `mixed-soak` are in
 `bench-all`'s `BENCH_SCENARIO_FILES` — that loop stays read-only-only, deliberately.
