@@ -1,0 +1,24 @@
+# Scrape config for the benchmark observability stack (docs-v00/Benchmark/benchmark-strategy/
+# 06-dashboard-building.md). Mounted straight into the prometheus container (docker-compose.yml)
+# at /etc/prometheus/prometheus.yml -- edit this file and `docker compose restart prometheus`.
+global:
+  scrape_interval: 5s # short benchmark runs (15-30s steady state) need finer granularity than the 15s default
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"] # itself, from inside its own container
+
+  # management.server.port=8081 under the `benchmark` Spring profile only -- a separate embedded
+  # connector with no Spring Security filter chain, so this is scrapable with no auth while
+  # :8080/actuator/** stays gated to SYSTEM_ADMINISTRATOR (PM-029, shared/security/SecurityConfig.java).
+  # host.docker.internal because the app runs on the host (./mvnw), not in this compose project.
+  - job_name: "spring-boot-app"
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8081"]
+
+  # Container DNS name -- mysqld-exporter is a sibling service on the same compose network.
+  - job_name: "mysqld-exporter"
+    static_configs:
+      - targets: ["mysqld-exporter:9104"]

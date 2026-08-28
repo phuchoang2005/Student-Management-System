@@ -1,0 +1,16 @@
+# Loads every *.json in this directory as a dashboard, in a "Benchmark" folder. Short poll
+# interval so editing a dashboard file here shows up in Grafana without a service restart.
+apiVersion: 1
+
+providers:
+  - name: benchmark-dashboards
+    orgId: 1
+    folder: Benchmark
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      # Container path -- docker-compose.yml mounts bench/observability/grafana at
+      # /etc/grafana/provisioning, so this directory lands at .../dashboards inside grafana.
+      path: /etc/grafana/provisioning/dashboards

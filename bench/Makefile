@@ -31,6 +31,7 @@ help:
 	@echo "make bench-xc-003 SCALE=S1|S2|S3 - BM-XC-003 pool-saturation sweep (BM-ENR-002 at VUS=5,10,20,40)"
 	@echo "make bench-scale-sweep - BM-XC-004: classify the 6 P0 scenarios' S1->S2->S3 growth from existing out/ exports"
 	@echo "make bench-mixed-soak SCALE=S2 [SOAK_DURATION=30m] - BM-XC-002 mixed-role soak + BM-IDN-004, with monitor-soak.js backgrounded"
+	@echo "(Prometheus/Grafana/mysqld-exporter are behind the 'benchmark' docker-compose profile -- 'make -C management up-bench' starts them all alongside mysql; see bench/observability/README.md)"
 
 SCALE ?= S1
 ifndef SEED
@@ -48,6 +49,15 @@ BM_ONLY ?=
 SOAK_DURATION ?= 30m
 BASELINE ?=
 JMH_REGEX ?=
+# k6 -> Prometheus, additive to --summary-export (docs-v00/Benchmark/benchmark-strategy/
+# 06-dashboard-building.md, HTTP & Load Testing dashboard). PROMETHEUS_RW=0 opts out for anyone
+# without Prometheus running -- see bench/observability/README.md for the receiver-side setup.
+PROMETHEUS_RW ?= 1
+K6_OUT := $(if $(filter 1,$(PROMETHEUS_RW)),--out experimental-prometheus-rw,)
+export K6_PROMETHEUS_RW_SERVER_URL ?= http://localhost:9090/api/v1/write
+# Default trend-stat is p99 only; the HTTP & Load Testing dashboard wants p50/p95/p99 together
+# (06-dashboard-building.md: "clearly exposes tail latency as concurrency increases").
+export K6_PROMETHEUS_RW_TREND_STATS ?= p(50),p(95),p(99)
 # Read-only PM-033 files only, deliberately -- PM-035/036's writes.js, enrollment-batch.js,
 # auth-login.js, cascade-delete.js and mixed-soak.js all mutate or destroy data, or (auth-login's
 # ramp) must run in isolation, so a blind "run everything" loop is wrong for any of them. Each has
@@ -76,6 +86,7 @@ bench: bench-node-modules
 		--env WARMUP_DURATION=$(WARMUP_DURATION) \
 		--env COOLDOWN_DURATION=$(COOLDOWN_DURATION) \
 		--env BM_ONLY=$(BM_ONLY) \
+		$(K6_OUT) \
 		--summary-trend-stats="min,med,avg,p(90),p(95),p(99),max" \
 		--summary-export=out/$(SCENARIO)-$(SCALE)-$(shell date +%Y%m%dT%H%M%S).json \
 		scenarios/$(SCENARIO).js
@@ -99,6 +110,7 @@ bench-ci-smoke: bench-node-modules
 	k6 run \
 		--env BASE_URL=$(BENCH_BASE_URL) \
 		--env SCALE=$(SCALE) \
+		$(K6_OUT) \
 		--summary-export=out/ci-smoke-$(SCALE)-$(shell date +%Y%m%dT%H%M%S).json \
 		scenarios/ci-smoke.js
 
@@ -134,6 +146,7 @@ bench-auth-ramp: bench-node-modules
 		--env WARMUP_DURATION=$(WARMUP_DURATION) \
 		--env COOLDOWN_DURATION=$(COOLDOWN_DURATION) \
 		--env BM_ONLY=BM_IDN_001_VU01,BM_IDN_001_VU10,BM_IDN_001_VU25,BM_IDN_001_VU50,BM_IDN_001_VU100 \
+		$(K6_OUT) \
 		--summary-trend-stats="min,med,avg,p(90),p(95),p(99),max" \
 		--summary-export=out/auth-login-$(SCALE)-$(shell date +%Y%m%dT%H%M%S).json \
 		scenarios/auth-login.js
@@ -147,6 +160,7 @@ bench-cascade-delete: bench-node-modules
 	k6 run \
 		--env BASE_URL=$(BENCH_BASE_URL) \
 		--env SCALE=$(SCALE) \
+		$(K6_OUT) \
 		--summary-trend-stats="min,med,avg,p(90),p(95),p(99),max" \
 		--summary-export=out/cascade-delete-$(SCALE)-$$(date +%Y%m%dT%H%M%S).json \
 		scenarios/cascade-delete.js; \
@@ -167,6 +181,7 @@ bench-xc-003: bench-node-modules
 			--env WARMUP_DURATION=$(WARMUP_DURATION) \
 			--env COOLDOWN_DURATION=$(COOLDOWN_DURATION) \
 			--env BM_ONLY=BM_ENR_002 \
+			$(K6_OUT) \
 			--summary-trend-stats="min,med,avg,p(90),p(95),p(99),max" \
 			--summary-export=out/enrollment-list-$(SCALE)-vu$$v-$$(date +%Y%m%dT%H%M%S).json \
 			scenarios/enrollment-list.js \
@@ -190,6 +205,7 @@ bench-mixed-soak: bench-node-modules
 		--env BASE_URL=$(BENCH_BASE_URL) \
 		--env SCALE=$(SCALE) \
 		--env SOAK_DURATION=$(SOAK_DURATION) \
+		$(K6_OUT) \
 		--summary-trend-stats="min,med,avg,p(90),p(95),p(99),max" \
 		--summary-export=out/mixed-soak-$(SCALE)-$$(date +%Y%m%dT%H%M%S).json \
 		scenarios/mixed-soak.js; \

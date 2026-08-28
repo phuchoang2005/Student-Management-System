@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -30,6 +31,7 @@ import org.springframework.security.web.authentication.session.RegisterSessionAu
 import org.springframework.security.web.authentication.session.SessionLimit;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -72,6 +74,32 @@ public class SecurityConfig {
   @Bean
   public HttpSessionEventPublisher httpSessionEventPublisher() {
     return new HttpSessionEventPublisher();
+  }
+
+  /**
+   * Unauthenticated chain for the {@code benchmark} profile's separate actuator port
+   * (management.server.port=8081, application-benchmark.properties) so Prometheus can scrape
+   * {@code /actuator/prometheus} without a session login (bench/observability/README.md).
+   *
+   * <p>A dedicated port alone doesn't achieve this: {@link SecurityFilterChain}s are matched by
+   * request path via {@code FilterChainProxy}, not by which embedded connector accepted the
+   * connection, so without this the {@link #filterChain} bean's {@code hasRole
+   * (SYSTEM_ADMINISTRATOR)} rule for {@code GET /actuator/**} still applied on :8081 too. This
+   * chain is scoped by {@link HttpServletRequest#getLocalPort()} instead of by path, so it only
+   * ever matches traffic that physically arrived on :8081 -- the :8080 rule below is completely
+   * untouched, including in any future profile that exposes more under {@code /actuator/**}
+   * there. {@code @Order(0)} makes {@code FilterChainProxy} try this chain before {@link
+   * #filterChain}, which keeps its default (lowest-precedence) order.
+   */
+  @Bean
+  @Order(0)
+  public SecurityFilterChain managementPortFilterChain(HttpSecurity http) throws Exception {
+    RequestMatcher onManagementPort = request -> request.getLocalPort() == 8081;
+    http
+        .securityMatcher(onManagementPort)
+        .csrf(AbstractHttpConfigurer::disable)
+        .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+    return http.build();
   }
 
   @Bean
@@ -135,7 +163,9 @@ public class SecurityConfig {
             // empty everywhere else, so these matchers are inert elsewhere. Health stays public so
             // liveness tooling doesn't need a session; everything else under /actuator/** is
             // metrics/introspection and is admin-only. Order matters between these two lines --
-            // the broad matcher would otherwise shadow the health one.
+            // the broad matcher would otherwise shadow the health one. This governs :8080 only --
+            // :8081 (the benchmark profile's separate actuator port) is handled by
+            // managementPortFilterChain above and never reaches these rules.
             .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
             .requestMatchers(HttpMethod.GET, "/actuator/**").hasRole("SYSTEM_ADMINISTRATOR")
             .requestMatchers(HttpMethod.POST, "/api/v1/auth/password").authenticated()
