@@ -9,12 +9,19 @@ import { SLO_CLASSES, MAX_ERROR_RATE } from './slo.js';
 
 // Summary-export files are named `<scenarioFile>-<scale>-<timestamp>.json` (see the `bench`
 // Makefile target) -- lexicographic sort on that timestamp suffix is also chronological.
+//
+// A plain prefix match on `<scenarioFile>-<scale>-` also matches `bench-xc-003`'s
+// `enrollment-list-S2-vu5-<timestamp>.json`-shaped siblings (BM_ONLY-pinned, single-scenario
+// sweep exports), and since 'v' sorts after every timestamp's leading digit, .sort().reverse()
+// picks the sweep file over the real bench-all run whenever both exist -- silently substituting
+// a different VU count's numbers under the id they came in as. Requiring the byte right after the
+// prefix to be a timestamp's leading digit excludes those siblings.
 export function latestExports(outDir, scenarioFile, scale, reps) {
   const prefix = `${scenarioFile}-${scale}-`;
   if (!fs.existsSync(outDir)) return [];
   return fs
     .readdirSync(outDir)
-    .filter((f) => f.startsWith(prefix) && f.endsWith('.json'))
+    .filter((f) => f.startsWith(prefix) && /^\d/.test(f.slice(prefix.length)) && f.endsWith('.json'))
     .sort()
     .reverse()
     .slice(0, reps)
