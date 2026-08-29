@@ -3,13 +3,14 @@ package org.phuchoang.management.shared.security;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.phuchoang.management.shared.web.ErrorResponseWriter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -44,7 +45,13 @@ import tools.jackson.databind.ObjectMapper;
 @EnableWebSecurity
 public class SecurityConfig {
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
+  private final ObjectMapper objectMapper;
+  private final ErrorResponseWriter errorResponseWriter;
+
+  public SecurityConfig(ObjectMapper objectMapper, ErrorResponseWriter errorResponseWriter) {
+    this.objectMapper = objectMapper;
+    this.errorResponseWriter = errorResponseWriter;
+  }
 
   // AuthenticationConfiguration is resolved here rather than exposed as its own AuthenticationManager
   // @Bean: declaring one would make getAuthenticationManager() resolve to this method itself,
@@ -107,6 +114,7 @@ public class SecurityConfig {
       HttpSecurity http,
       AuthenticationConfiguration authenticationConfiguration,
       MustChangePasswordFilter mustChangePasswordFilter,
+      LoginBulkheadFilter loginBulkheadFilter,
       SessionRegistry sessionRegistry)
       throws Exception {
     JsonUsernamePasswordAuthenticationFilter loginFilter =
@@ -152,7 +160,7 @@ public class SecurityConfig {
             .sessionConcurrency(concurrency -> concurrency
                 .maximumSessions(SessionLimit.UNLIMITED)
                 .sessionRegistry(sessionRegistry)
-                .expiredSessionStrategy(new SessionRevokedExpiredStrategy(objectMapper))))
+                .expiredSessionStrategy(new SessionRevokedExpiredStrategy(errorResponseWriter))))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
             // PM-017 — public so it's callable before login; only reachable at all when
@@ -218,6 +226,10 @@ public class SecurityConfig {
                 .hasAnyRole("REGISTRAR", "COURSE_ADMINISTRATOR")
             .anyRequest().authenticated())
         .addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class)
+        // PM-048 — sits immediately ahead of loginFilter (which occupies this exact chain
+        // position via addFilterAt above), so a saturated bulkhead rejects with 429 before the
+        // authentication manager, and BCrypt, are ever reached.
+        .addFilterBefore(loginBulkheadFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(mustChangePasswordFilter, AuthorizationFilter.class);
 
     return http.build();
@@ -242,15 +254,6 @@ public class SecurityConfig {
 
   private void onLoginFailure(HttpServletRequest req, HttpServletResponse res, AuthenticationException ex)
       throws IOException {
-    res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-    res.setContentType(MediaType.APPLICATION_JSON_VALUE);
-    objectMapper.writeValue(
-        res.getWriter(),
-        Map.of(
-            "timestamp", Instant.now().toString(),
-            "status", 401,
-            "error", "Unauthorized",
-            "message", "Invalid username or password",
-            "path", req.getRequestURI()));
+    errorResponseWriter.write(req, res, HttpStatus.UNAUTHORIZED, "Invalid username or password");
   }
 }

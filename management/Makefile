@@ -2,14 +2,14 @@
 # root Makefile so each toolchain (management/, bench/, docs-v00/) owns its own targets. Invoke
 # from the repo root as `make -C management <target>`, or `cd management && make <target>`.
 #
-# .env and docker-compose.yml stay at the repo root (docker-compose.yml has no bind mounts, so
-# nothing else needs to move with them); every path below is relative to this Makefile's
-# directory, one level under the repo root.
+# docker-compose.yml lives here (it's backend infrastructure); .env stays at the repo root.
+# --project-directory .. is still required: the compose file's bind mounts (bench/observability/*)
+# are written relative to the repo root, not to this Makefile's directory.
 
 -include ../.env
 export
 
-DC := docker compose -f ../docker-compose.yml --project-directory ..
+DC := docker compose -f docker-compose.yml --project-directory ..
 # docker-compose.yml gates mysqld-exporter/prometheus/grafana behind the "benchmark" profile, with
 # mysql in both -- so teardown targets activate every profile to reap whichever stack (dev-only or
 # full benchmark) happens to be running; `docker compose down` with no --profile only touches

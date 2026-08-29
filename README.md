@@ -104,7 +104,7 @@ Two of those runs also found bugs in the *benchmark harness itself* — a seed-d
 ### Prerequisites
 
 - JDK 21
-- Docker (or [Colima](https://github.com/abiosoft/colima) on macOS) — needed both to run MySQL via `docker-compose.yml` and for the [Testcontainers](https://testcontainers.com/)-backed integration tests
+- Docker (or [Colima](https://github.com/abiosoft/colima) on macOS) — needed both to run MySQL via `management/docker-compose.yml` and for the [Testcontainers](https://testcontainers.com/)-backed integration tests
 - The Maven wrapper (`./mvnw`) checked into `management/` — no local Maven install required
 - Node.js 20+ — for the demo UI (`management-frontend/`) and the docs compiler (`util/`)
 
@@ -114,7 +114,7 @@ Two of those runs also found bugs in the *benchmark harness itself* — a seed-d
 make -C management up
 ```
 
-This creates `.env` from `.env.example` if missing (see `.env.example` for the MySQL credentials/port and the `INITIAL_PASSWORD_KEY` used to encrypt students' initial passwords), starts Colima if needed, then brings up the `management-mysql` container defined in `docker-compose.yml`. The database targets live in `management/Makefile` — run them from the repo root with `-C management`, or `cd management` first.
+This creates `.env` from `.env.example` if missing (see `.env.example` for the MySQL credentials/port and the `INITIAL_PASSWORD_KEY` used to encrypt students' initial passwords), starts Colima if needed, then brings up the `management-mysql` container defined in `management/docker-compose.yml`. The database targets live in `management/Makefile` — run them from the repo root with `-C management`, or `cd management` first.
 
 Other useful targets: `make -C management down` (stop), `make -C management logs` (tail MySQL logs), `make -C management mysql` (open a MySQL shell), `make -C management reset` (wipe the data volume and start fresh). Run `make -C management help` to list them all.
 

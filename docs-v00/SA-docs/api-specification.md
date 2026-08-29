@@ -101,6 +101,10 @@ Where the sequence-diagram/auth docs left a status code ambiguous or unspecified
 
     `GET /staff-accounts` is the one remaining `page`-based listing, deliberately unconverted: it is not named by any Sprint 9 item and converting it was out of scope for that sprint.
 
+15. **`POST /auth/login` is bounded by a concurrency bulkhead, answering `429` when saturated (Sprint 10, PM-048).** `06-conclusions-and-recommendations.md` (`docs-v01/Benchmark/`) named hazard H5: BCrypt strength 10 puts a ~95ms floor under every login attempt, that work runs synchronously on the same Tomcat thread pool every other endpoint shares, and nothing bounded how many threads a login burst could occupy at once. `docs-v01/Benchmark/08-hazard-fix-specs.md` `IP-08` left the mechanism open between a dedicated thread pool and a queue-then-`429` cutoff; the mechanism actually built is a non-blocking, semaphore-gated permit count (`app.security.login-bulkhead.permits`, default `20`) — a request past the bound is rejected immediately, before the authentication manager (and BCrypt) ever run, rather than queued. Queuing was rejected because a queue sitting in front of BCrypt is itself a resource risk under the exact burst this exists to contain; `429` fails fast instead.
+
+    This is not general API rate limiting — no other endpoint is bounded this way, and the permit count is not per-client, only a single shared pool for the whole login endpoint. It does not touch BCrypt's own work factor, which is a deliberate security property (H5), not a defect. See `docs-v01/PM-docs/epic-k-sprint-plan.md` (PM-048) for the full hazard/verification history.
+
 ## 6. Out of scope
 
-Mirrors `04-authentication-authorization.md` §9: no SSO/OAuth/OIDC, no true forgot-password flow, no MFA, no rate limiting, no API versioning strategy beyond the `/api/v1` prefix. Pagination is specified — see §3.
+Mirrors `04-authentication-authorization.md` §9: no SSO/OAuth/OIDC, no true forgot-password flow, no MFA, no API versioning strategy beyond the `/api/v1` prefix. Pagination is specified — see §3. There is no general per-client API rate limiting; `POST /auth/login` alone is the one exception, bounded by the concurrency bulkhead in decision #15 above, which exists to isolate BCrypt's cost from the rest of the application rather than to throttle request rate.
