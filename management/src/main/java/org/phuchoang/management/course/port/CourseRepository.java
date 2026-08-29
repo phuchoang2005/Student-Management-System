@@ -1,12 +1,12 @@
 package org.phuchoang.management.course.port;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.phuchoang.management.course.domain.Course;
 import org.phuchoang.management.course.CourseCode;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.phuchoang.management.shared.paging.CursorPage;
 
 /**
  * Scoped to what US-3.1 (create), US-3.2 (update), US-3.3 (remove) and US-5.3 (search) need.
@@ -17,8 +17,15 @@ public interface CourseRepository {
 
   boolean existsByCode(CourseCode code);
 
-  /** UC-15 — matches course code/name, paged. {@code query} may be blank/{@code null}. */
-  Page<Course> search(String query, Pageable pageable);
+  /**
+   * UC-15 — matches course code/name, keyset-paged (PM-045). {@code query} may be blank/{@code
+   * null}. {@code afterKey} is the raw {@code course_code} to resume after, decoded from the
+   * cursor by the caller; {@code null} starts from the first page.
+   */
+  CursorPage<Course> search(String query, String afterKey, int limit);
+
+  /** Batch resolution for {@code CourseLookup.summariesOf} (PM-046). A code naming no course is absent from the result. */
+  List<Course> findByCodes(Collection<CourseCode> codes);
 
   /**
    * How many students are enrolled in each of {@code courseCodes}, for the course list (US-5.3). A

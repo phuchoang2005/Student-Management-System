@@ -37,12 +37,12 @@ env:
 	@test -f ../.env || cp ../.env.example ../.env
 
 up: env
-	colima start
+	colima start --memory 4
 	$(DC) --profile dev up -d
 	@echo "MySQL is starting on port $${MYSQL_PORT:-3306}..."
 
 up-bench: env
-	colima start
+	colima start --memory 4
 	$(DC) --profile benchmark up -d
 	@echo "MySQL + observability stack (mysqld-exporter, prometheus, grafana) starting -- see bench/observability/README.md"
 

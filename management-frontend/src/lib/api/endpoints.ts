@@ -18,6 +18,7 @@ import type {
   CourseDetail,
   CourseSummary,
   CourseUpdateRequest,
+  CursorPage,
   DemoAccount,
   Enrollment,
   InitialPassword,
@@ -58,8 +59,10 @@ export const auth = {
 
 export const students = {
   /** Transparently scoped server-side for a STUDENT caller: 0 or 1 rows, never a 403. */
-  search: (query?: string, page = 0, size = 20) =>
-    request<Page<StudentSummary>>('GET', '/api/v1/students', { params: { query, page, size } }),
+  search: (query?: string, cursor?: string, size = 20) =>
+    request<CursorPage<StudentSummary>>('GET', '/api/v1/students', {
+      params: { query, cursor, size },
+    }),
   get: (code: string) => request<StudentDetail>('GET', `/api/v1/students/${enc(code)}`),
   /** 404 once the student has changed their password — deliberately indistinguishable from "no such student". */
   initialPassword: (code: string) =>
@@ -74,9 +77,9 @@ export const students = {
 
 export const books = {
   /** `ownerStudentCode` is how the Librarian pulls up one student's borrowed books. */
-  search: (query?: string, page = 0, size = 20, ownerStudentCode?: string) =>
-    request<Page<BookSummary>>('GET', '/api/v1/books', {
-      params: { query, ownerStudentCode, page, size },
+  search: (query?: string, cursor?: string, size = 20, ownerStudentCode?: string) =>
+    request<CursorPage<BookSummary>>('GET', '/api/v1/books', {
+      params: { query, ownerStudentCode, cursor, size },
     }),
   get: (isbn: string) => request<BookDetail>('GET', `/api/v1/books/${enc(isbn)}`),
   create: (body: BookCreateRequest) => request<BookDetail>('POST', '/api/v1/books', { body }),
@@ -88,8 +91,10 @@ export const books = {
 };
 
 export const courses = {
-  search: (query?: string, page = 0, size = 20) =>
-    request<Page<CourseSummary>>('GET', '/api/v1/courses', { params: { query, page, size } }),
+  search: (query?: string, cursor?: string, size = 20) =>
+    request<CursorPage<CourseSummary>>('GET', '/api/v1/courses', {
+      params: { query, cursor, size },
+    }),
   get: (code: string) => request<CourseDetail>('GET', `/api/v1/courses/${enc(code)}`),
   create: (body: CourseCreateRequest) => request<CourseDetail>('POST', '/api/v1/courses', { body }),
   /** `courseCode` is immutable — the PUT body does not accept it. */
@@ -103,13 +108,13 @@ export const enrollments = {
    * Exactly one filter, never both and never neither — the backend answers a missing or doubled
    * filter with a 400 rather than enumerating every enrollment in the system.
    */
-  byStudent: (studentCode: string, page = 0, size = 20) =>
-    request<Page<Enrollment>>('GET', '/api/v1/enrollments', {
-      params: { studentCode, page, size },
+  byStudent: (studentCode: string, cursor?: string, size = 20) =>
+    request<CursorPage<Enrollment>>('GET', '/api/v1/enrollments', {
+      params: { studentCode, cursor, size },
     }),
-  byCourse: (courseCode: string, page = 0, size = 20) =>
-    request<Page<Enrollment>>('GET', '/api/v1/enrollments', {
-      params: { courseCode, page, size },
+  byCourse: (courseCode: string, cursor?: string, size = 20) =>
+    request<CursorPage<Enrollment>>('GET', '/api/v1/enrollments', {
+      params: { courseCode, cursor, size },
     }),
   create: (studentCode: string, courseCode: string) =>
     request<Enrollment>('POST', '/api/v1/enrollments', { body: { studentCode, courseCode } }),
@@ -134,10 +139,10 @@ export const enrollments = {
  */
 export const me = {
   profile: () => request<MeProfile>('GET', '/api/v1/me/profile'),
-  courses: (page = 0, size = 20) =>
-    request<Page<MeCourse>>('GET', '/api/v1/me/courses', { params: { page, size } }),
-  books: (page = 0, size = 20) =>
-    request<Page<MeBook>>('GET', '/api/v1/me/books', { params: { page, size } }),
+  courses: (cursor?: string, size = 20) =>
+    request<CursorPage<MeCourse>>('GET', '/api/v1/me/courses', { params: { cursor, size } }),
+  books: (cursor?: string, size = 20) =>
+    request<CursorPage<MeBook>>('GET', '/api/v1/me/books', { params: { cursor, size } }),
 };
 
 export const staffAccounts = {

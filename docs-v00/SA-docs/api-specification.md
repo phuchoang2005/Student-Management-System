@@ -95,6 +95,12 @@ Where the sequence-diagram/auth docs left a status code ambiguous or unspecified
 
     Two shape consequences: `/sessions` is not paged (the underlying registry is an in-memory snapshot with no stable ordering to offset into, so pages would overlap and skip), and the row carries no `mustChangePassword` or `enabled` — the registry's copy of those goes stale after a password change, and account state is `/staff-accounts`'s answer. See `04-authentication-authorization.md` §3c.
 
+14. **Cursor-based Prev/Next-only pagination supersedes decision #8, for `/students`, `/books`, `/courses`, `/enrollments`, `/me/books`, and `/me/courses` (Sprint 9, PM-045).** These six endpoints drop `page`, `totalElements`, and `totalPages` entirely; the response envelope is `{content, nextCursor}`, where `nextCursor` is an opaque, server-issued token (or `null` on the last page) that the caller echoes back as the `cursor` query parameter to fetch the next page. There is no way to jump to an arbitrary page or ask "how many pages" — only "give me the next one" — because no use case ever asked for either (`non-functional-requirements.md` §3.1 confirms every paginating UC describes "return the next page" and nothing more). `size`'s default of `20` and cap of `100` are unchanged from decision #8, and an oversized `size` is still clamped rather than rejected.
+
+    This is a genuine, deliberate product change, not only an internal optimization: a client can no longer render "Page 3 of 12" for these six endpoints. It was accepted because it is what let the backend replace `OFFSET`/`LIMIT` scans with keyset (seek) pagination and drop a redundant `COUNT(*)` per request, fixing two of the benchmark epic's confirmed hazards (H1, H3 — `docs-v01/Benchmark/`) with one shape change instead of two partial ones.
+
+    `GET /staff-accounts` is the one remaining `page`-based listing, deliberately unconverted: it is not named by any Sprint 9 item and converting it was out of scope for that sprint.
+
 ## 6. Out of scope
 
 Mirrors `04-authentication-authorization.md` §9: no SSO/OAuth/OIDC, no true forgot-password flow, no MFA, no rate limiting, no API versioning strategy beyond the `/api/v1` prefix. Pagination is specified — see §3.

@@ -6,14 +6,14 @@ import org.phuchoang.management.me.web.dto.MeBookSummaryDto;
 import org.phuchoang.management.me.web.dto.MeCourseSummaryDto;
 import org.phuchoang.management.me.web.dto.MeProfileDto;
 import org.phuchoang.management.shared.exception.NotFoundException;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.shared.security.AuthenticatedPrincipal;
-import org.phuchoang.management.shared.web.PageResponse;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
-import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -25,11 +25,10 @@ import org.springframework.web.bind.annotation.RestController;
  * check is needed here.
  *
  * <p>Three endpoints, not one composed response. The single {@code GET /me/books-and-courses} this
- * replaces had to hand-roll {@code booksPage}/{@code coursesPage} prefixed paging, because Spring
- * Data's {@code PageableHandlerMethodArgumentResolver} only resolves one {@code page}/{@code size}
- * pair per request — splitting the collections apart lets each take an ordinary {@link Pageable},
- * the same as every other list endpoint in the API, and lets a client paging its book list stop
- * refetching its course list to do it.
+ * replaces had to hand-roll {@code booksPage}/{@code coursesPage} prefixed paging, because only one
+ * {@code cursor}/{@code size} pair can be resolved per request — splitting the collections apart
+ * lets each take its own cursor (PM-045), the same as every other list endpoint in the API, and
+ * lets a client paging its book list stop refetching its course list to do it.
  */
 @RestController
 @RequestMapping("/api/v1/me")
@@ -69,16 +68,23 @@ public class MeController {
   }
 
   @GetMapping("/courses")
-  public PageResponse<MeCourseSummaryDto> getMyCourses(
-      Pageable pageable, Authentication authentication) {
-    return PageResponse.from(
-        enrollmentLookup.findByStudent(studentIdOf(authentication), pageable).map(mapper::toDto));
+  public CursorPage<MeCourseSummaryDto> getMyCourses(
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size,
+      Authentication authentication) {
+    int clampedSize = Math.min(Math.max(size, 1), 100);
+    return enrollmentLookup
+        .findByStudent(studentIdOf(authentication), cursor, clampedSize)
+        .map(mapper::toDto);
   }
 
   @GetMapping("/books")
-  public PageResponse<MeBookSummaryDto> getMyBooks(Pageable pageable, Authentication authentication) {
-    return PageResponse.from(
-        bookLookup.findByOwner(studentIdOf(authentication), pageable).map(mapper::toDto));
+  public CursorPage<MeBookSummaryDto> getMyBooks(
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size,
+      Authentication authentication) {
+    int clampedSize = Math.min(Math.max(size, 1), 100);
+    return bookLookup.findByOwner(studentIdOf(authentication), cursor, clampedSize).map(mapper::toDto);
   }
 
   // Cast is safe: identity's AppUserDetailsService is the only UserDetailsService in the

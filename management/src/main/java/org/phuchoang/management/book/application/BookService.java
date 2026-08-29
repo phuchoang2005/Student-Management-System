@@ -14,13 +14,13 @@ import org.phuchoang.management.book.port.BookRepository;
 import org.phuchoang.management.shared.exception.DuplicateIsbnException;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.exception.UnknownStudentException;
+import org.phuchoang.management.shared.paging.CursorCodec;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.student.StudentCode;
 import org.phuchoang.management.student.StudentDeleted;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
 import org.phuchoang.management.student.StudentSummary;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.modulith.ApplicationModuleListener;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -151,19 +151,24 @@ public class BookService implements BookLookup {
   }
 
   /**
-   * UC-14 — matches isbn/title/author, optionally filtered by owner, paged. {@code query} may be
-   * blank/{@code null}. {@code ownerStudentCode} is how the Librarian pulls up one student's
-   * borrowed books from that student's detail page; an unknown code is a {@code 400}, consistent
-   * with every other unresolvable reference (api-specification.md §5 decision #2).
+   * UC-14 — matches isbn/title/author, optionally filtered by owner, keyset-paged (PM-045). {@code
+   * query} may be blank/{@code null}. {@code ownerStudentCode} is how the Librarian pulls up one
+   * student's borrowed books from that student's detail page; an unknown code is a {@code 400},
+   * consistent with every other unresolvable reference (api-specification.md §5 decision #2).
    *
    * <p>{@code callerStudentId} is non-null only for a STUDENT caller (02-component-diagram.md §4);
    * when present it silently overrides {@code ownerStudentCode} rather than rejecting a mismatched
    * client-supplied value — consistent with the "transparently scoped, never blocked" search
    * philosophy (api-specification.md §5 decision #4), and it short-circuits the code resolution
    * entirely since the principal already carries the id.
+   *
+   * <p>{@code cursor} is the opaque value from a prior page's {@code nextCursor} ({@code null} for
+   * the first page), decoded here — the one place a raw request string becomes the {@code
+   * afterKey} the repository filters on, mirroring how a code becomes a domain Value Object
+   * elsewhere in this class.
    */
-  public Page<BookSummaryView> search(
-      String query, String ownerStudentCode, Pageable pageable, Long callerStudentId) {
+  public CursorPage<BookSummaryView> search(
+      String query, String ownerStudentCode, String cursor, int size, Long callerStudentId) {
     StudentId ownerId;
     if (callerStudentId != null) {
       ownerId = new StudentId(callerStudentId);
@@ -172,10 +177,12 @@ public class BookService implements BookLookup {
       ownerId = filter == null ? null : resolve(filter);
     }
 
+    String afterKey = CursorCodec.decode(cursor);
+
     // One lookup per distinct owner rather than one per row: a Librarian's catalogue page is mostly
     // the same handful of borrowers, and an owner-filtered page is a single owner by construction.
     Map<Long, String> ownerCodes = new HashMap<>();
-    return repository.search(query, ownerId, pageable).map(book -> toSummaryView(book, ownerCodes));
+    return repository.search(query, ownerId, afterKey, size).map(book -> toSummaryView(book, ownerCodes));
   }
 
   /**
@@ -214,8 +221,9 @@ public class BookService implements BookLookup {
   /** Backs {@code BookLookup.findByOwner} (US-5.4, {@code GET /api/v1/me/books}). */
   @Override
   @Transactional(readOnly = true)
-  public Page<BookSummary> findByOwner(StudentId ownerId, Pageable pageable) {
-    return repository.findByOwnerId(ownerId, pageable).map(this::toSummary);
+  public CursorPage<BookSummary> findByOwner(StudentId ownerId, String cursor, int size) {
+    String afterKey = CursorCodec.decode(cursor);
+    return repository.findByOwnerId(ownerId, afterKey, size).map(this::toSummary);
   }
 
   /** Book.4 — an owner reference that resolves to no student is malformed input, not a 404. */

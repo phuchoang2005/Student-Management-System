@@ -152,12 +152,12 @@ class MeControllerIntegrationTest {
         .perform(get("/api/v1/me/books").session(student.session()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content").isEmpty())
-        .andExpect(jsonPath("$.totalElements").value(0));
+        .andExpect(jsonPath("$.nextCursor").doesNotExist());
     mockMvc
         .perform(get("/api/v1/me/courses").session(student.session()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content").isEmpty())
-        .andExpect(jsonPath("$.totalElements").value(0));
+        .andExpect(jsonPath("$.nextCursor").doesNotExist());
   }
 
   @Test
@@ -208,24 +208,32 @@ class MeControllerIntegrationTest {
     enroll(student.studentCode(), "CS703A");
     enroll(student.studentCode(), "CS703B");
 
-    mockMvc
-        .perform(get("/api/v1/me/books").session(student.session()).param("size", "2"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.content.length()").value(2))
-        .andExpect(jsonPath("$.totalElements").value(3))
-        .andExpect(jsonPath("$.totalPages").value(2));
+    var firstBooksPage =
+        mockMvc
+            .perform(get("/api/v1/me/books").session(student.session()).param("size", "2"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.nextCursor").exists())
+            .andReturn();
+
+    String booksCursor =
+        JsonPath.read(firstBooksPage.getResponse().getContentAsString(), "$.nextCursor");
 
     mockMvc
-        .perform(get("/api/v1/me/books").session(student.session()).param("page", "1").param("size", "2"))
+        .perform(
+            get("/api/v1/me/books")
+                .session(student.session())
+                .param("cursor", booksCursor)
+                .param("size", "2"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.content.length()").value(1));
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.nextCursor").doesNotExist());
 
     mockMvc
         .perform(get("/api/v1/me/courses").session(student.session()).param("size", "1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
-        .andExpect(jsonPath("$.totalElements").value(2))
-        .andExpect(jsonPath("$.totalPages").value(2));
+        .andExpect(jsonPath("$.nextCursor").exists());
   }
 
   @Test

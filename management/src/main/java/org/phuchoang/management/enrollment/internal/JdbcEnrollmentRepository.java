@@ -1,15 +1,16 @@
 package org.phuchoang.management.enrollment.internal;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.enrollment.domain.Enrollment;
 import org.phuchoang.management.enrollment.domain.EnrollmentId;
 import org.phuchoang.management.enrollment.port.EnrollmentRepository;
+import org.phuchoang.management.shared.exception.DomainValidationException;
+import org.phuchoang.management.shared.paging.CursorCodec;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.student.StudentId;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -41,23 +42,89 @@ class JdbcEnrollmentRepository implements EnrollmentRepository {
   }
 
   @Override
-  public Page<Enrollment> findByStudentId(StudentId studentId, Pageable pageable) {
-    List<Enrollment> content =
-        springRepo.findByStudentId(studentId.value(), pageable.getPageSize(), pageable.getOffset()).stream()
+  public CursorPage<Enrollment> findByStudentId(StudentId studentId, String afterKey, int limit) {
+    Cursor after = Cursor.parse(afterKey);
+    List<Enrollment> rows =
+        springRepo
+            .findByStudentId(
+                studentId.value(),
+                after == null ? null : after.enrolledAt(),
+                after == null ? null : after.id(),
+                limit + 1)
+            .stream()
             .map(this::toDomain)
             .toList();
-    long total = springRepo.countByStudentId(studentId.value());
-    return new PageImpl<>(content, pageable, total);
+    return toCursorPage(rows, limit);
   }
 
   @Override
-  public Page<Enrollment> findByCourseCode(CourseCode courseCode, Pageable pageable) {
-    List<Enrollment> content =
-        springRepo.findByCourseCode(courseCode.value(), pageable.getPageSize(), pageable.getOffset()).stream()
+  public CursorPage<Enrollment> findByCourseCode(CourseCode courseCode, String afterKey, int limit) {
+    Cursor after = Cursor.parse(afterKey);
+    List<Enrollment> rows =
+        springRepo
+            .findByCourseCode(
+                courseCode.value(),
+                after == null ? null : after.enrolledAt(),
+                after == null ? null : after.id(),
+                limit + 1)
+            .stream()
             .map(row -> toDomain(row, courseCode))
             .toList();
-    long total = springRepo.countByCourseCode(courseCode.value());
-    return new PageImpl<>(content, pageable, total);
+    return toCursorPage(rows, limit);
+  }
+
+  private CursorPage<Enrollment> toCursorPage(List<Enrollment> rows, int limit) {
+    boolean hasMore = rows.size() > limit;
+    List<Enrollment> content = hasMore ? rows.subList(0, limit) : rows;
+    String nextCursor = hasMore && !content.isEmpty() ? encode(content.get(content.size() - 1)) : null;
+    return new CursorPage<>(content, nextCursor);
+  }
+
+  private static String encode(Enrollment last) {
+    return CursorCodec.encode(last.enrolledAt().toEpochMilli() + "|" + last.id().value());
+  }
+
+  /**
+   * Compound keyset cursor for enrollments — {@code enrolled_at} isn't unique, so the surrogate id
+   * breaks ties (PM-045). Built/parsed entirely here rather than in {@code CursorCodec}, which
+   * stays format-agnostic: student/course/book's single-string sort keys need no such format.
+   *
+   * <p>A plain class, not a record: {@code NamingConventionsTest} requires every record under
+   * {@code internal/} to be a {@code *Row} persistence projection, which this isn't.
+   */
+  private static final class Cursor {
+    private final Instant enrolledAt;
+    private final Long id;
+
+    private Cursor(Instant enrolledAt, Long id) {
+      this.enrolledAt = enrolledAt;
+      this.id = id;
+    }
+
+    Instant enrolledAt() {
+      return enrolledAt;
+    }
+
+    Long id() {
+      return id;
+    }
+
+    static Cursor parse(String rawKey) {
+      if (rawKey == null) {
+        return null;
+      }
+      int sep = rawKey.indexOf('|');
+      if (sep < 0) {
+        throw new DomainValidationException("Malformed pagination cursor.");
+      }
+      try {
+        return new Cursor(
+            Instant.ofEpochMilli(Long.parseLong(rawKey.substring(0, sep))),
+            Long.parseLong(rawKey.substring(sep + 1)));
+      } catch (NumberFormatException e) {
+        throw new DomainValidationException("Malformed pagination cursor.");
+      }
+    }
   }
 
   @Override

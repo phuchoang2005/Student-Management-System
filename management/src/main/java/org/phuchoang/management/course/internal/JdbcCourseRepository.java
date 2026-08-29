@@ -11,10 +11,9 @@ import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.course.domain.Credits;
 import org.phuchoang.management.course.port.CourseRepository;
 import org.phuchoang.management.shared.exception.StaleWriteException;
+import org.phuchoang.management.shared.paging.CursorCodec;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -37,13 +36,50 @@ class JdbcCourseRepository implements CourseRepository {
   }
 
   @Override
-  public Page<Course> search(String query, Pageable pageable) {
-    List<Course> content =
-        springRepo.search(query, pageable.getPageSize(), pageable.getOffset()).stream()
-            .map(this::toDomain)
-            .toList();
-    long total = springRepo.countBySearch(query);
-    return new PageImpl<>(content, pageable, total);
+  public CursorPage<Course> search(String query, String afterKey, int limit) {
+    String booleanQuery = toBooleanModeQuery(query);
+    List<Course> rows =
+        springRepo.search(booleanQuery, afterKey, limit + 1).stream().map(this::toDomain).toList();
+
+    boolean hasMore = rows.size() > limit;
+    List<Course> content = hasMore ? rows.subList(0, limit) : rows;
+    String nextCursor = hasMore ? CursorCodec.encode(content.get(content.size() - 1).code().value()) : null;
+    return new CursorPage<>(content, nextCursor);
+  }
+
+  @Override
+  public List<Course> findByCodes(Collection<CourseCode> codes) {
+    // A guard, not an optimisation: `IN ()` is a syntax error in MySQL, and an empty batch lookup
+    // is a perfectly ordinary call (e.g. an enrollment page naming no courses).
+    if (codes.isEmpty()) {
+      return List.of();
+    }
+    List<String> rawCodes = codes.stream().map(CourseCode::value).toList();
+    return springRepo.findByCourseCodeIn(rawCodes).stream().map(this::toDomain).toList();
+  }
+
+  // Builds a MySQL boolean-mode FULLTEXT expression requiring every token in the raw query as a
+  // prefix match, mirroring how the built-in FULLTEXT parser tokenizes indexed text on
+  // non-alphanumeric boundaries -- see JdbcStudentRepository.toBooleanModeQuery for the full
+  // rationale (a single glued trailing '*' breaks on any query with its own word separators, and a
+  // plain multi-word AGAINST with no '+' defaults to OR). Tokens under innodb_ft_min_token_size's
+  // default of 3 characters are dropped, not required -- MySQL never indexes them, so requiring one
+  // would make the whole query unsatisfiable. null/blank pass through untouched.
+  private static String toBooleanModeQuery(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return raw;
+    }
+    StringBuilder booleanQuery = new StringBuilder();
+    for (String token : raw.split("[^\\p{Alnum}]+")) {
+      if (token.length() < 3) {
+        continue;
+      }
+      if (booleanQuery.length() > 0) {
+        booleanQuery.append(' ');
+      }
+      booleanQuery.append('+').append(token).append('*');
+    }
+    return booleanQuery.isEmpty() ? null : booleanQuery.toString();
   }
 
   @Override

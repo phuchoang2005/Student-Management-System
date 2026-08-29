@@ -2,7 +2,12 @@ package org.phuchoang.management.student.application;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.phuchoang.management.identity.AccountProvisioning;
 import org.phuchoang.management.identity.InitialPasswordLookup;
 import org.phuchoang.management.identity.InitialPasswordView;
@@ -11,6 +16,8 @@ import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.DuplicateEmailException;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.exception.PasswordNoLongerAvailableException;
+import org.phuchoang.management.shared.paging.CursorCodec;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.student.StudentCode;
 import org.phuchoang.management.student.StudentDeleted;
 import org.phuchoang.management.student.StudentId;
@@ -24,8 +31,6 @@ import org.phuchoang.management.student.domain.Email;
 import org.phuchoang.management.student.domain.Student;
 import org.phuchoang.management.student.port.StudentRepository;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -150,14 +155,17 @@ public class StudentService implements StudentLookup {
   }
 
   /**
-   * UC-13 — matches code/name/email, paged. {@code query} may be blank/{@code null}.
-   * {@code callerStudentId} is non-null only for a STUDENT caller (02-component-diagram.md §4) and
-   * narrows the result to that student's own record — transparently (0/1 results, never a 403),
-   * per api-specification.md §5 decision #4.
+   * UC-13 — matches code/name/email via FULLTEXT search, keyset-paginated (PM-044/PM-045).
+   * {@code query} may be blank/{@code null}. {@code cursor} is the opaque cursor from the previous
+   * page's {@code nextCursor}, {@code null} for the first page. {@code callerStudentId} is
+   * non-null only for a STUDENT caller (02-component-diagram.md §4) and narrows the result to that
+   * student's own record — transparently (0/1 results, never a 403), per api-specification.md §5
+   * decision #4.
    */
-  public Page<StudentSummaryView> search(String query, Pageable pageable, Long callerStudentId) {
+  public CursorPage<StudentSummaryView> search(String query, String cursor, int size, Long callerStudentId) {
     StudentId scopeToId = callerStudentId == null ? null : new StudentId(callerStudentId);
-    return repository.search(query, scopeToId, pageable).map(this::toSummaryView);
+    String afterKey = CursorCodec.decode(cursor);
+    return repository.search(query, scopeToId, afterKey, size).map(this::toSummaryView);
   }
 
   /**
@@ -240,6 +248,26 @@ public class StudentService implements StudentLookup {
             .findById(id)
             .orElseThrow(() -> new NotFoundException("Student '" + id.value() + "' does not exist."));
 
+    return toSummary(student);
+  }
+
+  /**
+   * One bulk lookup for every id named in {@code ids} (PM-046) — backs {@code
+   * EnrollmentService}'s batch course/student resolution in place of one {@link #summaryOf} call
+   * per row. An id naming no student is simply absent from the result, unlike {@link #summaryOf}'s
+   * 404: the caller decides how to treat an id it expected to resolve.
+   */
+  @Override
+  public Map<StudentId, StudentSummary> summariesOf(Collection<StudentId> ids) {
+    if (ids.isEmpty()) {
+      return Map.of();
+    }
+    Set<StudentId> distinctIds = new LinkedHashSet<>(ids);
+    return repository.findByIds(distinctIds).stream()
+        .collect(Collectors.toMap(Student::id, this::toSummary, (first, second) -> first));
+  }
+
+  private StudentSummary toSummary(Student student) {
     return new StudentSummary(
         student.code().value(),
         student.firstName(),

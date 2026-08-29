@@ -176,7 +176,7 @@ class OwnRecordsScopingIntegrationTest {
     mockMvc
         .perform(get("/api/v1/students").session(student.session()).param("query", "S010"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(1))
+        .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].studentCode").value("S01004"));
   }
 
@@ -303,6 +303,6 @@ class OwnRecordsScopingIntegrationTest {
     mockMvc
         .perform(get("/api/v1/students").with(user("admin").roles("COURSE_ADMINISTRATOR")))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)));
+        .andExpect(jsonPath("$.content.length()").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)));
   }
 }

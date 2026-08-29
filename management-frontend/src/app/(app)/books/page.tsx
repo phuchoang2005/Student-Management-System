@@ -7,10 +7,10 @@ import { useState } from 'react';
 
 import BookFormDialog from '@/components/BookFormDialog';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import CursorPagination from '@/components/CursorPagination';
 import DataTable from '@/components/DataTable';
 import ErrorBanner from '@/components/ErrorBanner';
 import PageHeader from '@/components/PageHeader';
-import Pagination from '@/components/Pagination';
 import SearchInput from '@/components/SearchInput';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
@@ -20,7 +20,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { can } from '@/lib/auth/permissions';
 import RequireAuth from '@/lib/auth/RequireAuth';
 import useAsyncAction from '@/lib/hooks/useAsyncAction';
-import usePagedResource from '@/lib/hooks/usePagedResource';
+import useCursorResource from '@/lib/hooks/useCursorResource';
 
 /**
  * The catalogue for the Librarian; "my books" for a Student.
@@ -42,15 +42,15 @@ function Books() {
   const isStudent = session?.role === 'STUDENT';
   const mayWrite = can(session?.role, 'books:write');
 
-  const resource = usePagedResource<BookSummary>((query, page) =>
+  const resource = useCursorResource<BookSummary>((query, cursor) =>
     isStudent
-      ? me.books(page).then((page$) => ({
+      ? me.books(cursor).then((page$) => ({
           ...page$,
           // /me/books omits the owner -- every row is the caller's -- so the column is filled in
           // here rather than sent on every row.
           content: page$.content.map((book) => ({ ...book, ownerStudentCode: null })),
         }))
-      : books.search(query || undefined, page),
+      : books.search(query || undefined, cursor),
   );
 
   const [creating, setCreating] = useState(false);
@@ -173,7 +173,13 @@ function Books() {
         onRowClick={(row) => router.push(`/books/${encodeURIComponent(row.isbn)}`)}
       />
 
-      <Pagination data={resource.data} page={resource.page} onPageChange={resource.setPage} />
+      <CursorPagination
+        data={resource.data}
+        canGoPrev={resource.canGoPrev}
+        canGoNext={resource.canGoNext}
+        onPrev={resource.goPrev}
+        onNext={resource.goNext}
+      />
 
       <BookFormDialog
         open={creating}

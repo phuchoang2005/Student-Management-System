@@ -14,6 +14,13 @@ services:
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
+      # PM-041: the untouched 128MB container default. 06-conclusions-and-recommendations.md §3.1
+      # hypothesizes this is why BM-BK-001's S2->S3 p95 jump (2594ms -> 8571ms) is sharper than its
+      # S1->S2 jump (2282ms -> 2594ms) -- the ~80,000-row S3 books table stops fitting in memory.
+      # 1G comfortably fits the S2 dataset (students 5,000; courses 300; books 8,000; enrollments
+      # 30,000) with margin; a starting point, not a verified answer -- re-run the BM-XC-004 scale
+      # sweep after this lands, before PM-043/PM-044's query-shape fixes, to isolate this effect.
+      - --innodb-buffer-pool-size=1G
     ports:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:

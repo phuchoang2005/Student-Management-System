@@ -30,13 +30,10 @@ import org.phuchoang.management.student.application.command.UpdateStudentCommand
 import org.phuchoang.management.student.domain.DateOfBirth;
 import org.phuchoang.management.student.domain.Email;
 import org.phuchoang.management.student.domain.Student;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.student.StudentCode;
 import org.phuchoang.management.student.port.StudentRepository;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 
 @ExtendWith(MockitoExtension.class)
@@ -211,14 +208,13 @@ class StudentServiceTest {
   @Test
   void searchReturnsMappedSummariesFromRepositoryPage() {
     service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
-    Pageable pageable = PageRequest.of(0, 20);
-    Page<Student> repoPage = new PageImpl<>(java.util.List.of(existingStudent), pageable, 1);
-    when(repository.search("jane", null, pageable)).thenReturn(repoPage);
+    CursorPage<Student> repoPage = new CursorPage<>(java.util.List.of(existingStudent), null);
+    when(repository.search("jane", null, null, 20)).thenReturn(repoPage);
 
-    Page<StudentService.StudentSummaryView> result = service.search("jane", pageable, null);
+    CursorPage<StudentService.StudentSummaryView> result = service.search("jane", null, 20, null);
 
-    assertThat(result.getTotalElements()).isEqualTo(1);
-    StudentService.StudentSummaryView summary = result.getContent().get(0);
+    assertThat(result.content()).hasSize(1);
+    StudentService.StudentSummaryView summary = result.content().get(0);
     assertThat(summary.studentCode()).isEqualTo("S00123");
     assertThat(summary.email()).isEqualTo("jane.doe@example.edu");
   }
@@ -226,23 +222,23 @@ class StudentServiceTest {
   @Test
   void searchReturnsEmptyPageWhenNothingMatches() {
     service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
-    Pageable pageable = PageRequest.of(0, 20);
-    when(repository.search("nobody", null, pageable)).thenReturn(Page.empty(pageable));
+    when(repository.search("nobody", null, null, 20))
+        .thenReturn(new CursorPage<>(java.util.List.of(), null));
 
-    Page<StudentService.StudentSummaryView> result = service.search("nobody", pageable, null);
+    CursorPage<StudentService.StudentSummaryView> result = service.search("nobody", null, 20, null);
 
-    assertThat(result.getContent()).isEmpty();
+    assertThat(result.content()).isEmpty();
   }
 
   @Test
   void searchScopesToTheCallingStudentWhenACallerStudentIdIsGiven() {
     service = new StudentService(repository, accountProvisioning, initialPasswordLookup, events);
-    Pageable pageable = PageRequest.of(0, 20);
-    when(repository.search(null, new StudentId(1L), pageable)).thenReturn(Page.empty(pageable));
+    when(repository.search(null, new StudentId(1L), null, 20))
+        .thenReturn(new CursorPage<>(java.util.List.of(), null));
 
-    service.search(null, pageable, 1L);
+    service.search(null, null, 20, 1L);
 
-    verify(repository).search(null, new StudentId(1L), pageable);
+    verify(repository).search(null, new StudentId(1L), null, 20);
   }
 
   @Test

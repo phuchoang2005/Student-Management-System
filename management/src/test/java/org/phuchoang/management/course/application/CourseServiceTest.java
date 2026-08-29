@@ -9,6 +9,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,11 +28,9 @@ import org.phuchoang.management.course.port.CourseRepository;
 import org.phuchoang.management.shared.exception.DomainValidationException;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.NotFoundException;
+import org.phuchoang.management.shared.paging.CursorCodec;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class CourseServiceTest {
@@ -173,28 +173,78 @@ class CourseServiceTest {
   @Test
   void searchReturnsMappedSummariesFromRepositoryPage() {
     service = new CourseService(repository, events);
-    Pageable pageable = PageRequest.of(0, 20);
-    Page<Course> repoPage = new PageImpl<>(java.util.List.of(existingCourse), pageable, 1);
-    when(repository.search("cs101", pageable)).thenReturn(repoPage);
+    when(repository.search("cs101", null, 20))
+        .thenReturn(new CursorPage<>(List.of(existingCourse), null));
+    when(repository.enrollmentCountsFor(List.of("CS101"))).thenReturn(Map.of("CS101", 5L));
 
-    Page<CourseService.CourseSummaryView> result = service.search("cs101", pageable);
+    CursorPage<CourseService.CourseSummaryView> result = service.search("cs101", null, 20);
 
-    assertThat(result.getTotalElements()).isEqualTo(1);
-    CourseService.CourseSummaryView summary = result.getContent().get(0);
+    assertThat(result.nextCursor()).isNull();
+    CourseService.CourseSummaryView summary = result.content().get(0);
     assertThat(summary.courseCode()).isEqualTo("CS101");
     assertThat(summary.name()).isEqualTo("Intro to CS");
     assertThat(summary.credits()).isEqualTo(3);
+    assertThat(summary.enrolledCount()).isEqualTo(5L);
   }
 
   @Test
   void searchReturnsEmptyPageWhenNothingMatches() {
     service = new CourseService(repository, events);
-    Pageable pageable = PageRequest.of(0, 20);
-    when(repository.search("nobody", pageable)).thenReturn(Page.empty(pageable));
+    when(repository.search("nobody", null, 20)).thenReturn(new CursorPage<>(List.of(), null));
+    when(repository.enrollmentCountsFor(List.of())).thenReturn(Map.of());
 
-    Page<CourseService.CourseSummaryView> result = service.search("nobody", pageable);
+    CursorPage<CourseService.CourseSummaryView> result = service.search("nobody", null, 20);
 
-    assertThat(result.getContent()).isEmpty();
+    assertThat(result.content()).isEmpty();
+    assertThat(result.nextCursor()).isNull();
+  }
+
+  @Test
+  void searchDecodesCursorAndPassesRawAfterKeyToRepository() {
+    service = new CourseService(repository, events);
+    String cursor = CursorCodec.encode("CS100");
+    when(repository.search("cs1", "CS100", 20)).thenReturn(new CursorPage<>(List.of(), null));
+    when(repository.enrollmentCountsFor(List.of())).thenReturn(Map.of());
+
+    CursorPage<CourseService.CourseSummaryView> result = service.search("cs1", cursor, 20);
+
+    assertThat(result.content()).isEmpty();
+    assertThat(result.nextCursor()).isNull();
+    verify(repository).search("cs1", "CS100", 20);
+  }
+
+  @Test
+  void searchPreservesNextCursorFromRepositoryOnMapping() {
+    service = new CourseService(repository, events);
+    when(repository.search("cs101", null, 1))
+        .thenReturn(new CursorPage<>(List.of(existingCourse), "encoded-next"));
+    when(repository.enrollmentCountsFor(List.of("CS101"))).thenReturn(Map.of());
+
+    CursorPage<CourseService.CourseSummaryView> result = service.search("cs101", null, 1);
+
+    assertThat(result.nextCursor()).isEqualTo("encoded-next");
+    assertThat(result.content()).hasSize(1);
+  }
+
+  @Test
+  void summariesOfReturnsEmptyMapForEmptyInputWithoutQuerying() {
+    service = new CourseService(repository, events);
+
+    Map<CourseCode, CourseSummary> result = service.summariesOf(List.of());
+
+    assertThat(result).isEmpty();
+    verifyNoInteractions(repository);
+  }
+
+  @Test
+  void summariesOfDedupesDuplicateCodesWithoutThrowing() {
+    service = new CourseService(repository, events);
+    when(repository.findByCodes(any())).thenReturn(List.of(existingCourse));
+
+    Map<CourseCode, CourseSummary> result =
+        service.summariesOf(List.of(existingCode, existingCode));
+
+    assertThat(result).containsEntry(existingCode, new CourseSummary("CS101", "Intro to CS", 3));
   }
 
   @Test

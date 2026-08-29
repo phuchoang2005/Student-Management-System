@@ -2,6 +2,8 @@ package org.phuchoang.management.enrollment.application;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.course.CourseDeleted;
 import org.phuchoang.management.course.CourseLookup;
@@ -16,13 +18,13 @@ import org.phuchoang.management.shared.exception.FieldError;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.exception.UnknownCourseException;
 import org.phuchoang.management.shared.exception.UnknownStudentException;
+import org.phuchoang.management.shared.paging.CursorCodec;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.student.StudentCode;
 import org.phuchoang.management.student.StudentDeleted;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
 import org.phuchoang.management.student.StudentSummary;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.modulith.ApplicationModuleListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -148,17 +150,18 @@ public class EnrollmentService implements EnrollmentLookup {
 
   /**
    * UC-11/UC-20's list view — every enrollment of one student, or every enrollment in one course,
-   * paged. Exactly one filter must be supplied: with neither, this would be an "enumerate every
-   * enrollment in the system" endpoint no use case asks for; with both, the answer is a single
-   * enrollment, which {@link #getDetail} already addresses directly.
+   * keyset-paginated (PM-045). Exactly one filter must be supplied: with neither, this would be an
+   * "enumerate every enrollment in the system" endpoint no use case asks for; with both, the
+   * answer is a single enrollment, which {@link #getDetail} already addresses directly.
    *
    * <p>The constant side of the page is resolved once, outside the {@code map} — filtering by
    * {@code studentCode} means every row shares one {@code StudentSummary}, and by {@code
-   * courseCode} one {@code CourseSummary} — so a page of 20 costs one lookup for that side rather
-   * than 20 identical ones.
+   * courseCode} one {@code CourseSummary}. The varying side is resolved with one bulk {@code
+   * summariesOf} lookup for the whole page (PM-046), not one {@code summaryOf} call per row.
    */
   @Transactional(readOnly = true)
-  public Page<EnrollmentDetailView> search(String studentCode, String courseCode, Pageable pageable) {
+  public CursorPage<EnrollmentDetailView> search(
+      String studentCode, String courseCode, String cursor, int size) {
     boolean byStudent = studentCode != null && !studentCode.isBlank();
     boolean byCourse = courseCode != null && !courseCode.isBlank();
     if (byStudent == byCourse) {
@@ -168,15 +171,20 @@ public class EnrollmentService implements EnrollmentLookup {
           List.of(new FieldError("studentCode", message), new FieldError("courseCode", message)));
     }
 
+    String afterKey = CursorCodec.decode(cursor);
+
     if (byStudent) {
       StudentCode code = new StudentCode(studentCode);
       StudentId studentId = studentLookup
           .idOf(code)
           .orElseThrow(() -> new UnknownStudentException("Student '" + code.value() + "' does not exist."));
       StudentSummary student = studentLookup.summaryOf(studentId);
-      return repository
-          .findByStudentId(studentId, pageable)
-          .map(e -> new EnrollmentDetailView(student, courseLookup.summaryOf(e.courseCode()), e.enrolledAt()));
+      CursorPage<Enrollment> page = repository.findByStudentId(studentId, afterKey, size);
+      Map<CourseCode, CourseSummary> courseSummaries =
+          courseLookup.summariesOf(
+              page.content().stream().map(Enrollment::courseCode).collect(Collectors.toSet()));
+      return page.map(
+          e -> new EnrollmentDetailView(student, courseSummaries.get(e.courseCode()), e.enrolledAt()));
     }
 
     CourseCode code = new CourseCode(courseCode);
@@ -184,20 +192,30 @@ public class EnrollmentService implements EnrollmentLookup {
       throw new UnknownCourseException("Course '" + code.value() + "' does not exist.");
     }
     CourseSummary course = courseLookup.summaryOf(code);
-    return repository
-        .findByCourseCode(code, pageable)
-        .map(e -> new EnrollmentDetailView(studentLookup.summaryOf(e.studentId()), course, e.enrolledAt()));
+    CursorPage<Enrollment> page = repository.findByCourseCode(code, afterKey, size);
+    Map<StudentId, StudentSummary> studentSummaries =
+        studentLookup.summariesOf(
+            page.content().stream().map(Enrollment::studentId).collect(Collectors.toSet()));
+    return page.map(
+        e -> new EnrollmentDetailView(studentSummaries.get(e.studentId()), course, e.enrolledAt()));
   }
 
   /**
-   * findByStudentId → resolve each row's course side via {@code CourseLookup.summaryOf}. Backs
-   * {@code EnrollmentLookup.findByStudent} (US-5.4, {@code GET /api/v1/me/courses}), whose caller
-   * already holds a {@code StudentId} from its session principal and so needs no code resolution.
+   * findByStudentId → resolve every row's course side with one bulk {@code
+   * CourseLookup.summariesOf} call for the page (PM-046), not one {@code summaryOf} call per row.
+   * Backs {@code EnrollmentLookup.findByStudent} (US-5.4, {@code GET /api/v1/me/courses}), whose
+   * caller already holds a {@code StudentId} from its session principal and so needs no code
+   * resolution.
    */
   @Override
   @Transactional(readOnly = true)
-  public Page<CourseSummary> findByStudent(StudentId studentId, Pageable pageable) {
-    return repository.findByStudentId(studentId, pageable).map(e -> courseLookup.summaryOf(e.courseCode()));
+  public CursorPage<CourseSummary> findByStudent(StudentId studentId, String cursor, int size) {
+    String afterKey = CursorCodec.decode(cursor);
+    CursorPage<Enrollment> page = repository.findByStudentId(studentId, afterKey, size);
+    Map<CourseCode, CourseSummary> courseSummaries =
+        courseLookup.summariesOf(
+            page.content().stream().map(Enrollment::courseCode).collect(Collectors.toSet()));
+    return page.map(e -> courseSummaries.get(e.courseCode()));
   }
 
   /**

@@ -7,10 +7,10 @@ import { useState } from 'react';
 
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CourseFormDialog from '@/components/CourseFormDialog';
+import CursorPagination from '@/components/CursorPagination';
 import DataTable from '@/components/DataTable';
 import ErrorBanner from '@/components/ErrorBanner';
 import PageHeader from '@/components/PageHeader';
-import Pagination from '@/components/Pagination';
 import SearchInput from '@/components/SearchInput';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
@@ -20,7 +20,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { can } from '@/lib/auth/permissions';
 import RequireAuth from '@/lib/auth/RequireAuth';
 import useAsyncAction from '@/lib/hooks/useAsyncAction';
-import usePagedResource from '@/lib/hooks/usePagedResource';
+import useCursorResource from '@/lib/hooks/useCursorResource';
 
 /**
  * One route, two shapes again.
@@ -44,8 +44,8 @@ function Courses() {
   const isStudent = session?.role === 'STUDENT';
   const mayWrite = can(session?.role, 'courses:write');
 
-  const resource = usePagedResource<CourseSummary>((query, page) =>
-    isStudent ? me.courses(page) : courses.search(query || undefined, page),
+  const resource = useCursorResource<CourseSummary>((query, cursor) =>
+    isStudent ? me.courses(cursor) : courses.search(query || undefined, cursor),
   );
 
   const [editing, setEditing] = useState<CourseSummary | null>(null);
@@ -178,7 +178,13 @@ function Courses() {
         onRowClick={(row) => router.push(`/courses/${encodeURIComponent(row.courseCode)}`)}
       />
 
-      <Pagination data={resource.data} page={resource.page} onPageChange={resource.setPage} />
+      <CursorPagination
+        data={resource.data}
+        canGoPrev={resource.canGoPrev}
+        canGoNext={resource.canGoNext}
+        onPrev={resource.goPrev}
+        onNext={resource.goNext}
+      />
 
       <CourseFormDialog
         open={creating}
