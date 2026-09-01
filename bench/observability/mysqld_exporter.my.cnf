@@ -1,0 +1,8 @@
+# Copy to mysqld_exporter.my.cnf (gitignored) — mounted read-only into the mysqld-exporter
+# container at /.my.cnf (docker-compose.yml). Password must match the GRANT in
+# mysqld-exporter-grant.sql / MYSQLD_EXPORTER_PASSWORD in .env.
+[client]
+user = exporter
+password = exporter
+host = mysql
+port = 3306
