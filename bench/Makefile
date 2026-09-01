@@ -17,7 +17,8 @@ export
 CONTAINER := management-mysql
 
 .PHONY: help bench-node-modules bench-seed bench bench-all bench-report bench-jmh bench-ci-smoke \
-	bench-auth-ramp bench-cascade-delete bench-xc-003 bench-scale-sweep bench-mixed-soak
+	bench-auth-ramp bench-cascade-delete bench-xc-003 bench-scale-sweep bench-mixed-soak \
+	bench-full-catalog bench-auth-blast-radius bench-ip-suite
 
 help:
 	@echo "make bench-seed SCALE=S1|S2|S3 [SEED=..] - reseed the dataset at that scale, write out/<scale>-manifest.json, reset MySQL diagnostics"
@@ -32,6 +33,11 @@ help:
 	@echo "make bench-scale-sweep - BM-XC-004: classify the 6 P0 scenarios' S1->S2->S3 growth from existing out/ exports"
 	@echo "make bench-mixed-soak SCALE=S2 [SOAK_DURATION=30m] - BM-XC-002 mixed-role soak + BM-IDN-004, with monitor-soak.js backgrounded"
 	@echo "(Prometheus/Grafana/mysqld-exporter are behind the 'benchmark' docker-compose profile -- 'make -C management up-bench' starts them all alongside mysql; see bench/observability/README.md)"
+	@echo ""
+	@echo "docs-v01/Benchmark/07-improvement-roadmap.md IP-01..IP-11 verification (08-hazard-fix-specs.md has the per-item BM-* targets):"
+	@echo "make bench-full-catalog [REPS=1] [BASELINE=..] - reseed+run the P0 read catalog at S1/S2/S3 in sequence, bench-report each, then bench-scale-sweep -- IP-01/02/03/04/05/07's shared S1/S2/S3 exit criterion"
+	@echo "make bench-auth-blast-radius SCALE=S2|S3 - IP-08's blast-radius check: BM-IDN-001's ramp run concurrently against a BM-STU-005 control (bench-auth-ramp alone only gives the ramp's own knee, not this)"
+	@echo "make bench-ip-suite [IP_SUITE_SCALE=S2] - the whole IP-01..IP-11 sequence phase-by-phase (xc-003, full-catalog, writes, jmh, auth-ramp+blast-radius, cascade-delete last since it's destructive); IP-09 is already delivered and IP-10 is deliberately deferred (07-improvement-roadmap.md Phase 5) so neither runs here -- see bench-mixed-soak for H7 data anyway"
 
 SCALE ?= S1
 ifndef SEED
@@ -211,3 +217,89 @@ bench-mixed-soak: bench-node-modules
 		scenarios/mixed-soak.js; \
 	kill -INT $$monitor_pid 2>/dev/null || true; \
 	sleep 1
+
+# --- v0.1 roadmap orchestration (docs-v01/Benchmark/07-improvement-roadmap.md IP-01..IP-11,
+# 08-hazard-fix-specs.md's per-item Targets/Verification sections) ------------------------------
+
+IP_SUITE_SCALE ?= S2
+BLAST_RADIUS_CONTROL ?= BM_STU_005
+FULL_CATALOG_SCALES := S1 S2 S3
+
+# IP-01/IP-02/IP-03/IP-04/IP-05/IP-07 all share the same exit criterion: the P0 read catalog
+# (BENCH_SCENARIO_FILES -- BM-STU/BK/CRS/ENR/ME) re-run at S1, S2, and S3, then classified for
+# growth. Reseeds each scale fresh rather than assuming out/ already holds usable exports (unlike
+# bench-scale-sweep itself, which deliberately reads whatever is already there -- see its own
+# caveats). REPS follows bench-report's own REPS convention (median of the last REPS runs); each
+# scale gets REPS full bench-all passes before its bench-report is rendered.
+bench-full-catalog: bench-node-modules
+	@for s in $(FULL_CATALOG_SCALES); do \
+		$(MAKE) bench-seed SCALE=$$s; \
+		for i in $$(seq 1 $(REPS)); do \
+			$(MAKE) bench-all SCALE=$$s VUS=$(VUS) DURATION=$(DURATION) \
+				WARMUP_DURATION=$(WARMUP_DURATION) COOLDOWN_DURATION=$(COOLDOWN_DURATION) \
+				|| echo ">>> $$s rep $$i: one or more scenarios exited non-zero -- data still written, continuing"; \
+		done; \
+		$(MAKE) bench-report SCALE=$$s REPS=$(REPS) $(if $(BASELINE),BASELINE=$(BASELINE)); \
+	done
+	$(MAKE) bench-scale-sweep
+
+# IP-08 (08-hazard-fix-specs.md): BM-IDN-001's ramp must run alone to find its own knee
+# (auth-login.js's header comment; bench-auth-ramp above pins that). But IP-08 is judged on blast
+# radius, not the knee -- "other endpoints' latency, sampled concurrently, ... should no longer
+# degrade together with login latency" -- which needs the opposite: the ramp running WHILE
+# something else is measured. This backgrounds a repeating BM-STU-005 (read-single control)
+# loop against student-search.js for the duration of the ramp, following the same
+# background-then-kill shape bench-mixed-soak uses for monitor-soak.js above, and kills it once
+# the ramp completes. Deliberately not one measurement window sized to match the ramp's exact
+# wall-clock (auth-login.js's buildOptions(null, ...) call means no shared warm-up, so that's
+# computable from DURATION/COOLDOWN_DURATION, but brittle to hardcode here) -- the two exports in
+# out/ are meant for a manual before/after p95 comparison, same as this item's Verification section
+# describes; there is no automated pass/fail verdict for a concurrent-degradation check like this.
+bench-auth-blast-radius: bench-node-modules
+	@mkdir -p out
+	@echo "IP-08 blast-radius check: BM-IDN-001's ramp running concurrently against a $(BLAST_RADIUS_CONTROL) control."
+	@echo "This is NOT BM-IDN-001's own number -- use bench-auth-ramp alone for that (auth-login.js's header comment)."
+	@( while true; do \
+		k6 run \
+			--env BASE_URL=$(BENCH_BASE_URL) \
+			--env SCALE=$(SCALE) \
+			--env BM_ONLY=$(BLAST_RADIUS_CONTROL) \
+			--env DURATION=10s --env WARMUP_DURATION=1s --env COOLDOWN_DURATION=1s \
+			--quiet \
+			--summary-export=out/auth-blast-radius-control-$(SCALE)-$$(date +%Y%m%dT%H%M%S%N).json \
+			scenarios/student-search.js >/dev/null 2>&1; \
+	done ) & control_pid=$$!; \
+	$(MAKE) bench-auth-ramp SCALE=$(SCALE) DURATION=$(DURATION) \
+		WARMUP_DURATION=$(WARMUP_DURATION) COOLDOWN_DURATION=$(COOLDOWN_DURATION); \
+	kill $$control_pid 2>/dev/null || true; \
+	echo ">>> compare out/auth-blast-radius-control-$(SCALE)-*.json p95s against BM-STU-005's own Read-single SLO (<=50ms) -- degradation during the ramp is IP-08's target metric (08-hazard-fix-specs.md)."
+
+# The eleven-item roadmap end to end, sequenced by 07-improvement-roadmap.md's phase order (not by
+# IP-* number -- see that document for why config/tooling comes first, search-shape work second,
+# and so on). Runs the S2-scoped items against IP_SUITE_SCALE (default S2, "the scale the SLOs are
+# written for" per bench/README.md); bench-full-catalog sweeps S1/S2/S3 itself regardless.
+#   IP-01/IP-07 -> bench-xc-003 (pool sweep) + bench-full-catalog (S1/S2/S3 read catalog)
+#   IP-02/IP-03/IP-05 -> bench-full-catalog (same S1/S2/S3 data: BM-STU-002/003/004, BM-BK-001, BM-CRS-001)
+#   IP-04 -> bench-full-catalog's enrollment-list/me-reads legs + bench-jmh (BM-JMH-004 mapping-cost check)
+#   IP-06 -> bench-cascade-delete at N=200 -- destructive, so it runs LAST; the dataset needs
+#            restoring afterward before any further bench-* run at IP_SUITE_SCALE (its own target
+#            already prints that reminder)
+#   IP-08 -> bench-auth-ramp (the ramp's own knee) + bench-auth-blast-radius (the blast-radius check)
+#   IP-09 -> already delivered (08-hazard-fix-specs.md) -- nothing to run
+#   IP-10 -> deliberately deferred, no target metric yet (07-improvement-roadmap.md Phase 5) --
+#            not part of this sequence; run bench-mixed-soak separately if you want H7 data anyway
+#   IP-11 -> bench SCENARIO=writes (BM-STU-007's error rate)
+bench-ip-suite: bench-node-modules
+	$(MAKE) bench-xc-003 SCALE=$(IP_SUITE_SCALE) VUS=$(VUS) DURATION=$(DURATION) \
+		WARMUP_DURATION=$(WARMUP_DURATION) COOLDOWN_DURATION=$(COOLDOWN_DURATION)
+	$(MAKE) bench-full-catalog REPS=$(REPS) $(if $(BASELINE),BASELINE=$(BASELINE))
+	$(MAKE) bench-seed SCALE=$(IP_SUITE_SCALE)
+	$(MAKE) bench SCENARIO=writes SCALE=$(IP_SUITE_SCALE) VUS=$(VUS) DURATION=$(DURATION) \
+		WARMUP_DURATION=$(WARMUP_DURATION) COOLDOWN_DURATION=$(COOLDOWN_DURATION)
+	$(MAKE) bench-jmh JMH_REGEX=$(JMH_REGEX)
+	$(MAKE) bench-auth-ramp SCALE=$(IP_SUITE_SCALE) DURATION=$(DURATION) \
+		WARMUP_DURATION=$(WARMUP_DURATION) COOLDOWN_DURATION=$(COOLDOWN_DURATION)
+	$(MAKE) bench-auth-blast-radius SCALE=$(IP_SUITE_SCALE)
+	$(MAKE) bench-cascade-delete SCALE=$(IP_SUITE_SCALE)
+	@echo "=== bench-ip-suite done: IP-01..IP-11 except IP-09 (already delivered) and IP-10 (deferred, no target) ==="
+	@echo ">>> $(IP_SUITE_SCALE) is now post-cascade-delete -- restore the dataset (04-workload-data-preparation.md §5) before any further bench-* run at this scale."
