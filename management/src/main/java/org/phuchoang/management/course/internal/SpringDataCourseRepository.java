@@ -13,14 +13,26 @@ interface SpringDataCourseRepository extends CrudRepository<CourseRow, Long> {
   boolean existsByCourseCode(String courseCode);
 
   // Keyset (cursor) pagination, not OFFSET/COUNT: PM-044/PM-045 replaced the old LIKE + COUNT(*)
-  // pair with one FULLTEXT-backed query, ordered and filtered on course_code so JdbcCourseRepository
+  // pair with a FULLTEXT-backed query, ordered and filtered on course_code so JdbcCourseRepository
   // can ask for one extra row to detect whether a next page exists rather than pre-counting. `query`
   // has already been sanitized of boolean-mode operator characters by JdbcCourseRepository before it
   // reaches here.
+  //
+  // search/browse are deliberately separate statements, not one query with a
+  // "(:query IS NULL OR :query = '' OR MATCH(...))" branch: a single combined statement stopped
+  // the planner from specializing per call and regressed even the no-filter case
+  // (docs-v01/Benchmark/09-v01-vs-v00-conclusions.md §3) -- reopens IP-02/IP-03.
   @Query("""
       SELECT * FROM courses
-      WHERE (:query IS NULL OR :query = ''
-             OR MATCH(course_code, name) AGAINST (:query IN BOOLEAN MODE))
+      WHERE (:afterKey IS NULL OR course_code > :afterKey)
+      ORDER BY course_code
+      LIMIT :limit
+      """)
+  List<CourseRow> browse(String afterKey, int limit);
+
+  @Query("""
+      SELECT * FROM courses
+      WHERE MATCH(course_code, name) AGAINST (:query IN BOOLEAN MODE)
         AND (:afterKey IS NULL OR course_code > :afterKey)
       ORDER BY course_code
       LIMIT :limit

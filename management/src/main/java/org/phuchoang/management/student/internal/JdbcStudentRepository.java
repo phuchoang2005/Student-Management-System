@@ -65,7 +65,10 @@ class JdbcStudentRepository implements StudentRepository {
   public CursorPage<Student> search(String query, StudentId scopeToId, String afterKey, int limit) {
     Long scopeId = scopeToId == null ? null : scopeToId.value();
     String booleanQuery = toBooleanModeQuery(query);
-    List<StudentRow> rows = springRepo.search(booleanQuery, scopeId, afterKey, limit + 1);
+    List<StudentRow> rows =
+        booleanQuery == null || booleanQuery.isBlank()
+            ? springRepo.browse(scopeId, afterKey, limit + 1)
+            : springRepo.search(booleanQuery, scopeId, afterKey, limit + 1);
 
     boolean hasMore = rows.size() > limit;
     List<Student> content =

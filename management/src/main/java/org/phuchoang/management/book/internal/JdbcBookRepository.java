@@ -36,7 +36,10 @@ class JdbcBookRepository implements BookRepository {
   public CursorPage<Book> search(String query, StudentId ownerFilter, String afterKey, int limit) {
     Long ownerId = ownerFilter == null ? null : ownerFilter.value();
     String booleanQuery = toBooleanModeQuery(query);
-    List<BookRow> rows = springRepo.search(booleanQuery, ownerId, afterKey, limit + 1);
+    List<BookRow> rows =
+        booleanQuery == null || booleanQuery.isBlank()
+            ? springRepo.browse(ownerId, afterKey, limit + 1)
+            : springRepo.search(booleanQuery, ownerId, afterKey, limit + 1);
     return toCursorPage(rows, limit);
   }
 

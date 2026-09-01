@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -141,14 +143,17 @@ class JdbcBookRepositoryTest {
   }
 
   @Test
-  void searchPassesThroughANullOrBlankQueryUnchanged() {
+  void searchRoutesANullOrBlankQueryToBrowseInsteadOfTheFulltextStatement() {
+    // A null/blank query must never reach the MATCH-based `search` statement -- routing it there
+    // via an "(:query IS NULL OR ...)" branch is exactly the combined-query shape that regressed
+    // the no-filter case (docs-v01/Benchmark/09-v01-vs-v00-conclusions.md §3, BM-STU-001 +191%).
     repository = new JdbcBookRepository(springRepo);
-    when(springRepo.search(any(), isNull(), isNull(), anyInt())).thenReturn(List.of());
+    when(springRepo.browse(isNull(), isNull(), anyInt())).thenReturn(List.of());
 
     repository.search(null, null, null, 20);
     repository.search("", null, null, 20);
 
-    verify(springRepo).search(isNull(), isNull(), isNull(), eq(21));
-    verify(springRepo).search(eq(""), isNull(), isNull(), eq(21));
+    verify(springRepo, times(2)).browse(isNull(), isNull(), eq(21));
+    verify(springRepo, never()).search(any(), any(), any(), anyInt());
   }
 }

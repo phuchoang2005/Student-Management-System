@@ -20,11 +20,23 @@ interface SpringDataStudentRepository extends CrudRepository<StudentRow, Long> {
   // MODE, :afterKey is the previous page's last student_code (null for the first page), and there
   // is no separate count query -- JdbcStudentRepository asks for limit + 1 rows and trims the
   // extra one itself to decide whether a nextCursor is warranted.
+  //
+  // search/browse are deliberately separate statements, not one query with a
+  // "(:query IS NULL OR :query = '' OR MATCH(...))" branch: a single combined statement stopped
+  // the planner from specializing per call and regressed even the no-filter case (+191% p95,
+  // docs-v01/Benchmark/09-v01-vs-v00-conclusions.md §3) -- reopens IP-02/IP-03.
   @Query("""
       SELECT * FROM students
-      WHERE (:query IS NULL OR :query = ''
-             OR MATCH(student_code, first_name, last_name, email)
-                AGAINST (:query IN BOOLEAN MODE))
+      WHERE (:scopeId IS NULL OR id = :scopeId)
+        AND (:afterKey IS NULL OR student_code > :afterKey)
+      ORDER BY student_code
+      LIMIT :limit
+      """)
+  List<StudentRow> browse(Long scopeId, String afterKey, int limit);
+
+  @Query("""
+      SELECT * FROM students
+      WHERE MATCH(student_code, first_name, last_name, email) AGAINST (:query IN BOOLEAN MODE)
         AND (:scopeId IS NULL OR id = :scopeId)
         AND (:afterKey IS NULL OR student_code > :afterKey)
       ORDER BY student_code

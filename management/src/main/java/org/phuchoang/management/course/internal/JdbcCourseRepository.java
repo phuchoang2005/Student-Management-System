@@ -38,8 +38,11 @@ class JdbcCourseRepository implements CourseRepository {
   @Override
   public CursorPage<Course> search(String query, String afterKey, int limit) {
     String booleanQuery = toBooleanModeQuery(query);
-    List<Course> rows =
-        springRepo.search(booleanQuery, afterKey, limit + 1).stream().map(this::toDomain).toList();
+    List<CourseRow> matched =
+        booleanQuery == null || booleanQuery.isBlank()
+            ? springRepo.browse(afterKey, limit + 1)
+            : springRepo.search(booleanQuery, afterKey, limit + 1);
+    List<Course> rows = matched.stream().map(this::toDomain).toList();
 
     boolean hasMore = rows.size() > limit;
     List<Course> content = hasMore ? rows.subList(0, limit) : rows;
