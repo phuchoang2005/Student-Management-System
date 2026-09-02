@@ -1,0 +1,13 @@
+# Provisioned Prometheus datasource for the benchmark dashboards. Fixed uid so the dashboard
+# JSON files can reference it deterministically instead of Grafana's auto-generated one.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus (benchmark)
+    type: prometheus
+    uid: prometheus-benchmark
+    access: proxy
+    # Container DNS name -- grafana and prometheus are sibling services in docker-compose.yml.
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

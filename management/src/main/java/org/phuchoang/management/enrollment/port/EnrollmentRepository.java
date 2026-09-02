@@ -3,9 +3,8 @@ package org.phuchoang.management.enrollment.port;
 import java.util.Optional;
 import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.enrollment.domain.Enrollment;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.student.StudentId;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 /**
  * Scoped to what US-4.1 (enroll), US-4.2 (end, incl. the cascade listeners), and US-5.5 (detail and
@@ -22,12 +21,16 @@ public interface EnrollmentRepository {
 
   /**
    * Backs {@code EnrollmentLookup.findByStudent} ({@code GET /api/v1/me/courses}) and the {@code
-   * studentCode} half of {@code EnrollmentService.search}.
+   * studentCode} half of {@code EnrollmentService.search}. {@code afterKey} is the raw (already
+   * decoded) keyset cursor, {@code null} for the first page (PM-045).
    */
-  Page<Enrollment> findByStudentId(StudentId studentId, Pageable pageable);
+  CursorPage<Enrollment> findByStudentId(StudentId studentId, String afterKey, int limit);
 
-  /** Backs the {@code courseCode} half of {@code EnrollmentService.search} — a course's roster. */
-  Page<Enrollment> findByCourseCode(CourseCode courseCode, Pageable pageable);
+  /**
+   * Backs the {@code courseCode} half of {@code EnrollmentService.search} — a course's roster.
+   * {@code afterKey} is the raw (already decoded) keyset cursor, {@code null} for the first page.
+   */
+  CursorPage<Enrollment> findByCourseCode(CourseCode courseCode, String afterKey, int limit);
 
   Enrollment save(Enrollment enrollment);
 

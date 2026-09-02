@@ -1,8 +1,12 @@
 package org.phuchoang.management.student.internal;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.phuchoang.management.shared.exception.StaleWriteException;
+import org.phuchoang.management.shared.paging.CursorCodec;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.student.StudentCode;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.domain.DateOfBirth;
@@ -10,9 +14,6 @@ import org.phuchoang.management.student.domain.Email;
 import org.phuchoang.management.student.domain.Student;
 import org.phuchoang.management.student.port.StudentRepository;
 import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -35,6 +36,17 @@ class JdbcStudentRepository implements StudentRepository {
   }
 
   @Override
+  public List<Student> findByIds(Collection<StudentId> ids) {
+    if (ids.isEmpty()) {
+      return List.of();
+    }
+    List<Long> rawIds = ids.stream().map(StudentId::value).toList();
+    List<Student> students = new ArrayList<>();
+    springRepo.findAllById(rawIds).forEach(row -> students.add(toDomain(row)));
+    return students;
+  }
+
+  @Override
   public boolean existsByCode(StudentCode code) {
     return springRepo.existsByStudentCode(code.value());
   }
@@ -50,14 +62,55 @@ class JdbcStudentRepository implements StudentRepository {
   }
 
   @Override
-  public Page<Student> search(String query, StudentId scopeToId, Pageable pageable) {
+  public CursorPage<Student> search(String query, StudentId scopeToId, String afterKey, int limit) {
     Long scopeId = scopeToId == null ? null : scopeToId.value();
+    String booleanQuery = toBooleanModeQuery(query);
+    List<StudentRow> rows =
+        booleanQuery == null || booleanQuery.isBlank()
+            ? springRepo.browse(scopeId, afterKey, limit + 1)
+            : springRepo.search(booleanQuery, scopeId, afterKey, limit + 1);
+
+    boolean hasMore = rows.size() > limit;
     List<Student> content =
-        springRepo.search(query, scopeId, pageable.getPageSize(), pageable.getOffset()).stream()
-            .map(this::toDomain)
-            .toList();
-    long total = springRepo.countBySearch(query, scopeId);
-    return new PageImpl<>(content, pageable, total);
+        (hasMore ? rows.subList(0, limit) : rows).stream().map(this::toDomain).toList();
+
+    String nextCursor =
+        hasMore && !content.isEmpty()
+            ? CursorCodec.encode(content.get(content.size() - 1).code().value())
+            : null;
+    return new CursorPage<>(content, nextCursor);
+  }
+
+  /**
+   * Builds a MySQL boolean-mode FULLTEXT expression requiring every token in the raw query as a
+   * prefix match, mirroring how the built-in FULLTEXT parser tokenizes indexed text on
+   * non-alphanumeric boundaries. Naively gluing one trailing {@code '*'} onto the raw string
+   * breaks on any query containing its own word separators -- e.g. an email like
+   * "paging-scope-0@example.edu" indexes as five separate tokens, and searching for one glued
+   * "pagingscope0exampleedu*" token matches none of them; and a plain multi-word {@code AGAINST}
+   * with no {@code +} defaults to OR, so "Jane Doe" would match any row containing just "Doe".
+   * Splitting on non-alphanumeric characters and requiring ({@code +}) each resulting token as a
+   * prefix ({@code *}) fixes both. Tokens under {@code innodb_ft_min_token_size}'s default of 3
+   * characters are dropped rather than required: MySQL never indexes them at all, so requiring one
+   * as a mandatory term would make the whole query unsatisfiable (e.g. an ISBN's single-digit
+   * segments). {@code null}/blank pass through untouched -- the query itself already treats either
+   * as "no filter" via its {@code :query IS NULL OR :query = ''} clause.
+   */
+  private static String toBooleanModeQuery(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return raw;
+    }
+    StringBuilder booleanQuery = new StringBuilder();
+    for (String token : raw.split("[^\\p{Alnum}]+")) {
+      if (token.length() < 3) {
+        continue;
+      }
+      if (booleanQuery.length() > 0) {
+        booleanQuery.append(' ');
+      }
+      booleanQuery.append('+').append(token).append('*');
+    }
+    return booleanQuery.isEmpty() ? null : booleanQuery.toString();
   }
 
   @Override

@@ -1,6 +1,7 @@
 package org.phuchoang.management.book.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -25,11 +26,9 @@ import org.phuchoang.management.book.application.BookService;
 import org.phuchoang.management.shared.exception.DuplicateIsbnException;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.exception.UnknownStudentException;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.shared.web.GlobalExceptionHandler;
 import org.phuchoang.management.student.StudentSummary;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -236,22 +235,20 @@ class BookControllerTest {
 
   @Test
   void searchBooksReturnsPagedSummaries() throws Exception {
-    Page<BookService.BookSummaryView> page =
-        new PageImpl<>(List.of(A_SUMMARY), PageRequest.of(0, 20), 1);
-    when(bookService.search(any(), any(), any(), any())).thenReturn(page);
+    CursorPage<BookService.BookSummaryView> page = new CursorPage<>(List.of(A_SUMMARY), null);
+    when(bookService.search(any(), any(), any(), anyInt(), any())).thenReturn(page);
 
     mockMvc
         .perform(get("/api/v1/books").param("query", "clean"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(1))
         .andExpect(jsonPath("$.content[0].isbn").value("978-0-13-468599-1"))
         .andExpect(jsonPath("$.content[0].ownerStudentCode").value("S00101"));
   }
 
   @Test
   void searchBooksReturnsEmptyContentWhenNoMatch() throws Exception {
-    when(bookService.search(any(), any(), any(), any()))
-        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+    when(bookService.search(any(), any(), any(), anyInt(), any()))
+        .thenReturn(new CursorPage<>(List.of(), null));
 
     mockMvc
         .perform(get("/api/v1/books").param("query", "nobody"))

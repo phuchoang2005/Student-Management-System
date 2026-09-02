@@ -18,12 +18,13 @@
 
 import http from 'k6/http';
 import { check } from 'k6';
+import { vu } from 'k6/execution';
 import { BASE_URL } from '../lib/config.js';
 import { ensureLoggedIn } from '../lib/vuSession.js';
 import { shardFor } from '../lib/vuShard.js';
 import { mergeThresholds, sloThresholds } from '../lib/slo.js';
 
-const MAX_SHARD_VUS = 20;
+const WARMUP_VUS = 20;
 const WARMUP_SECONDS = 10;
 // Generous fixed spacing between stages so a real S2/S3 run has room for one stage's cascade to
 // mostly settle before the next burst starts skewing host CPU/pool contention; irrelevant to a
@@ -39,7 +40,7 @@ export const options = {
   scenarios: {
     warmup: {
       executor: 'constant-vus',
-      vus: MAX_SHARD_VUS,
+      vus: WARMUP_VUS,
       duration: `${WARMUP_SECONDS}s`,
       exec: 'warmup',
       startTime: '0s',
@@ -81,9 +82,13 @@ export const options = {
   noCookiesReset: true,
 };
 
-let pool10 = [];
-let pool50 = [];
-let pool200 = [];
+// Discovered once per VU during warm-up, raw and unsharded -- each stage shards its own slice
+// lazily, on first use, against its own scenario's `vus` above (10/20/20), not warm-up's own
+// (bench/lib/vuShard.js's header explains why the divisor must match the actual consumer).
+let allCodes = [];
+const shard10 = { pool: null };
+const shard50 = { pool: null };
+const shard200 = { pool: null };
 let cursor10 = 0;
 let cursor50 = 0;
 let cursor200 = 0;
@@ -102,16 +107,17 @@ export function warmup() {
     codes = codes.concat(content.map((s) => s.studentCode));
     if (content.length < 100) break;
   }
-  pool10 = shardFor(codes.slice(0, 10), __VU, MAX_SHARD_VUS);
-  pool50 = shardFor(codes.slice(10, 60), __VU, MAX_SHARD_VUS);
-  pool200 = shardFor(codes.slice(60, 260), __VU, MAX_SHARD_VUS);
+  allCodes = codes;
 }
 
-function deleteNext(pool, cursorGetter, cursorSetter, tagName) {
+function deleteNext(rawSlice, stageVus, shardCache, cursorGetter, cursorSetter, tagName) {
   ensureLoggedIn('REGISTRAR');
+  if (shardCache.pool === null) {
+    shardCache.pool = shardFor(rawSlice, vu.idInTest, stageVus);
+  }
   const cursor = cursorGetter();
-  if (cursor >= pool.length) return;
-  const code = pool[cursor];
+  if (cursor >= shardCache.pool.length) return;
+  const code = shardCache.pool[cursor];
   cursorSetter(cursor + 1);
   const res = http.del(`${BASE_URL}/api/v1/students/${code}`, null, { tags: { name: tagName } });
   check(res, { [`${tagName} status 204`]: (r) => r.status === 204 });
@@ -119,7 +125,9 @@ function deleteNext(pool, cursorGetter, cursorSetter, tagName) {
 
 export function bmXc001N10() {
   deleteNext(
-    pool10,
+    allCodes.slice(0, 10),
+    10,
+    shard10,
     () => cursor10,
     (v) => (cursor10 = v),
     'BM_XC_001_N10',
@@ -128,7 +136,9 @@ export function bmXc001N10() {
 
 export function bmXc001N50() {
   deleteNext(
-    pool50,
+    allCodes.slice(10, 60),
+    20,
+    shard50,
     () => cursor50,
     (v) => (cursor50 = v),
     'BM_XC_001_N50',
@@ -137,7 +147,9 @@ export function bmXc001N50() {
 
 export function bmXc001N200() {
   deleteNext(
-    pool200,
+    allCodes.slice(60, 260),
+    20,
+    shard200,
     () => cursor200,
     (v) => (cursor200 = v),
     'BM_XC_001_N200',

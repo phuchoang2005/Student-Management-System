@@ -58,7 +58,6 @@ class StudentLookupIntegrationTest {
     mockMvc
         .perform(get("/api/v1/students").param("query", "S00301"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(1))
         .andExpect(jsonPath("$.content[0].studentCode").value("S00301"))
         .andExpect(jsonPath("$.content[0].email").value("amy.lee.301@example.edu"));
   }
@@ -69,17 +68,17 @@ class StudentLookupIntegrationTest {
     mockMvc
         .perform(get("/api/v1/students").param("query", "no-such-student-anywhere"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(0))
+        .andExpect(jsonPath("$.nextCursor").doesNotExist())
         .andExpect(jsonPath("$.content").isArray())
         .andExpect(jsonPath("$.content").isEmpty());
   }
 
   @Test
   @WithMockUser(roles = "REGISTRAR")
-  void searchResultsCanBeBrowsedPageByPage() throws Exception {
+  void searchResultsCanBeBrowsedPageByPageWithCursor() throws Exception {
     // Scoped to a query term unique to this test's own rows -- other test methods in this class
     // register their own students in the same (per-class) MySQL container without cleanup between
-    // tests, so an unscoped/unfiltered count would be polluted by their leftover rows.
+    // tests, so an unscoped/unfiltered result would be polluted by their leftover rows.
     for (int i = 0; i < 3; i++) {
       mockMvc
           .perform(
@@ -89,18 +88,89 @@ class StudentLookupIntegrationTest {
           .andExpect(status().isCreated());
     }
 
-    mockMvc
-        .perform(get("/api/v1/students").param("query", "paging-scope-").param("size", "2").param("page", "0"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.size").value(2))
-        .andExpect(jsonPath("$.totalElements").value(3))
-        .andExpect(jsonPath("$.totalPages").value(2))
-        .andExpect(jsonPath("$.content.length()").value(2));
+    var firstPage =
+        mockMvc
+            .perform(get("/api/v1/students").param("query", "paging-scope-").param("size", "2"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.nextCursor").exists())
+            .andReturn();
+
+    String cursor =
+        com.jayway.jsonpath.JsonPath.read(
+            firstPage.getResponse().getContentAsString(), "$.nextCursor");
 
     mockMvc
-        .perform(get("/api/v1/students").param("query", "paging-scope-").param("size", "2").param("page", "1"))
+        .perform(
+            get("/api/v1/students")
+                .param("query", "paging-scope-")
+                .param("size", "2")
+                .param("cursor", cursor))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.content.length()").value(1));
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.nextCursor").doesNotExist());
+  }
+
+  @Test
+  @WithMockUser(roles = "REGISTRAR")
+  void searchPageExactlyMatchingSizeHasNoPhantomNextCursor() throws Exception {
+    for (int i = 0; i < 2; i++) {
+      mockMvc
+          .perform(
+              post("/api/v1/students")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(
+                      registerBody("S005" + i, "Exact", "Fit" + i, "exact-fit-" + i + "@example.edu")))
+          .andExpect(status().isCreated());
+    }
+
+    mockMvc
+        .perform(get("/api/v1/students").param("query", "exact-fit-").param("size", "2"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(2))
+        .andExpect(jsonPath("$.nextCursor").doesNotExist());
+  }
+
+  @Test
+  @WithMockUser(roles = "REGISTRAR")
+  void searchWithCursorPastTheEndReturnsEmptyContentNotError() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/students")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody("S00420", "Cursor", "PastEnd", "cursor-past-end@example.edu")))
+        .andExpect(status().isCreated());
+
+    String farCursor =
+        java.util.Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString("ZZZZZZZZZZ".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+    mockMvc
+        .perform(
+            get("/api/v1/students")
+                .param("query", "cursor-past-end")
+                .param("cursor", farCursor))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content").isArray())
+        .andExpect(jsonPath("$.content").isEmpty())
+        .andExpect(jsonPath("$.nextCursor").doesNotExist());
+  }
+
+  @Test
+  @WithMockUser(roles = "REGISTRAR")
+  void searchWithFulltextOperatorCharacterDoesNotError() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/students")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(registerBody("S00430", "Foo", "Bar", "foo.bar.430@example.edu")))
+        .andExpect(status().isCreated());
+
+    mockMvc
+        .perform(get("/api/v1/students").param("query", "foo+bar"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content").isArray());
   }
 
   @Test

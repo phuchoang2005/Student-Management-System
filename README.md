@@ -1,5 +1,16 @@
 # Student Management System
 
+## What's new in v0.1
+
+The [Performance](#performance) section below documents eight hazards found by reading the code and confirmed under load — v0.1 fixes them:
+
+- **HikariCP's connection pool** raised off its untuned default of 10, removing the hard concurrency ceiling that used to cap the whole system.
+- **Enrollment listings** batch-resolve a page's course/student lookups in one query instead of one per row — **50–78% faster**.
+- **Search** (students, books, courses) now uses a MySQL `FULLTEXT` index with purpose-built queries instead of an unindexed scan.
+- **Keyset (seek) pagination** replaces `OFFSET`/`LIMIT` for deep list pages, so page depth stops being a cost variable.
+
+See [`docs-v01/`](docs-v01/) for the full remediation plan and [`docs-v01/Benchmark/10-customer-performance-summary.md`](docs-v01/Benchmark/10-customer-performance-summary.md) for the measured, customer-facing results — including a regression that was found and fixed along the way, written up rather than quietly smoothed over.
+
 ## What is this?
 
 This is a system for keeping track of **students, the books they borrow, and the courses they take** — the kind of record-keeping a school, training center, or library would need day to day.
@@ -104,7 +115,7 @@ Two of those runs also found bugs in the *benchmark harness itself* — a seed-d
 ### Prerequisites
 
 - JDK 21
-- Docker (or [Colima](https://github.com/abiosoft/colima) on macOS) — needed both to run MySQL via `docker-compose.yml` and for the [Testcontainers](https://testcontainers.com/)-backed integration tests
+- Docker (or [Colima](https://github.com/abiosoft/colima) on macOS) — needed both to run MySQL via `management/docker-compose.yml` and for the [Testcontainers](https://testcontainers.com/)-backed integration tests
 - The Maven wrapper (`./mvnw`) checked into `management/` — no local Maven install required
 - Node.js 20+ — for the demo UI (`management-frontend/`) and the docs compiler (`util/`)
 
@@ -114,7 +125,7 @@ Two of those runs also found bugs in the *benchmark harness itself* — a seed-d
 make -C management up
 ```
 
-This creates `.env` from `.env.example` if missing (see `.env.example` for the MySQL credentials/port and the `INITIAL_PASSWORD_KEY` used to encrypt students' initial passwords), starts Colima if needed, then brings up the `management-mysql` container defined in `docker-compose.yml`. The database targets live in `management/Makefile` — run them from the repo root with `-C management`, or `cd management` first.
+This creates `.env` from `.env.example` if missing (see `.env.example` for the MySQL credentials/port and the `INITIAL_PASSWORD_KEY` used to encrypt students' initial passwords), starts Colima if needed, then brings up the `management-mysql` container defined in `management/docker-compose.yml`. The database targets live in `management/Makefile` — run them from the repo root with `-C management`, or `cd management` first.
 
 Other useful targets: `make -C management down` (stop), `make -C management logs` (tail MySQL logs), `make -C management mysql` (open a MySQL shell), `make -C management reset` (wipe the data volume and start fresh). Run `make -C management help` to list them all.
 

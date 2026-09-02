@@ -35,6 +35,23 @@ login:
               error: Unauthorized
               message: Username or password is incorrect.
               path: /api/v1/auth/login
+      '429':
+        description: |
+          The login bulkhead's concurrent-attempt permits are all in use. This is not a
+          per-client rate limit — it's a bounded number of in-flight logins, shared across all
+          callers, that exists to keep a login burst from starving the rest of the application's
+          Tomcat thread pool while BCrypt runs (api-specification.md §5 decision #15). A rejected
+          request never reaches credential verification.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/common.yaml#/Error'
+            example:
+              timestamp: '2026-01-15T09:24:00Z'
+              status: 429
+              error: Too Many Requests
+              message: Too many concurrent login attempts, try again shortly
+              path: /api/v1/auth/login
 
 password:
   post:

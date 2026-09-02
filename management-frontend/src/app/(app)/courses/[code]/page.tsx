@@ -4,10 +4,10 @@ import { Box, Center, Code, Heading, Spinner, Stack } from '@chakra-ui/react';
 import { ArrowLeft, Users } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 
+import CursorPagination from '@/components/CursorPagination';
 import DataTable from '@/components/DataTable';
 import ErrorBanner from '@/components/ErrorBanner';
 import PageHeader from '@/components/PageHeader';
-import Pagination from '@/components/Pagination';
 import RecordCard from '@/components/RecordCard';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
@@ -16,7 +16,7 @@ import type { Enrollment } from '@/lib/api/types';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { can } from '@/lib/auth/permissions';
 import RequireAuth from '@/lib/auth/RequireAuth';
-import usePagedResource from '@/lib/hooks/usePagedResource';
+import useCursorResource from '@/lib/hooks/useCursorResource';
 import useResource from '@/lib/hooks/useResource';
 
 /**
@@ -89,9 +89,10 @@ function CourseDetail() {
 /** Every student enrolled in this course; each row opens that student's profile. */
 function Roster({ code }: { code: string }) {
   const router = useRouter();
-  const resource = usePagedResource<Enrollment>((_query, page) => enrollments.byCourse(code, page), {
-    deps: [code],
-  });
+  const resource = useCursorResource<Enrollment>(
+    (_query, cursor) => enrollments.byCourse(code, cursor),
+    { deps: [code] },
+  );
 
   return (
     <Box>
@@ -132,7 +133,13 @@ function Roster({ code }: { code: string }) {
         }
         onRowClick={(row) => router.push(`/students/${encodeURIComponent(row.student.studentCode)}`)}
       />
-      <Pagination data={resource.data} page={resource.page} onPageChange={resource.setPage} />
+      <CursorPagination
+        data={resource.data}
+        canGoPrev={resource.canGoPrev}
+        canGoNext={resource.canGoNext}
+        onPrev={resource.goPrev}
+        onNext={resource.goNext}
+      />
     </Box>
   );
 }

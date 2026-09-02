@@ -1,8 +1,12 @@
 package org.phuchoang.management.course.application;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.phuchoang.management.course.CourseCode;
 import org.phuchoang.management.course.CourseDeleted;
 import org.phuchoang.management.course.CourseLookup;
@@ -14,9 +18,9 @@ import org.phuchoang.management.course.domain.Credits;
 import org.phuchoang.management.course.port.CourseRepository;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.NotFoundException;
+import org.phuchoang.management.shared.paging.CursorCodec;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -109,7 +113,9 @@ public class CourseService implements CourseLookup {
   }
 
   /**
-   * UC-15 — matches code/name, paged. {@code query} may be blank/{@code null}.
+   * UC-15 — matches code/name, keyset-paged (PM-045). {@code query} may be blank/{@code null}.
+   * {@code cursor} is the opaque value from the previous page's {@code nextCursor}, or {@code null}
+   * for the first page.
    *
    * <p>The enrolled-student count is fetched once for the whole page rather than per row: a page of
    * 20 costs one extra query, not 20. {@code readOnly} because this is now two statements — the
@@ -120,11 +126,12 @@ public class CourseService implements CourseLookup {
    * guarantee — it must not be used as a capacity check.
    */
   @Transactional(readOnly = true)
-  public Page<CourseSummaryView> search(String query, Pageable pageable) {
-    Page<Course> page = repository.search(query, pageable);
-    List<String> codes = page.getContent().stream().map(course -> course.code().value()).toList();
+  public CursorPage<CourseSummaryView> search(String query, String cursor, int size) {
+    String afterKey = CursorCodec.decode(cursor);
+    CursorPage<Course> cursorPage = repository.search(query, afterKey, size);
+    List<String> codes = cursorPage.content().stream().map(course -> course.code().value()).toList();
     Map<String, Long> counts = repository.enrollmentCountsFor(codes);
-    return page.map(
+    return cursorPage.map(
         course ->
             new CourseSummaryView(
                 course.code().value(),
@@ -178,6 +185,31 @@ public class CourseService implements CourseLookup {
             .findByCode(code)
             .orElseThrow(() -> new NotFoundException("Course '" + code.value() + "' does not exist."));
 
+    return toSummary(course);
+  }
+
+  /**
+   * Backs {@code CourseLookup.summariesOf} (PM-046) — one batch query in place of one {@link
+   * #summaryOf} call per row. Deduplicates {@code codes} via a {@link LinkedHashSet} before it
+   * reaches the repository, purely so a caller passing duplicates can't make {@code
+   * Collectors.toMap} throw on a duplicate key below (the same code always resolves to the same
+   * course, so a duplicate is never an actual key collision, just wasted lookup work).
+   */
+  @Override
+  public Map<CourseCode, CourseSummary> summariesOf(Collection<CourseCode> codes) {
+    if (codes.isEmpty()) {
+      return Map.of();
+    }
+    Set<CourseCode> distinctCodes = new LinkedHashSet<>(codes);
+    return repository.findByCodes(distinctCodes).stream()
+        .collect(Collectors.toMap(Course::code, this::toSummary));
+  }
+
+  /**
+   * Unwraps {@code Course}'s Value Objects for both {@link #summaryOf} and {@link #summariesOf} —
+   * kept as one helper so the two never drift on which fields a {@code CourseSummary} carries.
+   */
+  private CourseSummary toSummary(Course course) {
     return new CourseSummary(course.code().value(), course.name(), course.credits().value());
   }
 

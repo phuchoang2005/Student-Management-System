@@ -11,7 +11,9 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
@@ -30,15 +32,12 @@ import org.phuchoang.management.shared.exception.DuplicateEnrollmentException;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.exception.UnknownCourseException;
 import org.phuchoang.management.shared.exception.UnknownStudentException;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.student.StudentCode;
 import org.phuchoang.management.student.StudentDeleted;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
 import org.phuchoang.management.student.StudentSummary;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class EnrollmentServiceTest {
@@ -226,7 +225,7 @@ class EnrollmentServiceTest {
   void searchRejectsNeitherFilter() {
     service = new EnrollmentService(repository, studentLookup, courseLookup);
 
-    assertThatThrownBy(() -> service.search(null, null, PageRequest.of(0, 20)))
+    assertThatThrownBy(() -> service.search(null, null, null, 20))
         .isInstanceOf(DomainValidationException.class);
 
     verifyNoInteractions(repository, studentLookup, courseLookup);
@@ -236,7 +235,7 @@ class EnrollmentServiceTest {
   void searchRejectsBothFilters() {
     service = new EnrollmentService(repository, studentLookup, courseLookup);
 
-    assertThatThrownBy(() -> service.search("S00123", "CS101", PageRequest.of(0, 20)))
+    assertThatThrownBy(() -> service.search("S00123", "CS101", null, 20))
         .isInstanceOf(DomainValidationException.class);
 
     verifyNoInteractions(repository, studentLookup, courseLookup);
@@ -247,7 +246,7 @@ class EnrollmentServiceTest {
     service = new EnrollmentService(repository, studentLookup, courseLookup);
     when(studentLookup.idOf(STUDENT_CODE)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.search("S00123", null, PageRequest.of(0, 20)))
+    assertThatThrownBy(() -> service.search("S00123", null, null, 20))
         .isInstanceOf(UnknownStudentException.class);
   }
 
@@ -256,58 +255,61 @@ class EnrollmentServiceTest {
     service = new EnrollmentService(repository, studentLookup, courseLookup);
     when(courseLookup.existsByCode(COURSE_CODE)).thenReturn(false);
 
-    assertThatThrownBy(() -> service.search(null, "CS101", PageRequest.of(0, 20)))
+    assertThatThrownBy(() -> service.search(null, "CS101", null, 20))
         .isInstanceOf(UnknownCourseException.class);
   }
 
   @Test
-  void searchByStudentCodeResolvesTheStudentOnceForThePage() {
+  void searchByStudentCodeResolvesTheStudentOnceAndBatchesTheCourseLookupForThePage() {
     service = new EnrollmentService(repository, studentLookup, courseLookup);
-    Pageable pageable = PageRequest.of(0, 20);
     Instant enrolledAt = Instant.parse("2024-01-01T00:00:00Z");
     knownStudent();
     when(studentLookup.summaryOf(STUDENT_ID)).thenReturn(aStudentSummary());
-    when(repository.findByStudentId(STUDENT_ID, pageable))
+    when(repository.findByStudentId(STUDENT_ID, null, 20))
         .thenReturn(
-            new PageImpl<>(
+            new CursorPage<>(
                 List.of(anEnrollment(STUDENT_ID, enrolledAt), anEnrollment(STUDENT_ID, enrolledAt)),
-                pageable,
-                2));
-    when(courseLookup.summaryOf(COURSE_CODE)).thenReturn(aCourseSummary());
+                null));
+    when(courseLookup.summariesOf(Set.of(COURSE_CODE))).thenReturn(Map.of(COURSE_CODE, aCourseSummary()));
 
-    Page<EnrollmentService.EnrollmentDetailView> page =
-        service.search("S00123", null, pageable);
+    CursorPage<EnrollmentService.EnrollmentDetailView> page =
+        service.search("S00123", null, null, 20);
 
-    assertThat(page.getContent()).hasSize(2);
-    assertThat(page.getContent().get(0).course().courseCode()).isEqualTo("CS101");
+    assertThat(page.content()).hasSize(2);
+    assertThat(page.content().get(0).course().courseCode()).isEqualTo("CS101");
     // Two rows, one student lookup -- the constant side is resolved outside the per-row mapping.
     verify(studentLookup).summaryOf(STUDENT_ID);
+    // Two rows, one distinct course -- the varying side is one bulk lookup for the page, not one
+    // summaryOf call per row (PM-046).
+    verify(courseLookup).summariesOf(Set.of(COURSE_CODE));
   }
 
   @Test
-  void searchByCourseCodeResolvesTheCourseOnceForThePage() {
+  void searchByCourseCodeResolvesTheCourseOnceAndBatchesTheStudentLookupForThePage() {
     service = new EnrollmentService(repository, studentLookup, courseLookup);
-    Pageable pageable = PageRequest.of(0, 20);
     Instant enrolledAt = Instant.parse("2024-01-01T00:00:00Z");
+    StudentId otherStudentId = new StudentId(2L);
     when(courseLookup.existsByCode(COURSE_CODE)).thenReturn(true);
     when(courseLookup.summaryOf(COURSE_CODE)).thenReturn(aCourseSummary());
-    when(repository.findByCourseCode(COURSE_CODE, pageable))
+    when(repository.findByCourseCode(COURSE_CODE, null, 20))
         .thenReturn(
-            new PageImpl<>(
-                List.of(anEnrollment(STUDENT_ID, enrolledAt), anEnrollment(new StudentId(2L), enrolledAt)),
-                pageable,
-                2));
-    when(studentLookup.summaryOf(STUDENT_ID)).thenReturn(aStudentSummary());
-    when(studentLookup.summaryOf(new StudentId(2L)))
-        .thenReturn(new StudentSummary("S00124", "John", "Roe", "john.roe@example.edu"));
+            new CursorPage<>(
+                List.of(anEnrollment(STUDENT_ID, enrolledAt), anEnrollment(otherStudentId, enrolledAt)),
+                null));
+    StudentSummary otherStudentSummary = new StudentSummary("S00124", "John", "Roe", "john.roe@example.edu");
+    when(studentLookup.summariesOf(Set.of(STUDENT_ID, otherStudentId)))
+        .thenReturn(Map.of(STUDENT_ID, aStudentSummary(), otherStudentId, otherStudentSummary));
 
-    Page<EnrollmentService.EnrollmentDetailView> page = service.search(null, "CS101", pageable);
+    CursorPage<EnrollmentService.EnrollmentDetailView> page = service.search(null, "CS101", null, 20);
 
-    assertThat(page.getContent()).hasSize(2);
-    assertThat(page.getContent())
+    assertThat(page.content()).hasSize(2);
+    assertThat(page.content())
         .extracting(view -> view.student().studentCode())
         .containsExactly("S00123", "S00124");
     verify(courseLookup).summaryOf(COURSE_CODE);
+    // Two rows, two distinct students -- one bulk lookup for the page, not one summaryOf call per
+    // row (PM-046).
+    verify(studentLookup).summariesOf(Set.of(STUDENT_ID, otherStudentId));
   }
 
   private static Enrollment anEnrollment(StudentId studentId, Instant enrolledAt) {

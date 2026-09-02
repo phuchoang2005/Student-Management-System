@@ -7,8 +7,7 @@ import org.phuchoang.management.course.web.dto.CourseDetailDto;
 import org.phuchoang.management.course.web.dto.CourseResponse;
 import org.phuchoang.management.course.web.dto.CourseSummaryDto;
 import org.phuchoang.management.course.web.dto.CourseUpdateRequest;
-import org.phuchoang.management.shared.web.PageResponse;
-import org.springframework.data.domain.Pageable;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,9 +33,12 @@ public class CourseController {
   }
 
   @GetMapping
-  public PageResponse<CourseSummaryDto> searchCourses(
-      @RequestParam(required = false) String query, Pageable pageable) {
-    return PageResponse.from(courseService.search(query, pageable).map(mapper::toSummaryDto));
+  public CursorPage<CourseSummaryDto> searchCourses(
+      @RequestParam(required = false) String query,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size) {
+    int clampedSize = Math.min(Math.max(size, 1), 100);
+    return courseService.search(query, cursor, clampedSize).map(mapper::toSummaryDto);
   }
 
   @GetMapping("/{code}")

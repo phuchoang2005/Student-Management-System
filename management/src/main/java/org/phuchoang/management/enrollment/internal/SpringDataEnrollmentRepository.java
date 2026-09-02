@@ -1,5 +1,6 @@
 package org.phuchoang.management.enrollment.internal;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jdbc.repository.query.Modifying;
@@ -39,21 +40,27 @@ interface SpringDataEnrollmentRepository extends CrudRepository<EnrollmentRow, L
 
   // Selects c.course_code alongside the enrollment's own columns -- EnrollmentRow only carries
   // the surrogate course_id, but EnrollmentLookup.findByStudent's callers (EnrollmentService)
-  // need CourseCode to resolve each row's CourseSummary via CourseLookup.summaryOf, so the join
+  // need CourseCode to resolve each row's CourseSummary via CourseLookup.summariesOf, so the join
   // result needs its own Row type (EnrollmentCourseRow) rather than EnrollmentRow itself.
+  //
+  // Keyset pagination on the compound (enrolled_at, id) key (PM-045): enrolled_at alone isn't
+  // unique, so two enrollments created in the same millisecond would otherwise collide or get
+  // silently skipped -- the surrogate id breaks the tie. No separate COUNT(*) (PM-043): the caller
+  // fetches limit+1 and trims, the same convention as student/course/book.
   @Query("""
       SELECT e.id AS id, e.student_id AS student_id, e.course_id AS course_id,
              e.enrolled_at AS enrolled_at, c.course_code AS course_code
       FROM enrollments e
       JOIN courses c ON c.id = e.course_id
       WHERE e.student_id = :studentId
-      ORDER BY e.enrolled_at
-      LIMIT :limit OFFSET :offset
+        AND (:afterEnrolledAt IS NULL
+             OR e.enrolled_at > :afterEnrolledAt
+             OR (e.enrolled_at = :afterEnrolledAt AND e.id > :afterId))
+      ORDER BY e.enrolled_at, e.id
+      LIMIT :limit
       """)
-  List<EnrollmentCourseRow> findByStudentId(Long studentId, int limit, long offset);
-
-  @Query("SELECT COUNT(*) FROM enrollments WHERE student_id = :studentId")
-  long countByStudentId(Long studentId);
+  List<EnrollmentCourseRow> findByStudentId(
+      Long studentId, Instant afterEnrolledAt, Long afterId, int limit);
 
   // The roster half of EnrollmentRepository.search. Returns EnrollmentRow, not EnrollmentCourseRow:
   // every row in this page shares the one course the caller filtered on, so there is nothing per-row
@@ -63,17 +70,14 @@ interface SpringDataEnrollmentRepository extends CrudRepository<EnrollmentRow, L
       SELECT e.* FROM enrollments e
       JOIN courses c ON c.id = e.course_id
       WHERE c.course_code = :courseCode
-      ORDER BY e.enrolled_at
-      LIMIT :limit OFFSET :offset
+        AND (:afterEnrolledAt IS NULL
+             OR e.enrolled_at > :afterEnrolledAt
+             OR (e.enrolled_at = :afterEnrolledAt AND e.id > :afterId))
+      ORDER BY e.enrolled_at, e.id
+      LIMIT :limit
       """)
-  List<EnrollmentRow> findByCourseCode(String courseCode, int limit, long offset);
-
-  @Query("""
-      SELECT COUNT(*) FROM enrollments e
-      JOIN courses c ON c.id = e.course_id
-      WHERE c.course_code = :courseCode
-      """)
-  long countByCourseCode(String courseCode);
+  List<EnrollmentRow> findByCourseCode(
+      String courseCode, Instant afterEnrolledAt, Long afterId, int limit);
 
   @Modifying
   @Query("""

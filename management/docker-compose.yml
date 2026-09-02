@@ -1,0 +1,101 @@
+services:
+  # Shared by both profiles -- the benchmark stack scrapes/queries this same instance rather than
+  # spinning up a second one, so `--profile dev` and `--profile benchmark` both pull it in.
+  mysql:
+    image: mysql:8.4
+    container_name: management-mysql
+    restart: unless-stopped
+    profiles: ["dev", "benchmark"]
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-management}
+      MYSQL_USER: ${MYSQL_USER:-management}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-management}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-management}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      # PM-041: the untouched 128MB container default. 06-conclusions-and-recommendations.md §3.1
+      # hypothesizes this is why BM-BK-001's S2->S3 p95 jump (2594ms -> 8571ms) is sharper than its
+      # S1->S2 jump (2282ms -> 2594ms) -- the ~80,000-row S3 books table stops fitting in memory.
+      # 1G comfortably fits the S2 dataset (students 5,000; courses 300; books 8,000; enrollments
+      # 30,000) with margin; a starting point, not a verified answer -- re-run the BM-XC-004 scale
+      # sweep after this lands, before PM-043/PM-044's query-shape fixes, to isolate this effect.
+      - --innodb-buffer-pool-size=1G
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u${MYSQL_USER:-management} -p${MYSQL_PASSWORD:-management}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # bench/observability/README.md — feeds the MySQL Performance dashboard
+  # (docs-v00/Benchmark/benchmark-strategy/06-dashboard-building.md). Not in Homebrew core, so it
+  # runs as a container against the `mysql` service over the compose network rather than as a
+  # brew service like prometheus/grafana. Needs the 'exporter' user from
+  # bench/observability/mysqld-exporter-grant.sql to already exist.
+  mysqld-exporter:
+    image: prom/mysqld-exporter:latest
+    container_name: management-mysqld-exporter
+    restart: unless-stopped
+    profiles: ["benchmark"]
+    # DATA_SOURCE_NAME was removed upstream (CVE-2023 fix) -- 0.15+ only reads credentials from a
+    # mounted my.cnf. bench/observability/mysqld_exporter.my.cnf is gitignored; copy it from the
+    # .example next to it.
+    volumes:
+      - ./bench/observability/mysqld_exporter.my.cnf:/.my.cnf:ro
+    command:
+      - --config.my-cnf=/.my.cnf
+      - --collect.perf_schema.eventsstatements
+      - --collect.perf_schema.eventsstatementssum
+      - --collect.info_schema.innodb_metrics
+    ports:
+      - "9104:9104"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # bench/observability/README.md — Prometheus scrapes mysqld-exporter and the Spring Boot app
+  # (the latter via host.docker.internal, since the app runs on the host via ./mvnw, not in this
+  # compose project) and accepts k6's remote-write pushes from the host at :9090.
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: management-prometheus
+    restart: unless-stopped
+    profiles: ["benchmark"]
+    volumes:
+      - ./bench/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-remote-write-receiver
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - mysqld-exporter
+
+  # Dashboards + datasource are provisioned from bench/observability/grafana -- see that
+  # directory's README before changing anything by hand in the UI, it'll be overwritten on
+  # the next provisioning poll (10s).
+  grafana:
+    image: grafana/grafana:latest
+    container_name: management-grafana
+    restart: unless-stopped
+    profiles: ["benchmark"]
+    volumes:
+      - ./bench/observability/grafana:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  mysql_data:
+  prometheus_data:
+  grafana_data:

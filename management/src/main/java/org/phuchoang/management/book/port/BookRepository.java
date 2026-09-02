@@ -3,9 +3,8 @@ package org.phuchoang.management.book.port;
 import java.util.Optional;
 import org.phuchoang.management.book.domain.Book;
 import org.phuchoang.management.book.domain.Isbn;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.student.StudentId;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 /**
  * Scoped to what US-2.1 (add), US-2.2 (assign owner), US-2.3 (unassign), US-2.4 (remove), and
@@ -18,14 +17,16 @@ public interface BookRepository {
   Optional<Book> findByIsbn(Isbn isbn);
 
   /**
-   * UC-14 — matches isbn/title/author, optionally filtered by owner, paged. {@code query} may be
-   * blank/{@code null}. Typed in {@link StudentId}, not {@code StudentCode}: {@code BookService}
-   * resolves the caller's code to the {@code books.owner_id} value this matches on.
+   * UC-14 — matches isbn/title/author, optionally filtered by owner, keyset-paged (PM-045).
+   * {@code query} may be blank/{@code null}. Typed in {@link StudentId}, not {@code StudentCode}:
+   * {@code BookService} resolves the caller's code to the {@code books.owner_id} value this
+   * matches on. {@code afterKey} is the decoded cursor (the last-seen {@code isbn}, or {@code
+   * null} for the first page); {@code limit} is the page size.
    */
-  Page<Book> search(String query, StudentId ownerFilter, Pageable pageable);
+  CursorPage<Book> search(String query, StudentId ownerFilter, String afterKey, int limit);
 
   /** Backs {@code BookLookup.findByOwner} (US-5.4, {@code GET /api/v1/me/books}). */
-  Page<Book> findByOwnerId(StudentId ownerId, Pageable pageable);
+  CursorPage<Book> findByOwnerId(StudentId ownerId, String afterKey, int limit);
 
   Book save(Book book);
 

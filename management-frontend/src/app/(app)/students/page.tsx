@@ -9,10 +9,10 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import FadeIn from '@/components/motion/FadeIn';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
+import CursorPagination from '@/components/CursorPagination';
 import DataTable from '@/components/DataTable';
 import ErrorBanner from '@/components/ErrorBanner';
 import PageHeader from '@/components/PageHeader';
-import Pagination from '@/components/Pagination';
 import RecordCard from '@/components/RecordCard';
 import SearchInput from '@/components/SearchInput';
 import StudentFormDialog from '@/components/StudentFormDialog';
@@ -21,7 +21,7 @@ import type { StudentSummary } from '@/lib/api/types';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { can } from '@/lib/auth/permissions';
 import useAsyncAction from '@/lib/hooks/useAsyncAction';
-import usePagedResource from '@/lib/hooks/usePagedResource';
+import useCursorResource from '@/lib/hooks/useCursorResource';
 import useResource from '@/lib/hooks/useResource';
 
 /**
@@ -85,8 +85,8 @@ function StudentRoll() {
   const router = useRouter();
   const mayWrite = can(session?.role, 'students:write');
 
-  const resource = usePagedResource<StudentSummary>((query, page) =>
-    students.search(query || undefined, page),
+  const resource = useCursorResource<StudentSummary>((query, cursor) =>
+    students.search(query || undefined, cursor),
   );
 
   const [editing, setEditing] = useState<StudentSummary | null>(null);
@@ -205,7 +205,13 @@ function StudentRoll() {
         onRowClick={(row) => router.push(`/students/${encodeURIComponent(row.studentCode)}`)}
       />
 
-      <Pagination data={resource.data} page={resource.page} onPageChange={resource.setPage} />
+      <CursorPagination
+        data={resource.data}
+        canGoPrev={resource.canGoPrev}
+        canGoNext={resource.canGoNext}
+        onPrev={resource.goPrev}
+        onNext={resource.goNext}
+      />
 
       <StudentFormDialog
         open={creating}

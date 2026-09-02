@@ -84,7 +84,6 @@ class BookLookupIntegrationTest {
     mockMvc
         .perform(get("/api/v1/books").param("query", "978-0-13-235088-4"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(1))
         .andExpect(jsonPath("$.content[0].isbn").value("978-0-13-235088-4"))
         .andExpect(jsonPath("$.content[0].title").value("Clean Code"));
   }
@@ -95,17 +94,17 @@ class BookLookupIntegrationTest {
     mockMvc
         .perform(get("/api/v1/books").param("query", "no-such-book-anywhere"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(0))
+        .andExpect(jsonPath("$.nextCursor").doesNotExist())
         .andExpect(jsonPath("$.content").isArray())
         .andExpect(jsonPath("$.content").isEmpty());
   }
 
   @Test
   @WithMockUser(roles = "LIBRARIAN")
-  void searchResultsCanBeBrowsedPageByPage() throws Exception {
+  void searchResultsCanBeBrowsedPageByPageWithCursor() throws Exception {
     // Scoped to a title term unique to this test's own rows -- other test methods in this class
     // create their own books in the same (per-class) MySQL container without cleanup between
-    // tests, so an unscoped/unfiltered count would be polluted by their leftover rows.
+    // tests, so an unscoped/unfiltered result would be polluted by their leftover rows.
     for (int i = 0; i < 3; i++) {
       mockMvc
           .perform(
@@ -115,18 +114,87 @@ class BookLookupIntegrationTest {
           .andExpect(status().isCreated());
     }
 
-    mockMvc
-        .perform(get("/api/v1/books").param("query", "Paging Scope Book").param("size", "2").param("page", "0"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.size").value(2))
-        .andExpect(jsonPath("$.totalElements").value(3))
-        .andExpect(jsonPath("$.totalPages").value(2))
-        .andExpect(jsonPath("$.content.length()").value(2));
+    var firstPage =
+        mockMvc
+            .perform(get("/api/v1/books").param("query", "Paging Scope Book").param("size", "2"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.nextCursor").exists())
+            .andReturn();
+
+    String cursor =
+        JsonPath.read(firstPage.getResponse().getContentAsString(), "$.nextCursor");
 
     mockMvc
-        .perform(get("/api/v1/books").param("query", "Paging Scope Book").param("size", "2").param("page", "1"))
+        .perform(
+            get("/api/v1/books")
+                .param("query", "Paging Scope Book")
+                .param("size", "2")
+                .param("cursor", cursor))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.content.length()").value(1));
+        .andExpect(jsonPath("$.content.length()").value(1))
+        .andExpect(jsonPath("$.nextCursor").doesNotExist());
+  }
+
+  @Test
+  @WithMockUser(roles = "LIBRARIAN")
+  void searchPageExactlyMatchingSizeHasNoPhantomNextCursor() throws Exception {
+    for (int i = 0; i < 2; i++) {
+      mockMvc
+          .perform(
+              post("/api/v1/books")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(createBookBody("978-0-00-001" + i + "0-0", "Exact Fit Book " + i, "Author")))
+          .andExpect(status().isCreated());
+    }
+
+    mockMvc
+        .perform(get("/api/v1/books").param("query", "Exact Fit Book").param("size", "2"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.length()").value(2))
+        .andExpect(jsonPath("$.nextCursor").doesNotExist());
+  }
+
+  @Test
+  @WithMockUser(roles = "LIBRARIAN")
+  void searchWithCursorPastTheEndReturnsEmptyContentNotError() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/books")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBookBody("978-0-00-002000-0", "Cursor Past End Book", "Author")))
+        .andExpect(status().isCreated());
+
+    String farCursor =
+        java.util.Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString("ZZZZZZZZZZ".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+    mockMvc
+        .perform(
+            get("/api/v1/books")
+                .param("query", "Cursor Past End Book")
+                .param("cursor", farCursor))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content").isArray())
+        .andExpect(jsonPath("$.content").isEmpty())
+        .andExpect(jsonPath("$.nextCursor").doesNotExist());
+  }
+
+  @Test
+  @WithMockUser(roles = "LIBRARIAN")
+  void searchWithFulltextOperatorCharacterDoesNotError() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/books")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBookBody("978-0-00-003000-0", "Foo Bar Book", "Author")))
+        .andExpect(status().isCreated());
+
+    mockMvc
+        .perform(get("/api/v1/books").param("query", "foo+bar"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content").isArray());
   }
 
   @Test
@@ -157,7 +225,7 @@ class BookLookupIntegrationTest {
     mockMvc
         .perform(get("/api/v1/books").param("ownerStudentCode", ownerCode))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(1))
+        .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].isbn").value("978-0-13-597444-5"))
         .andExpect(jsonPath("$.content[0].ownerStudentCode").value(ownerCode));
   }

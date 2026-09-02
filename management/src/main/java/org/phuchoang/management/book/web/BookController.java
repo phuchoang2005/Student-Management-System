@@ -7,9 +7,8 @@ import org.phuchoang.management.book.web.dto.BookDetailDto;
 import org.phuchoang.management.book.web.dto.BookOwnerRequest;
 import org.phuchoang.management.book.web.dto.BookResponse;
 import org.phuchoang.management.book.web.dto.BookSummaryDto;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.shared.security.AuthenticatedPrincipal;
-import org.phuchoang.management.shared.web.PageResponse;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -36,14 +35,17 @@ public class BookController {
   }
 
   @GetMapping
-  public PageResponse<BookSummaryDto> searchBooks(
+  public CursorPage<BookSummaryDto> searchBooks(
       @RequestParam(required = false) String query,
       @RequestParam(required = false) String ownerStudentCode,
-      Pageable pageable,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size,
       Authentication authentication) {
     Long callerStudentId = AuthenticatedPrincipal.studentIdOf(authentication);
-    return PageResponse.from(
-        bookService.search(query, ownerStudentCode, pageable, callerStudentId).map(mapper::toSummaryDto));
+    int clampedSize = Math.min(Math.max(size, 1), 100);
+    return bookService
+        .search(query, ownerStudentCode, cursor, clampedSize, callerStudentId)
+        .map(mapper::toSummaryDto);
   }
 
   @GetMapping("/{isbn}")

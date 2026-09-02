@@ -5,10 +5,10 @@ import { ArrowLeft, BookOpen, GraduationCap } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import CursorPagination from '@/components/CursorPagination';
 import DataTable from '@/components/DataTable';
 import ErrorBanner from '@/components/ErrorBanner';
 import PageHeader from '@/components/PageHeader';
-import Pagination from '@/components/Pagination';
 import RecordCard from '@/components/RecordCard';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
@@ -18,7 +18,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { can } from '@/lib/auth/permissions';
 import RequireAuth from '@/lib/auth/RequireAuth';
 import useAsyncAction from '@/lib/hooks/useAsyncAction';
-import usePagedResource from '@/lib/hooks/usePagedResource';
+import useCursorResource from '@/lib/hooks/useCursorResource';
 import useResource from '@/lib/hooks/useResource';
 
 /**
@@ -140,8 +140,8 @@ function InitialPasswordButton({ code }: { code: string }) {
 /** The Librarian's half: `GET /books?ownerStudentCode=`, addressed by code, never by an owner id. */
 function BorrowedBooks({ code }: { code: string }) {
   const router = useRouter();
-  const resource = usePagedResource<BookSummary>(
-    (_query, page) => books.search(undefined, page, 20, code),
+  const resource = useCursorResource<BookSummary>(
+    (_query, cursor) => books.search(undefined, cursor, 20, code),
     { deps: [code] },
   );
 
@@ -169,7 +169,13 @@ function BorrowedBooks({ code }: { code: string }) {
         }
         onRowClick={(row) => router.push(`/books/${encodeURIComponent(row.isbn)}`)}
       />
-      <Pagination data={resource.data} page={resource.page} onPageChange={resource.setPage} />
+      <CursorPagination
+        data={resource.data}
+        canGoPrev={resource.canGoPrev}
+        canGoNext={resource.canGoNext}
+        onPrev={resource.goPrev}
+        onNext={resource.goNext}
+      />
     </Box>
   );
 }
@@ -177,9 +183,10 @@ function BorrowedBooks({ code }: { code: string }) {
 /** The Registrar's and Course Administrator's half: `GET /enrollments?studentCode=`. */
 function EnrolledCourses({ code }: { code: string }) {
   const router = useRouter();
-  const resource = usePagedResource<Enrollment>((_query, page) => enrollments.byStudent(code, page), {
-    deps: [code],
-  });
+  const resource = useCursorResource<Enrollment>(
+    (_query, cursor) => enrollments.byStudent(code, cursor),
+    { deps: [code] },
+  );
 
   return (
     <Box>
@@ -216,7 +223,13 @@ function EnrolledCourses({ code }: { code: string }) {
         }
         onRowClick={(row) => router.push(`/courses/${encodeURIComponent(row.course.courseCode)}`)}
       />
-      <Pagination data={resource.data} page={resource.page} onPageChange={resource.setPage} />
+      <CursorPagination
+        data={resource.data}
+        canGoPrev={resource.canGoPrev}
+        canGoNext={resource.canGoNext}
+        onPrev={resource.goPrev}
+        onNext={resource.goNext}
+      />
     </Box>
   );
 }

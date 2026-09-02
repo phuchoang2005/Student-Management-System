@@ -1,5 +1,7 @@
 package org.phuchoang.management.student;
 
+import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -24,6 +26,14 @@ public interface StudentLookup {
 
   /** Consumed by {@code BookService.getDetail} (06-low-level-design.md §4.8) to embed the current owner's summary. */
   StudentSummary summaryOf(StudentId id);
+
+  /**
+   * One bulk lookup for every id named in {@code ids}. An id naming no student is simply absent
+   * from the result — callers decide how to treat an id they expected to resolve. Backs
+   * EnrollmentService's batch course/student resolution (PM-046) in place of one summaryOf call
+   * per row.
+   */
+  Map<StudentId, StudentSummary> summariesOf(Collection<StudentId> ids);
 
   /**
    * Consumed by {@code MeController} (US-5.4) for {@code GET /api/v1/me/profile} — the caller's own

@@ -1,6 +1,7 @@
 package org.phuchoang.management.enrollment.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -21,10 +22,9 @@ import org.phuchoang.management.enrollment.application.EnrollmentService;
 import org.phuchoang.management.shared.exception.DomainValidationException;
 import org.phuchoang.management.shared.exception.FieldError;
 import org.phuchoang.management.shared.exception.NotFoundException;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.shared.web.GlobalExceptionHandler;
 import org.phuchoang.management.student.StudentSummary;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.test.web.servlet.MockMvc;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,13 +40,7 @@ class EnrollmentControllerTest {
     EnrollmentController controller =
         new EnrollmentController(enrollmentService, enrollmentBatchService, new EnrollmentMapperImpl());
     mockMvc =
-        standaloneSetup(controller)
-            .setControllerAdvice(new GlobalExceptionHandler())
-            // GET /enrollments takes a Pageable; standaloneSetup registers no argument resolvers of
-            // its own, so it needs the one Spring Data would contribute (same as BookControllerTest).
-            .setCustomArgumentResolvers(
-                new org.springframework.data.web.PageableHandlerMethodArgumentResolver())
-            .build();
+        standaloneSetup(controller).setControllerAdvice(new GlobalExceptionHandler()).build();
   }
 
   private static EnrollmentService.EnrollmentDetailView aDetailView() {
@@ -80,32 +74,30 @@ class EnrollmentControllerTest {
 
   @Test
   void searchByStudentCodeReturnsPagedEnrollments() throws Exception {
-    when(enrollmentService.search(eq("S00123"), eq(null), any()))
-        .thenReturn(new PageImpl<>(List.of(aDetailView()), PageRequest.of(0, 20), 1));
+    when(enrollmentService.search(eq("S00123"), eq(null), any(), anyInt()))
+        .thenReturn(new CursorPage<>(List.of(aDetailView()), null));
 
     mockMvc
         .perform(get("/api/v1/enrollments").param("studentCode", "S00123"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(1))
         .andExpect(jsonPath("$.content[0].course.courseCode").value("CS101"));
   }
 
   @Test
   void searchByCourseCodeReturnsPagedEnrollments() throws Exception {
-    when(enrollmentService.search(eq(null), eq("CS101"), any()))
-        .thenReturn(new PageImpl<>(List.of(aDetailView()), PageRequest.of(0, 20), 1));
+    when(enrollmentService.search(eq(null), eq("CS101"), any(), anyInt()))
+        .thenReturn(new CursorPage<>(List.of(aDetailView()), null));
 
     mockMvc
         .perform(get("/api/v1/enrollments").param("courseCode", "CS101"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(1))
         .andExpect(jsonPath("$.content[0].student.studentCode").value("S00123"));
   }
 
   @Test
   void searchWithoutAFilterPropagatesValidationErrorAs400() throws Exception {
     String message = "Supply exactly one of 'studentCode' or 'courseCode'.";
-    when(enrollmentService.search(eq(null), eq(null), any()))
+    when(enrollmentService.search(eq(null), eq(null), any(), anyInt()))
         .thenThrow(new DomainValidationException(message, List.of(new FieldError("studentCode", message))));
 
     mockMvc

@@ -24,6 +24,17 @@ export interface Page<T> {
   content: T[];
 }
 
+/**
+ * The cursor-pagination envelope every converted list endpoint returns (PM-045). `nextCursor` is
+ * `null` exactly when there is no further page — there is no `totalPages`/`totalElements` here,
+ * since no use case ever promised a page count (non-functional-requirements.md §3.1). Staff
+ * accounts is the one remaining `Page<T>`-based listing; see `usePagedResource`/`Pagination`.
+ */
+export interface CursorPage<T> {
+  content: T[];
+  nextCursor: string | null;
+}
+
 export interface LoginResponse {
   role: Role;
   mustChangePassword: boolean;

@@ -264,35 +264,44 @@ The gap between the 204 and the 401 is what "deferred" means in §3c.3. It is al
 ```mermaid
 sequenceDiagram
     actor User
+    participant Bulk as LoginBulkheadFilter
     participant Sec as Spring Security
     participant UDS as AppUserDetailsService
     participant Repo as JdbcUserRepository
     participant DB as MySQL
 
-    User->>Sec: POST /api/v1/auth/login {username, password}
-    Sec->>UDS: loadUserByUsername(username)
-    UDS->>Repo: findByUsername(username)
-    Repo->>DB: SELECT ... WHERE username = ?
-    DB-->>Repo: result
-    Repo-->>UDS: user or empty
-    alt username not found
-        UDS-->>Sec: UsernameNotFoundException
-        Sec-->>User: 401 Unauthorized
-    else user found, but enabled = false
-        UDS-->>Sec: DisabledException (Identity.7)
-        Sec-->>User: 401 Unauthorized
-    else user found and enabled
-        Sec->>Sec: PasswordEncoder.matches(password, user.passwordHash)
-        alt password mismatch
+    User->>Bulk: POST /api/v1/auth/login {username, password}
+    alt no permit available (bulkhead saturated)
+        Bulk-->>User: 429 Too Many Requests
+    else permit acquired
+        Bulk->>Sec: forward request
+        Sec->>UDS: loadUserByUsername(username)
+        UDS->>Repo: findByUsername(username)
+        Repo->>DB: SELECT ... WHERE username = ?
+        DB-->>Repo: result
+        Repo-->>UDS: user or empty
+        alt username not found
+            UDS-->>Sec: UsernameNotFoundException
             Sec-->>User: 401 Unauthorized
-        else password matches
-            Sec->>Sec: open HttpSession, store SecurityContext (JSESSIONID cookie)
-            Sec-->>User: 200 OK {role, mustChangePassword}
+        else user found, but enabled = false
+            UDS-->>Sec: DisabledException (Identity.7)
+            Sec-->>User: 401 Unauthorized
+        else user found and enabled
+            Sec->>Sec: PasswordEncoder.matches(password, user.passwordHash)
+            alt password mismatch
+                Sec-->>User: 401 Unauthorized
+            else password matches
+                Sec->>Sec: open HttpSession, store SecurityContext (JSESSIONID cookie)
+                Sec-->>User: 200 OK {role, mustChangePassword}
+            end
         end
+        Bulk->>Bulk: release permit
     end
 ```
 
 A disabled account and a wrong password both return the same `401 Unauthorized` with no distinguishing detail — otherwise the response would leak an account's enabled-state to an unauthenticated caller.
+
+`Bulk` (PM-048, hazard H5, `shared/security/LoginBulkheadFilter.java`) is a fixed-permit semaphore gate ahead of every other step in this diagram: the permit check happens before `AppUserDetailsService`/BCrypt are ever reached, which is the entire point — a saturated bulkhead rejects in constant time, without spending a BCrypt verify (~95ms) or a Tomcat thread on a request that's going to be rejected anyway.
 
 ### 4.2 Must-change-password gate
 

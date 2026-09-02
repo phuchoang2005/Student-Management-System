@@ -3,12 +3,14 @@ package org.phuchoang.management.shared.security;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.phuchoang.management.shared.web.ErrorResponseWriter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -30,6 +32,7 @@ import org.springframework.security.web.authentication.session.RegisterSessionAu
 import org.springframework.security.web.authentication.session.SessionLimit;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -42,7 +45,13 @@ import tools.jackson.databind.ObjectMapper;
 @EnableWebSecurity
 public class SecurityConfig {
 
-  private final ObjectMapper objectMapper = new ObjectMapper();
+  private final ObjectMapper objectMapper;
+  private final ErrorResponseWriter errorResponseWriter;
+
+  public SecurityConfig(ObjectMapper objectMapper, ErrorResponseWriter errorResponseWriter) {
+    this.objectMapper = objectMapper;
+    this.errorResponseWriter = errorResponseWriter;
+  }
 
   // AuthenticationConfiguration is resolved here rather than exposed as its own AuthenticationManager
   // @Bean: declaring one would make getAuthenticationManager() resolve to this method itself,
@@ -74,11 +83,38 @@ public class SecurityConfig {
     return new HttpSessionEventPublisher();
   }
 
+  /**
+   * Unauthenticated chain for the {@code benchmark} profile's separate actuator port
+   * (management.server.port=8081, application-benchmark.properties) so Prometheus can scrape
+   * {@code /actuator/prometheus} without a session login (bench/observability/README.md).
+   *
+   * <p>A dedicated port alone doesn't achieve this: {@link SecurityFilterChain}s are matched by
+   * request path via {@code FilterChainProxy}, not by which embedded connector accepted the
+   * connection, so without this the {@link #filterChain} bean's {@code hasRole
+   * (SYSTEM_ADMINISTRATOR)} rule for {@code GET /actuator/**} still applied on :8081 too. This
+   * chain is scoped by {@link HttpServletRequest#getLocalPort()} instead of by path, so it only
+   * ever matches traffic that physically arrived on :8081 -- the :8080 rule below is completely
+   * untouched, including in any future profile that exposes more under {@code /actuator/**}
+   * there. {@code @Order(0)} makes {@code FilterChainProxy} try this chain before {@link
+   * #filterChain}, which keeps its default (lowest-precedence) order.
+   */
+  @Bean
+  @Order(0)
+  public SecurityFilterChain managementPortFilterChain(HttpSecurity http) throws Exception {
+    RequestMatcher onManagementPort = request -> request.getLocalPort() == 8081;
+    http
+        .securityMatcher(onManagementPort)
+        .csrf(AbstractHttpConfigurer::disable)
+        .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+    return http.build();
+  }
+
   @Bean
   public SecurityFilterChain filterChain(
       HttpSecurity http,
       AuthenticationConfiguration authenticationConfiguration,
       MustChangePasswordFilter mustChangePasswordFilter,
+      LoginBulkheadFilter loginBulkheadFilter,
       SessionRegistry sessionRegistry)
       throws Exception {
     JsonUsernamePasswordAuthenticationFilter loginFilter =
@@ -124,7 +160,7 @@ public class SecurityConfig {
             .sessionConcurrency(concurrency -> concurrency
                 .maximumSessions(SessionLimit.UNLIMITED)
                 .sessionRegistry(sessionRegistry)
-                .expiredSessionStrategy(new SessionRevokedExpiredStrategy(objectMapper))))
+                .expiredSessionStrategy(new SessionRevokedExpiredStrategy(errorResponseWriter))))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
             // PM-017 — public so it's callable before login; only reachable at all when
@@ -135,7 +171,9 @@ public class SecurityConfig {
             // empty everywhere else, so these matchers are inert elsewhere. Health stays public so
             // liveness tooling doesn't need a session; everything else under /actuator/** is
             // metrics/introspection and is admin-only. Order matters between these two lines --
-            // the broad matcher would otherwise shadow the health one.
+            // the broad matcher would otherwise shadow the health one. This governs :8080 only --
+            // :8081 (the benchmark profile's separate actuator port) is handled by
+            // managementPortFilterChain above and never reaches these rules.
             .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
             .requestMatchers(HttpMethod.GET, "/actuator/**").hasRole("SYSTEM_ADMINISTRATOR")
             .requestMatchers(HttpMethod.POST, "/api/v1/auth/password").authenticated()
@@ -188,6 +226,10 @@ public class SecurityConfig {
                 .hasAnyRole("REGISTRAR", "COURSE_ADMINISTRATOR")
             .anyRequest().authenticated())
         .addFilterAt(loginFilter, UsernamePasswordAuthenticationFilter.class)
+        // PM-048 — sits immediately ahead of loginFilter (which occupies this exact chain
+        // position via addFilterAt above), so a saturated bulkhead rejects with 429 before the
+        // authentication manager, and BCrypt, are ever reached.
+        .addFilterBefore(loginBulkheadFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(mustChangePasswordFilter, AuthorizationFilter.class);
 
     return http.build();
@@ -212,15 +254,6 @@ public class SecurityConfig {
 
   private void onLoginFailure(HttpServletRequest req, HttpServletResponse res, AuthenticationException ex)
       throws IOException {
-    res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-    res.setContentType(MediaType.APPLICATION_JSON_VALUE);
-    objectMapper.writeValue(
-        res.getWriter(),
-        Map.of(
-            "timestamp", Instant.now().toString(),
-            "status", 401,
-            "error", "Unauthorized",
-            "message", "Invalid username or password",
-            "path", req.getRequestURI()));
+    errorResponseWriter.write(req, res, HttpStatus.UNAUTHORIZED, "Invalid username or password");
   }
 }

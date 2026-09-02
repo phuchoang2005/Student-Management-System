@@ -8,8 +8,7 @@ import org.phuchoang.management.enrollment.web.dto.BatchEnrollmentResponse;
 import org.phuchoang.management.enrollment.web.dto.EnrollmentCreateRequest;
 import org.phuchoang.management.enrollment.web.dto.EnrollmentDetailDto;
 import org.phuchoang.management.enrollment.web.dto.EnrollmentResponse;
-import org.phuchoang.management.shared.web.PageResponse;
-import org.springframework.data.domain.Pageable;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,12 +49,15 @@ public class EnrollmentController {
    * client renders a course list and another a student roster off one schema.
    */
   @GetMapping
-  public PageResponse<EnrollmentDetailDto> searchEnrollments(
+  public CursorPage<EnrollmentDetailDto> searchEnrollments(
       @RequestParam(required = false) String studentCode,
       @RequestParam(required = false) String courseCode,
-      Pageable pageable) {
-    return PageResponse.from(
-        enrollmentService.search(studentCode, courseCode, pageable).map(mapper::toDetailDto));
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size) {
+    int clampedSize = Math.min(Math.max(size, 1), 100);
+    return enrollmentService
+        .search(studentCode, courseCode, cursor, clampedSize)
+        .map(mapper::toDetailDto);
   }
 
   @PostMapping

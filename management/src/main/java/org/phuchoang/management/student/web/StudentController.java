@@ -1,8 +1,8 @@
 package org.phuchoang.management.student.web;
 
 import jakarta.validation.Valid;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.shared.security.AuthenticatedPrincipal;
-import org.phuchoang.management.shared.web.PageResponse;
 import org.phuchoang.management.student.application.StudentService;
 import org.phuchoang.management.student.web.dto.InitialPasswordResponse;
 import org.phuchoang.management.student.web.dto.RegisterStudentRequest;
@@ -11,7 +11,6 @@ import org.phuchoang.management.student.web.dto.StudentRegistrationResponse;
 import org.phuchoang.management.student.web.dto.StudentResponse;
 import org.phuchoang.management.student.web.dto.StudentSummaryDto;
 import org.phuchoang.management.student.web.dto.UpdateStudentRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -38,11 +37,14 @@ public class StudentController {
   }
 
   @GetMapping
-  public PageResponse<StudentSummaryDto> searchStudents(
-      @RequestParam(required = false) String query, Pageable pageable, Authentication authentication) {
+  public CursorPage<StudentSummaryDto> searchStudents(
+      @RequestParam(required = false) String query,
+      @RequestParam(required = false) String cursor,
+      @RequestParam(defaultValue = "20") int size,
+      Authentication authentication) {
     Long callerStudentId = AuthenticatedPrincipal.studentIdOf(authentication);
-    return PageResponse.from(
-        studentService.search(query, pageable, callerStudentId).map(mapper::toSummaryDto));
+    int clampedSize = Math.min(Math.max(size, 1), 100);
+    return studentService.search(query, cursor, clampedSize, callerStudentId).map(mapper::toSummaryDto);
   }
 
   @GetMapping("/{code}")

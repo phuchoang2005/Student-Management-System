@@ -1,6 +1,7 @@
 package org.phuchoang.management.course.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -24,10 +25,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.phuchoang.management.course.application.CourseService;
 import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.NotFoundException;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.shared.web.GlobalExceptionHandler;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -42,11 +41,7 @@ class CourseControllerTest {
   void setUp() {
     CourseController controller = new CourseController(courseService, new CourseMapperImpl());
     mockMvc =
-        standaloneSetup(controller)
-            .setControllerAdvice(new GlobalExceptionHandler())
-            .setCustomArgumentResolvers(
-                new org.springframework.data.web.PageableHandlerMethodArgumentResolver())
-            .build();
+        standaloneSetup(controller).setControllerAdvice(new GlobalExceptionHandler()).build();
   }
 
   private static CourseService.CreatedCourse aCreatedCourse() {
@@ -185,29 +180,58 @@ class CourseControllerTest {
       new CourseService.CourseSummaryView("CS101", "Intro to CS", 3, 12L);
 
   @Test
-  void searchCoursesReturnsPagedSummaries() throws Exception {
-    Page<CourseService.CourseSummaryView> page =
-        new PageImpl<>(List.of(A_SUMMARY), PageRequest.of(0, 20), 1);
-    when(courseService.search(any(), any())).thenReturn(page);
+  void searchCoursesReturnsCursorPagedSummaries() throws Exception {
+    CursorPage<CourseService.CourseSummaryView> page = new CursorPage<>(List.of(A_SUMMARY), null);
+    when(courseService.search(any(), any(), anyInt())).thenReturn(page);
 
     mockMvc
         .perform(get("/api/v1/courses").param("query", "cs101"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(1))
+        .andExpect(jsonPath("$.nextCursor").doesNotExist())
         .andExpect(jsonPath("$.content[0].courseCode").value("CS101"))
         .andExpect(jsonPath("$.content[0].enrolledCount").value(12));
   }
 
   @Test
   void searchCoursesReturnsEmptyContentWhenNoMatch() throws Exception {
-    when(courseService.search(any(), any()))
-        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+    when(courseService.search(any(), any(), anyInt())).thenReturn(new CursorPage<>(List.of(), null));
 
     mockMvc
         .perform(get("/api/v1/courses").param("query", "nobody"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content").isArray())
         .andExpect(jsonPath("$.content").isEmpty());
+  }
+
+  @Test
+  void searchCoursesPassesCursorAndClampedSizeToService() throws Exception {
+    when(courseService.search(eq("cs101"), eq("abc123"), eq(50)))
+        .thenReturn(new CursorPage<>(List.of(), null));
+
+    mockMvc
+        .perform(
+            get("/api/v1/courses").param("query", "cs101").param("cursor", "abc123").param("size", "50"))
+        .andExpect(status().isOk());
+
+    verify(courseService).search("cs101", "abc123", 50);
+  }
+
+  @Test
+  void searchCoursesClampsOversizedSizeParamTo100() throws Exception {
+    when(courseService.search(any(), any(), eq(100))).thenReturn(new CursorPage<>(List.of(), null));
+
+    mockMvc.perform(get("/api/v1/courses").param("size", "500")).andExpect(status().isOk());
+
+    verify(courseService).search(null, null, 100);
+  }
+
+  @Test
+  void searchCoursesClampsNonPositiveSizeParamTo1() throws Exception {
+    when(courseService.search(any(), any(), eq(1))).thenReturn(new CursorPage<>(List.of(), null));
+
+    mockMvc.perform(get("/api/v1/courses").param("size", "0")).andExpect(status().isOk());
+
+    verify(courseService).search(null, null, 1);
   }
 
   private static CourseService.CourseDetailView aCourseDetailView() {

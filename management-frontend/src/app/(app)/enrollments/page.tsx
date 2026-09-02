@@ -6,11 +6,11 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 
 import ConfirmDialog from '@/components/ConfirmDialog';
+import CursorPagination from '@/components/CursorPagination';
 import DataTable from '@/components/DataTable';
 import ErrorBanner from '@/components/ErrorBanner';
 import FormField from '@/components/FormField';
 import PageHeader from '@/components/PageHeader';
-import Pagination from '@/components/Pagination';
 import SearchInput from '@/components/SearchInput';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
@@ -26,7 +26,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { can } from '@/lib/auth/permissions';
 import RequireAuth from '@/lib/auth/RequireAuth';
 import useAsyncAction from '@/lib/hooks/useAsyncAction';
-import usePagedResource from '@/lib/hooks/usePagedResource';
+import useCursorResource from '@/lib/hooks/useCursorResource';
 
 /**
  * Two very different jobs share this route, because they are the two ways an enrollment gets looked
@@ -67,8 +67,8 @@ function RegistrarView() {
   const [enrolling, setEnrolling] = useState(false);
   const [ending, setEnding] = useState<Enrollment | null>(null);
 
-  const resource = usePagedResource<Enrollment>(
-    (_query, page) => enrollments.byStudent(studentCode, page),
+  const resource = useCursorResource<Enrollment>(
+    (_query, cursor) => enrollments.byStudent(studentCode, cursor),
     { enabled: !!studentCode, deps: [studentCode] },
   );
 
@@ -196,7 +196,13 @@ function RegistrarView() {
               router.push(`/courses/${encodeURIComponent(row.course.courseCode)}`)
             }
           />
-          <Pagination data={resource.data} page={resource.page} onPageChange={resource.setPage} />
+          <CursorPagination
+            data={resource.data}
+            canGoPrev={resource.canGoPrev}
+            canGoNext={resource.canGoNext}
+            onPrev={resource.goPrev}
+            onNext={resource.goNext}
+          />
         </>
       )}
 
@@ -253,8 +259,8 @@ function EnrollDialog({
   const [outcome, setOutcome] = useState<BatchEnrollmentResponse | null>(null);
   const action = useAsyncAction(enrollments.createBatch);
 
-  const catalogue = usePagedResource<CourseSummary>(
-    (query, page) => courses.search(query || undefined, page),
+  const catalogue = useCursorResource<CourseSummary>(
+    (query, cursor) => courses.search(query || undefined, cursor),
     { enabled: open },
   );
 
@@ -362,10 +368,12 @@ function EnrollDialog({
             }
             onRowClick={(row) => toggle(row.courseCode)}
           />
-          <Pagination
+          <CursorPagination
             data={catalogue.data}
-            page={catalogue.page}
-            onPageChange={catalogue.setPage}
+            canGoPrev={catalogue.canGoPrev}
+            canGoNext={catalogue.canGoNext}
+            onPrev={catalogue.goPrev}
+            onNext={catalogue.goNext}
           />
 
           <HStack gap="4" justify="flex-end" wrap="wrap">
@@ -433,12 +441,12 @@ function CourseAdminView() {
   const router = useRouter();
   const [selected, setSelected] = useState<CourseSummary | null>(null);
 
-  const courseList = usePagedResource<CourseSummary>((query, page) =>
-    courses.search(query || undefined, page),
+  const courseList = useCursorResource<CourseSummary>((query, cursor) =>
+    courses.search(query || undefined, cursor),
   );
 
-  const roster = usePagedResource<Enrollment>(
-    (_query, page) => enrollments.byCourse(selected!.courseCode, page),
+  const roster = useCursorResource<Enrollment>(
+    (_query, cursor) => enrollments.byCourse(selected!.courseCode, cursor),
     { enabled: !!selected, deps: [selected?.courseCode] },
   );
 
@@ -490,7 +498,13 @@ function CourseAdminView() {
         }
         onRowClick={(row) => setSelected(row)}
       />
-      <Pagination data={courseList.data} page={courseList.page} onPageChange={courseList.setPage} />
+      <CursorPagination
+        data={courseList.data}
+        canGoPrev={courseList.canGoPrev}
+        canGoNext={courseList.canGoNext}
+        onPrev={courseList.goPrev}
+        onNext={courseList.goNext}
+      />
 
       {selected ? (
         <Box mt="8">
@@ -538,7 +552,13 @@ function CourseAdminView() {
               router.push(`/students/${encodeURIComponent(row.student.studentCode)}`)
             }
           />
-          <Pagination data={roster.data} page={roster.page} onPageChange={roster.setPage} />
+          <CursorPagination
+            data={roster.data}
+            canGoPrev={roster.canGoPrev}
+            canGoNext={roster.canGoNext}
+            onPrev={roster.goPrev}
+            onNext={roster.goNext}
+          />
         </Box>
       ) : null}
     </Box>

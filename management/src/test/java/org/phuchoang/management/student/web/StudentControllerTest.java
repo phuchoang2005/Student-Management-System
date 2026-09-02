@@ -1,6 +1,7 @@
 package org.phuchoang.management.student.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -26,11 +27,9 @@ import org.phuchoang.management.shared.exception.DuplicateCodeException;
 import org.phuchoang.management.shared.exception.DuplicateEmailException;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.exception.PasswordNoLongerAvailableException;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.shared.web.GlobalExceptionHandler;
 import org.phuchoang.management.student.application.StudentService;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -207,21 +206,19 @@ class StudentControllerTest {
 
   @Test
   void searchStudentsReturnsPagedSummaries() throws Exception {
-    Page<StudentService.StudentSummaryView> page =
-        new PageImpl<>(List.of(A_SUMMARY), PageRequest.of(0, 20), 1);
-    when(studentService.search(any(), any(), any())).thenReturn(page);
+    CursorPage<StudentService.StudentSummaryView> page = new CursorPage<>(List.of(A_SUMMARY), null);
+    when(studentService.search(any(), any(), anyInt(), any())).thenReturn(page);
 
     mockMvc
         .perform(get("/api/v1/students").param("query", "jane"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(1))
         .andExpect(jsonPath("$.content[0].studentCode").value("S00123"));
   }
 
   @Test
   void searchStudentsReturnsEmptyContentWhenNoMatch() throws Exception {
-    when(studentService.search(any(), any(), any()))
-        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+    when(studentService.search(any(), any(), anyInt(), any()))
+        .thenReturn(new CursorPage<>(List.of(), null));
 
     mockMvc
         .perform(get("/api/v1/students").param("query", "nobody"))

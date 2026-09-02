@@ -12,28 +12,35 @@ interface SpringDataCourseRepository extends CrudRepository<CourseRow, Long> {
 
   boolean existsByCourseCode(String courseCode);
 
-  // Spring Data JDBC's string-based @Query methods (a) can't return Page (no auto count-query
-  // derivation for string queries, unlike derived queries) and (b) don't auto-apply LIMIT/OFFSET
-  // from a Pageable parameter the way derived queries do -- both are done explicitly instead:
-  // JdbcCourseRepository pairs this with countBySearch and binds limit/offset itself, mirroring
-  // SpringDataStudentRepository.
+  // Keyset (cursor) pagination, not OFFSET/COUNT: PM-044/PM-045 replaced the old LIKE + COUNT(*)
+  // pair with a FULLTEXT-backed query, ordered and filtered on course_code so JdbcCourseRepository
+  // can ask for one extra row to detect whether a next page exists rather than pre-counting. `query`
+  // has already been sanitized of boolean-mode operator characters by JdbcCourseRepository before it
+  // reaches here.
+  //
+  // search/browse are deliberately separate statements, not one query with a
+  // "(:query IS NULL OR :query = '' OR MATCH(...))" branch: a single combined statement stopped
+  // the planner from specializing per call and regressed even the no-filter case
+  // (docs-v01/Benchmark/09-v01-vs-v00-conclusions.md §3) -- reopens IP-02/IP-03.
   @Query("""
       SELECT * FROM courses
-      WHERE :query IS NULL OR :query = ''
-         OR course_code LIKE CONCAT('%', :query, '%')
-         OR name LIKE CONCAT('%', :query, '%')
+      WHERE (:afterKey IS NULL OR course_code > :afterKey)
       ORDER BY course_code
-      LIMIT :limit OFFSET :offset
+      LIMIT :limit
       """)
-  List<CourseRow> search(String query, int limit, long offset);
+  List<CourseRow> browse(String afterKey, int limit);
 
   @Query("""
-      SELECT COUNT(*) FROM courses
-      WHERE :query IS NULL OR :query = ''
-         OR course_code LIKE CONCAT('%', :query, '%')
-         OR name LIKE CONCAT('%', :query, '%')
+      SELECT * FROM courses
+      WHERE MATCH(course_code, name) AGAINST (:query IN BOOLEAN MODE)
+        AND (:afterKey IS NULL OR course_code > :afterKey)
+      ORDER BY course_code
+      LIMIT :limit
       """)
-  long countBySearch(String query);
+  List<CourseRow> search(String query, String afterKey, int limit);
+
+  @Query("SELECT * FROM courses WHERE course_code IN (:codes)")
+  List<CourseRow> findByCourseCodeIn(Collection<String> codes);
 
   // The two queries below read `enrollments`, which belongs to the enrollment module, joined in
   // plain SQL rather than reached through a Java call. That direction is forced: `enrollment`

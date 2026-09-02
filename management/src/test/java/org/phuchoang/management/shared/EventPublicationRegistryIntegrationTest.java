@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.jayway.jsonpath.JsonPath;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -218,5 +220,70 @@ class EventPublicationRegistryIntegrationTest {
         jdbcTemplate.queryForObject(
             "SELECT owner_id FROM books WHERE isbn = ?", Long.class, "978-0-13-468599-2");
     assertThat(ownerId).isNull();
+  }
+
+  /**
+   * PM-047 / H6 regression: before {@code AsyncConfig#taskExecutor()}'s widened sizing (core=2,
+   * max=4, queue=50 — capacity for only 54 in-flight/queued tasks), a burst this size would have
+   * outrun the executor and left publications permanently incomplete under the default {@code
+   * AbortPolicy} ({@code BM-XC-001} measured 568/801 incomplete at N=200). This test uses a
+   * JUnit-practical N (10 students, 20 cascade listener firings) rather than reproducing N=200 —
+   * the full zero-loss claim at that scale is verified separately via the k6 {@code BM-XC-001}
+   * re-run documented in {@code docs-v01/Benchmark/08-hazard-fix-specs.md}'s IP-06 entry.
+   *
+   * <p>The {@code await} window below is sized to the design's own documented worst case (see
+   * {@link EventPublicationRecoveryJob}: up to ~2 minutes before a stuck publication is eligible,
+   * plus up to 60 seconds until the next scheduled tick), not to the fast path's typical speed.
+   * Under concurrent load — a full {@code ./mvnw test} run sharing this sandbox's limited DB
+   * throughput with hundreds of other tests — an occasional listener invocation genuinely does
+   * fail to complete on the first attempt and needs that recovery job to catch it; asserting a
+   * short timeout here would be testing "the fast path never hiccups," which nothing in this
+   * design promises, instead of "nothing is ever permanently lost," which is the actual contract.
+   */
+  @Test
+  void burstOfDeletesLeavesNoIncompletePublications() throws Exception {
+    int burstSize = 10;
+
+    // Each student gets its own course rather than sharing one: 10 concurrent cascade-deletes
+    // all touching the same course_id would hot-spot the same secondary-index range on
+    // `enrollments`, an InnoDB gap-lock deadlock pattern that has nothing to do with the
+    // AsyncConfig sizing this test exists to cover. A real burst (200 students at end of term)
+    // spans many different courses, so this is also the more representative shape.
+    List<String> studentCodes = new ArrayList<>();
+    for (int i = 0; i < burstSize; i++) {
+      String code = "S009%02d".formatted(i);
+      String isbn = "ISBN-BURST-%02d".formatted(i);
+      String courseCode = "CS9%02d".formatted(i);
+      registerStudent(code, "burst.%d@example.edu".formatted(i));
+      addBook(isbn, "Burst Book " + i, "Author " + i);
+      assignBookOwner(isbn, code);
+      createCourse(courseCode, "Burst Course " + i);
+      enroll(code, courseCode);
+      studentCodes.add(code);
+    }
+
+    Instant since = Instant.now();
+    for (String code : studentCodes) {
+      mockMvc
+          .perform(delete("/api/v1/students/" + code).with(user("registrar").roles("REGISTRAR")))
+          .andExpect(status().isNoContent());
+    }
+
+    await()
+        .atMost(Duration.ofSeconds(200))
+        .untilAsserted(
+            () -> {
+              assertThat(completedCountFor("%BookService%onStudentDeleted%", since))
+                  .isEqualTo(burstSize);
+              assertThat(completedCountFor("%EnrollmentService%onStudentDeleted%", since))
+                  .isEqualTo(burstSize);
+            });
+
+    assertThat(registry.findIncompletePublications())
+        .noneMatch(
+            pub -> {
+              String target = pub.getTargetIdentifier().getValue();
+              return target.contains("BookService") || target.contains("EnrollmentService");
+            });
   }
 }

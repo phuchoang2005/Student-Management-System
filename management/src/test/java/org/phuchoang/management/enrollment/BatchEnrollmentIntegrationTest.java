@@ -104,7 +104,7 @@ class BatchEnrollmentIntegrationTest {
                 .param("studentCode", studentCode)
                 .with(user("registrar").roles("REGISTRAR")))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(3));
+        .andExpect(jsonPath("$.content.length()").value(3));
   }
 
   @Test
@@ -129,7 +129,7 @@ class BatchEnrollmentIntegrationTest {
                 .param("studentCode", studentCode)
                 .with(user("registrar").roles("REGISTRAR")))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(2));
+        .andExpect(jsonPath("$.content.length()").value(2));
   }
 
   @Test

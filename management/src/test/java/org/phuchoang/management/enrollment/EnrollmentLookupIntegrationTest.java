@@ -220,7 +220,7 @@ class EnrollmentLookupIntegrationTest {
     mockMvc
         .perform(get("/api/v1/enrollments").param("studentCode", studentCode))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(2))
+        .andExpect(jsonPath("$.content.length()").value(2))
         .andExpect(jsonPath("$.content[0].student.studentCode").value(studentCode))
         .andExpect(jsonPath("$.content[*].course.courseCode").value(hasItems("CS606A", "CS606B")));
   }
@@ -237,26 +237,39 @@ class EnrollmentLookupIntegrationTest {
     mockMvc
         .perform(get("/api/v1/enrollments").param("courseCode", "CS607"))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.totalElements").value(2))
+        .andExpect(jsonPath("$.content.length()").value(2))
         .andExpect(jsonPath("$.content[0].course.courseCode").value("CS607"))
         .andExpect(jsonPath("$.content[*].student.studentCode").value(hasItems(first, second)));
   }
 
   @Test
   @WithMockUser(roles = "REGISTRAR")
-  void searchPagesTheRoster() throws Exception {
+  void searchPagesTheRosterWithCursor() throws Exception {
     String first = registerStudent("S00608A", "amy.lee.608a@example.edu");
     String second = registerStudent("S00608B", "amy.lee.608b@example.edu");
     createCourse("CS608", "Paged Course");
     enroll(first, "CS608");
     enroll(second, "CS608");
 
+    var firstPage =
+        mockMvc
+            .perform(get("/api/v1/enrollments").param("courseCode", "CS608").param("size", "1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.nextCursor").exists())
+            .andReturn();
+
+    String cursor = JsonPath.read(firstPage.getResponse().getContentAsString(), "$.nextCursor");
+
     mockMvc
-        .perform(get("/api/v1/enrollments").param("courseCode", "CS608").param("size", "1"))
+        .perform(
+            get("/api/v1/enrollments")
+                .param("courseCode", "CS608")
+                .param("size", "1")
+                .param("cursor", cursor))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
-        .andExpect(jsonPath("$.totalElements").value(2))
-        .andExpect(jsonPath("$.totalPages").value(2));
+        .andExpect(jsonPath("$.nextCursor").doesNotExist());
   }
 
   @Test

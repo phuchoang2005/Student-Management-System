@@ -23,14 +23,12 @@ import org.phuchoang.management.book.port.BookRepository;
 import org.phuchoang.management.shared.exception.DuplicateIsbnException;
 import org.phuchoang.management.shared.exception.NotFoundException;
 import org.phuchoang.management.shared.exception.UnknownStudentException;
+import org.phuchoang.management.shared.paging.CursorCodec;
+import org.phuchoang.management.shared.paging.CursorPage;
 import org.phuchoang.management.student.StudentCode;
 import org.phuchoang.management.student.StudentId;
 import org.phuchoang.management.student.StudentLookup;
 import org.phuchoang.management.student.StudentSummary;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 
 @ExtendWith(MockitoExtension.class)
@@ -241,19 +239,19 @@ class BookServiceTest {
   @Test
   void searchReturnsMappedSummariesFromRepositoryPage() {
     service = new BookService(repository, studentLookup);
-    Pageable pageable = PageRequest.of(0, 20);
-    Page<Book> repoPage = new PageImpl<>(List.of(anOwnedBook(), anOwnedBook()), pageable, 2);
-    when(repository.search("clean", null, pageable)).thenReturn(repoPage);
+    CursorPage<Book> repoPage = new CursorPage<>(List.of(anOwnedBook(), anOwnedBook()), null);
+    when(repository.search("clean", null, null, 20)).thenReturn(repoPage);
     when(studentLookup.summaryOf(OWNER_ID))
         .thenReturn(new StudentSummary("S00101", "Amy", "Lee", "amy.lee@example.edu"));
 
-    Page<BookService.BookSummaryView> result = service.search("clean", null, pageable, null);
+    CursorPage<BookService.BookSummaryView> result = service.search("clean", null, null, 20, null);
 
-    assertThat(result.getTotalElements()).isEqualTo(2);
-    BookService.BookSummaryView summary = result.getContent().get(0);
+    assertThat(result.content()).hasSize(2);
+    BookService.BookSummaryView summary = result.content().get(0);
     assertThat(summary.isbn()).isEqualTo("978-0-13-468599-1");
     assertThat(summary.title()).isEqualTo("Clean Architecture");
     assertThat(summary.ownerStudentCode()).isEqualTo("S00101");
+    assertThat(result.nextCursor()).isNull();
     // Two rows sharing an owner cost one lookup, not two.
     verify(studentLookup).summaryOf(OWNER_ID);
   }
@@ -261,13 +259,12 @@ class BookServiceTest {
   @Test
   void searchResolvesTheOwnerStudentCodeToTheIdItFiltersOn() {
     service = new BookService(repository, studentLookup);
-    Pageable pageable = PageRequest.of(0, 20);
     when(studentLookup.idOf(OWNER_CODE)).thenReturn(Optional.of(OWNER_ID));
-    when(repository.search(null, OWNER_ID, pageable)).thenReturn(Page.empty(pageable));
+    when(repository.search(null, OWNER_ID, null, 20)).thenReturn(new CursorPage<>(List.of(), null));
 
-    service.search(null, "S00101", pageable, null);
+    service.search(null, "S00101", null, 20, null);
 
-    verify(repository).search(null, OWNER_ID, pageable);
+    verify(repository).search(null, OWNER_ID, null, 20);
   }
 
   @Test
@@ -275,32 +272,43 @@ class BookServiceTest {
     service = new BookService(repository, studentLookup);
     when(studentLookup.idOf(new StudentCode("S00999"))).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.search(null, "S00999", PageRequest.of(0, 20), null))
+    assertThatThrownBy(() -> service.search(null, "S00999", null, 20, null))
         .isInstanceOf(UnknownStudentException.class);
   }
 
   @Test
   void searchReturnsEmptyPageWhenNothingMatches() {
     service = new BookService(repository, studentLookup);
-    Pageable pageable = PageRequest.of(0, 20);
-    when(repository.search("nobody", null, pageable)).thenReturn(Page.empty(pageable));
+    when(repository.search("nobody", null, null, 20)).thenReturn(new CursorPage<>(List.of(), null));
 
-    Page<BookService.BookSummaryView> result = service.search("nobody", null, pageable, null);
+    CursorPage<BookService.BookSummaryView> result = service.search("nobody", null, null, 20, null);
 
-    assertThat(result.getContent()).isEmpty();
+    assertThat(result.content()).isEmpty();
+    assertThat(result.nextCursor()).isNull();
+  }
+
+  @Test
+  void searchDecodesTheCursorBeforePassingItToTheRepositoryAsTheAfterKey() {
+    service = new BookService(repository, studentLookup);
+    String cursor = CursorCodec.encode("978-0-13-468599-1");
+    when(repository.search(null, null, "978-0-13-468599-1", 20))
+        .thenReturn(new CursorPage<>(List.of(), null));
+
+    service.search(null, null, cursor, 20, null);
+
+    verify(repository).search(null, null, "978-0-13-468599-1", 20);
   }
 
   @Test
   void searchOverridesTheOwnerFilterWithTheCallerStudentIdWhenGiven() {
     service = new BookService(repository, studentLookup);
-    Pageable pageable = PageRequest.of(0, 20);
-    when(repository.search(null, new StudentId(9L), pageable)).thenReturn(Page.empty(pageable));
+    when(repository.search(null, new StudentId(9L), null, 20)).thenReturn(new CursorPage<>(List.of(), null));
 
     // Client asked for S00101's books, but the caller is Student 9 -- the caller wins, silently,
     // and the supplied code is never even resolved.
-    service.search(null, "S00101", pageable, 9L);
+    service.search(null, "S00101", null, 20, 9L);
 
-    verify(repository).search(null, new StudentId(9L), pageable);
+    verify(repository).search(null, new StudentId(9L), null, 20);
     verify(studentLookup, org.mockito.Mockito.never()).idOf(any());
   }
 
@@ -371,13 +379,12 @@ class BookServiceTest {
   @Test
   void findByOwnerPagesTheOwnersBooksForMe() {
     service = new BookService(repository, studentLookup);
-    Pageable pageable = PageRequest.of(0, 20);
-    when(repository.findByOwnerId(OWNER_ID, pageable))
-        .thenReturn(new PageImpl<>(List.of(anOwnedBook()), pageable, 1));
+    when(repository.findByOwnerId(OWNER_ID, null, 20))
+        .thenReturn(new CursorPage<>(List.of(anOwnedBook()), null));
 
-    var result = service.findByOwner(OWNER_ID, pageable);
+    var result = service.findByOwner(OWNER_ID, null, 20);
 
-    assertThat(result.getContent()).hasSize(1);
-    assertThat(result.getContent().get(0).isbn()).isEqualTo("978-0-13-468599-1");
+    assertThat(result.content()).hasSize(1);
+    assertThat(result.content().get(0).isbn()).isEqualTo("978-0-13-468599-1");
   }
 }
