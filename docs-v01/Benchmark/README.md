@@ -30,12 +30,14 @@ Read these first if you haven't already — nothing in this folder restates them
 | --- | --- |
 | [`07-improvement-roadmap.md`](./07-improvement-roadmap.md) | Phases the eleven recommendations into an execution order, with the dependency and file-overlap reasoning for why they're grouped the way they are — none of which v00 states |
 | [`08-hazard-fix-specs.md`](./08-hazard-fix-specs.md) | Per-recommendation spec: approach, `BM-*` targets, hypothesis against the SLO classes, verification plan, and a pointer back to its roadmap phase |
+| [`09-v01-vs-v00-conclusions.md`](./09-v01-vs-v00-conclusions.md) | The actual verification: compares `result/`'s v0.1 runs against `docs-v00`'s baselines per `IP-*` item, including the `IP-02`/`IP-03` regression found in the first run and the fix verified in the second |
+| [`10-customer-performance-summary.md`](./10-customer-performance-summary.md) | A non-technical rollup of the verified results, written for a customer/stakeholder audience rather than an engineering one |
 
 Both documents introduce **`IP-01`…`IP-11`**, mapping 1:1 and in order onto `06` §6's existing table (P0 #1–5 → `IP-01`…`IP-05`, P1 #6–9 → `IP-06`…`IP-09`, P2 #10–11 → `IP-10`…`IP-11`). The id is deliberately distinct from `H*` (hazards), `BM-*` (scenarios), and `PM-0xx` (PM-docs backlog items) — it names a unit of remediation work, not a hazard, a measurement, or a scheduled sprint item. Promoting an `IP-*` entry into a GitHub issue (required before any code change — `05-baseline-and-reporting.md` §5) or into a future PM-docs epic is a later step this version does not perform.
 
 ## Where future runs go
 
-Every `IP-*` fix is verified by re-running its scenario and recording a new run (`05-baseline-and-reporting.md` §3). Those future runs belong under **`docs-v01/Benchmark/result/`** — not created by this version, since no work against this plan has happened yet — keeping `docs-v00/Benchmark/result/`'s six runs as the closed historical baseline set the recommendations were derived from. Stating this now is deliberate: without it, the natural but wrong move is to keep appending new runs to the v00 folder, mixing the evidence a plan was built from with the evidence of whether the plan worked.
+Every `IP-*` fix is verified by re-running its scenario and recording a new run (`05-baseline-and-reporting.md` §3). Those runs belong under **`docs-v01/Benchmark/result/`** — see that folder's own [`README.md`](./result/README.md) for the run index — keeping `docs-v00/Benchmark/result/`'s six runs as the closed historical baseline set the recommendations were derived from. Stating this now is deliberate: without it, the natural but wrong move is to keep appending new runs to the v00 folder, mixing the evidence a plan was built from with the evidence of whether the plan worked.
 
 ## Non-goals
 

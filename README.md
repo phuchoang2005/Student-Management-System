@@ -1,5 +1,16 @@
 # Student Management System
 
+## What's new in v0.1
+
+The [Performance](#performance) section below documents eight hazards found by reading the code and confirmed under load — v0.1 fixes them:
+
+- **HikariCP's connection pool** raised off its untuned default of 10, removing the hard concurrency ceiling that used to cap the whole system.
+- **Enrollment listings** batch-resolve a page's course/student lookups in one query instead of one per row — **50–78% faster**.
+- **Search** (students, books, courses) now uses a MySQL `FULLTEXT` index with purpose-built queries instead of an unindexed scan.
+- **Keyset (seek) pagination** replaces `OFFSET`/`LIMIT` for deep list pages, so page depth stops being a cost variable.
+
+See [`docs-v01/`](docs-v01/) for the full remediation plan and [`docs-v01/Benchmark/10-customer-performance-summary.md`](docs-v01/Benchmark/10-customer-performance-summary.md) for the measured, customer-facing results — including a regression that was found and fixed along the way, written up rather than quietly smoothed over.
+
 ## What is this?
 
 This is a system for keeping track of **students, the books they borrow, and the courses they take** — the kind of record-keeping a school, training center, or library would need day to day.
