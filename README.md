@@ -9,7 +9,7 @@ The [Performance](#performance) section below documents eight hazards found by r
 - **Search** (students, books, courses) now uses a MySQL `FULLTEXT` index with purpose-built queries instead of an unindexed scan.
 - **Keyset (seek) pagination** replaces `OFFSET`/`LIMIT` for deep list pages, so page depth stops being a cost variable.
 
-See [`docs-v01/`](docs-v01/) for the full remediation plan and [`docs-v01/Benchmark/10-customer-performance-summary.md`](docs-v01/Benchmark/10-customer-performance-summary.md) for the measured, customer-facing results — including a regression that was found and fixed along the way, written up rather than quietly smoothed over.
+See [`docs/Benchmark/`](docs/Benchmark/) for the full remediation plan and [`docs/Benchmark/10-customer-performance-summary.md`](docs/Benchmark/10-customer-performance-summary.md) for the measured, customer-facing results — including a regression that was found and fixed along the way, written up rather than quietly smoothed over.
 
 ## What is this?
 
@@ -74,7 +74,7 @@ Under the hood, this is a Java/Spring Boot REST API, with a Next.js demo UI over
 
 - `management/` — the API. Spring Boot 4 / Spring Modulith, MySQL 8, Flyway.
 - `management-frontend/` — the demo UI. Next.js 16, TypeScript, Chakra UI v3.
-- `docs/` — Markdown sources for the BA, PM, SA, Testing, and UI-UX document sets. The HTML is generated (`make -C docs-v00 docs`), not committed.
+- `docs/` — Markdown sources for the BA, PM, SA, Testing, and UI-UX document sets. The HTML is generated (`make -C docs docs`), not committed.
 - `util/` — build tooling; currently the docs Markdown → HTML compiler.
 
 For architecture details, module boundaries, database design, and the technical roadmap, see the documentation: [Document](docs/).
@@ -94,7 +94,7 @@ This project is built the way a specification-driven team would build it — bus
 
 Most portfolio projects assert performance; this one measures it and writes down what it finds — including when the finding is inconvenient.
 
-[`docs-v00/Benchmark/benchmark-strategy/`](docs-v00/Benchmark/benchmark-strategy/) documents a hazard-driven benchmarking practice: **eight specific, expensive code paths were identified by reading the shipped implementation** — not guessed — each cited by file and line (e.g. a leading-wildcard search that scans its table twice per request, an N+1 course lookup while listing enrollments, deep `OFFSET` pagination). Each hazard was then given a load-testing scenario and measured with **k6** against the real API and a real MySQL 8 database, at three generated dataset sizes:
+[`docs/Benchmark/benchmark-strategy/`](docs/Benchmark/benchmark-strategy/) documents a hazard-driven benchmarking practice: **eight specific, expensive code paths were identified by reading the shipped implementation** — not guessed — each cited by file and line (e.g. a leading-wildcard search that scans its table twice per request, an N+1 course lookup while listing enrollments, deep `OFFSET` pagination). Each hazard was then given a load-testing scenario and measured with **k6** against the real API and a real MySQL 8 database, at three generated dataset sizes:
 
 | Scale | Students | Courses | Books | Enrollments |
 | --- | --- | --- | --- | --- |
@@ -102,7 +102,7 @@ Most portfolio projects assert performance; this one measures it and writes down
 | S2 — Institution (the scale the targets are written for) | 5,000 | 300 | 8,000 | 30,000 |
 | S3 — stress probe | 50,000 | 1,000 | 80,000 | ~400,000 |
 
-The first baseline runs (2026-08-26, recorded in [`docs-v00/Benchmark/result/`](docs-v00/Benchmark/result/)) came back with **0% errors and 100% of response-correctness checks passing** — tens of thousands of assertions across every scenario, at every scale. Latency is where it gets honest: on the shared 4-core laptop the runs were taken on, every scenario missed its proposed response-time target, including simple by-key lookups that should be flat — and the record says so plainly, rather than reporting only the numbers that looked good. The leading cause, documented rather than hidden, was a confound between genuine per-row query cost and 20 simulated users queuing against a connection pool left at its framework default of 10.
+The first baseline runs (2026-08-26, recorded in [`docs/Benchmark/result/`](docs/Benchmark/result/)) came back with **0% errors and 100% of response-correctness checks passing** — tens of thousands of assertions across every scenario, at every scale. Latency is where it gets honest: on the shared 4-core laptop the runs were taken on, every scenario missed its proposed response-time target, including simple by-key lookups that should be flat — and the record says so plainly, rather than reporting only the numbers that looked good. The leading cause, documented rather than hidden, was a confound between genuine per-row query cost and 20 simulated users queuing against a connection pool left at its framework default of 10.
 
 What the data *does* already show cleanly is the shape of the curve, which is exactly what this exercise was designed to find: search/list endpoints grow sharply between the 5,000-row and 50,000-row datasets — e.g. for student search, the response time faster than 95% of all requests goes from 263 ms at the 5,000-student scale to 1.65 s at the 50,000-student scale — consistent with the full-table-scan hazard the code review flagged before a single request was fired against it. That match — predicted from reading the code, then confirmed under load — is the actual point of the exercise, more than any individual millisecond figure.
 
@@ -110,7 +110,7 @@ A second pass (2026-08-27, same result folder) finished the job: write, login, b
 
 Two of those runs also found bugs in the *benchmark harness itself* — a seed-data column that silently broke every write scenario, and a signal-handling bug that silently dropped a companion script's output — both root-caused from a stack trace or a direct reproduction, fixed in the same sitting, and written up next to the numbers they affected rather than quietly patched away. That's the same standard the rest of this project holds itself to, applied to the measurement tooling too.
 
-Fixing these eight hazards is what v0.1 is (see [What's new in v0.1](#whats-new-in-v01) above). The same rigor was applied to verifying the fixes: a follow-up run caught a **461% p95 regression** the search fix itself introduced — the combined search/browse query was optimized for one access pattern at the cost of the other — root-caused via `EXPLAIN` and `performance_schema` digests, split into two purpose-built queries, and re-verified clean. The full before/after, including that regression and its fix, is in [`docs-v01/Benchmark/09-v01-vs-v00-conclusions.md`](docs-v01/Benchmark/09-v01-vs-v00-conclusions.md).
+Fixing these eight hazards is what v0.1 is (see [What's new in v0.1](#whats-new-in-v01) above). The same rigor was applied to verifying the fixes: a follow-up run caught a **461% p95 regression** the search fix itself introduced — the combined search/browse query was optimized for one access pattern at the cost of the other — root-caused via `EXPLAIN` and `performance_schema` digests, split into two purpose-built queries, and re-verified clean. The full before/after, including that regression and its fix, is in [`docs/Benchmark/09-v01-vs-v00-conclusions.md`](docs/Benchmark/09-v01-vs-v00-conclusions.md).
 
 ## Getting Started
 
@@ -198,9 +198,9 @@ To run the same check locally, see [Getting Started](#getting-started) above.
 The Markdown under [`docs/`](docs/) is the source. To read it as a linked HTML site — with the mermaid and PlantUML diagrams rendered and click-to-zoom — generate it:
 
 ```sh
-make -C docs-v00 docs         # compile docs/**/*.md → .html
-make -C docs-v00 docs-watch   # ...and rebuild on every save
-make -C docs-v00 docs-clean   # remove the generated HTML
+make -C docs docs         # compile docs/**/*.md → .html
+make -C docs docs-watch   # ...and rebuild on every save
+make -C docs docs-clean   # remove the generated HTML
 ```
 
-The generated HTML is gitignored; edit the Markdown and regenerate. The compiler is [`util/md-to-html.js`](util/md-to-html.js), and the docs targets live in [`docs-v00/Makefile`](docs-v00/Makefile).
+The generated HTML is gitignored; edit the Markdown and regenerate. The compiler is [`util/md-to-html.js`](util/md-to-html.js), and the docs targets live in [`docs/Makefile`](docs/Makefile).

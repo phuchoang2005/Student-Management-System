@@ -18,7 +18,7 @@ import useAsyncAction from '@/lib/hooks/useAsyncAction';
 import { ROLE_LABELS, landingRoute, navItemsFor } from '@/lib/auth/permissions';
 
 /**
- * What each role is for, in one line, from `docs-v00/BA-docs/use-cases.md`'s actor table.
+ * What each role is for, in one line, from `docs/BA-docs/use-cases.md`'s actor table.
  *
  * Written as the job rather than the permission — "keeps the catalogue and tracks who is holding
  * which book" is what a Librarian would say they do; "holds books:read and books:write" is what the

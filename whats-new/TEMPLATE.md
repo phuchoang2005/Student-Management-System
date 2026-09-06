@@ -23,5 +23,5 @@ Link or embed anything under `assests/images-demo/` that shows the change.
 
 ## Details
 
-Point to the doc that has the real reasoning — a `docs-v0N/` section, a benchmark result file, an
+Point to the doc that has the real reasoning — a `docs/` section, a benchmark result file, an
 ADR — rather than re-explaining it here. This file is the pointer, not the source of truth.

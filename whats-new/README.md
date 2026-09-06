@@ -5,7 +5,7 @@ release; the current in-progress work lives in [`unreleased.md`](unreleased.md) 
 `main` and gets its own dated file.
 
 This is a changelog for people, not a commit log — `git log` already has the commit history, and
-the versioned doc sets under `docs-v00/`/`docs-v01/` already have the full design/architecture
+the versioned doc set under `docs/` already has the full design/architecture
 reasoning. What belongs here is the short version: what changed, why it mattered, and where to look
 for the long version.
 

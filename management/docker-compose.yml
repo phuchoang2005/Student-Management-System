@@ -32,7 +32,7 @@ services:
       retries: 10
 
   # bench/observability/README.md — feeds the MySQL Performance dashboard
-  # (docs-v00/Benchmark/benchmark-strategy/06-dashboard-building.md). Not in Homebrew core, so it
+  # (docs/Benchmark/benchmark-strategy/06-dashboard-building.md). Not in Homebrew core, so it
   # runs as a container against the `mysql` service over the compose network rather than as a
   # brew service like prometheus/grafana. Needs the 'exporter' user from
   # bench/observability/mysqld-exporter-grant.sql to already exist.

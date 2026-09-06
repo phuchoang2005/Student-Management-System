@@ -24,7 +24,7 @@ interface SpringDataStudentRepository extends CrudRepository<StudentRow, Long> {
   // search/browse are deliberately separate statements, not one query with a
   // "(:query IS NULL OR :query = '' OR MATCH(...))" branch: a single combined statement stopped
   // the planner from specializing per call and regressed even the no-filter case (+191% p95,
-  // docs-v01/Benchmark/09-v01-vs-v00-conclusions.md §3) -- reopens IP-02/IP-03.
+  // docs/Benchmark/09-v01-vs-v00-conclusions.md §3) -- reopens IP-02/IP-03.
   @Query("""
       SELECT * FROM students
       WHERE (:scopeId IS NULL OR id = :scopeId)

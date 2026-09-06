@@ -1,6 +1,6 @@
 # Benchmark harness -- k6 scenarios + dataset generator specified in
-# docs-v00/Benchmark/benchmark-strategy/. Split out of the former root Makefile so each toolchain
-# (management/, bench/, docs-v00/) owns its own targets. Invoke from the repo root as
+# docs/Benchmark/benchmark-strategy/. Split out of the former root Makefile so each toolchain
+# (management/, bench/, docs/) owns its own targets. Invoke from the repo root as
 # `make -C bench <target>`, or `cd bench && make <target>`.
 #
 # `make bench` deliberately does NOT depend on `management`'s `up` target
@@ -24,7 +24,7 @@ help:
 	@echo "make bench-seed SCALE=S1|S2|S3 [SEED=..] - reseed the dataset at that scale, write out/<scale>-manifest.json, reset MySQL diagnostics"
 	@echo "make bench SCENARIO=<name> SCALE=S1|S2|S3 - run one k6 scenario (scenarios/<name>.js), raw output to out/"
 	@echo "make bench-all SCALE=S1|S2|S3 [BM_ONLY=..] - run every PM-033 scenario file in sequence"
-	@echo "make bench-report SCALE=S1|S2|S3 [REPS=3] [BASELINE=../docs-v00/Benchmark/result/<file>.md] - render the median of the last REPS runs into the run-record Results table, with a Δp95-vs-baseline regression verdict per scenario if BASELINE is given"
+	@echo "make bench-report SCALE=S1|S2|S3 [REPS=3] [BASELINE=../docs/Benchmark/result/<file>.md] - render the median of the last REPS runs into the run-record Results table, with a Δp95-vs-baseline regression verdict per scenario if BASELINE is given"
 	@echo "make bench-jmh [JMH_REGEX=..] - run the JMH microbenchmark suite (BM-JMH-001..004), result to ../management/target/jmh-result.json"
 	@echo "make bench-ci-smoke SCALE=S1 - BM-STU-002+BM-ENR-002 with loose thresholds; what .github/workflows/benchmark-smoke.yml runs"
 	@echo "make bench-auth-ramp SCALE=S1|S2|S3 - BM-IDN-001's login ramp, isolated (BM_ONLY-pinned) per its 'runs alone' requirement"
@@ -34,7 +34,7 @@ help:
 	@echo "make bench-mixed-soak SCALE=S2 [SOAK_DURATION=30m] - BM-XC-002 mixed-role soak + BM-IDN-004, with monitor-soak.js backgrounded"
 	@echo "(Prometheus/Grafana/mysqld-exporter are behind the 'benchmark' docker-compose profile -- 'make -C management up-bench' starts them all alongside mysql; see bench/observability/README.md)"
 	@echo ""
-	@echo "docs-v01/Benchmark/07-improvement-roadmap.md IP-01..IP-11 verification (08-hazard-fix-specs.md has the per-item BM-* targets):"
+	@echo "docs/Benchmark/07-improvement-roadmap.md IP-01..IP-11 verification (08-hazard-fix-specs.md has the per-item BM-* targets):"
 	@echo "make bench-full-catalog [REPS=1] [BASELINE=..] - reseed+run the P0 read catalog at S1/S2/S3 in sequence, bench-report each, then bench-scale-sweep -- IP-01/02/03/04/05/07's shared S1/S2/S3 exit criterion"
 	@echo "make bench-auth-blast-radius SCALE=S2|S3 - IP-08's blast-radius check: BM-IDN-001's ramp run concurrently against a BM-STU-005 control (bench-auth-ramp alone only gives the ramp's own knee, not this)"
 	@echo "make bench-ip-suite [IP_SUITE_SCALE=S2] - the whole IP-01..IP-11 sequence phase-by-phase (xc-003, full-catalog, writes, jmh, auth-ramp+blast-radius, cascade-delete last since it's destructive); IP-09 is already delivered and IP-10 is deliberately deferred (07-improvement-roadmap.md Phase 5) so neither runs here -- see bench-mixed-soak for H7 data anyway"
@@ -55,7 +55,7 @@ BM_ONLY ?=
 SOAK_DURATION ?= 30m
 BASELINE ?=
 JMH_REGEX ?=
-# k6 -> Prometheus, additive to --summary-export (docs-v00/Benchmark/benchmark-strategy/
+# k6 -> Prometheus, additive to --summary-export (docs/Benchmark/benchmark-strategy/
 # 06-dashboard-building.md, HTTP & Load Testing dashboard). PROMETHEUS_RW=0 opts out for anyone
 # without Prometheus running -- see bench/observability/README.md for the receiver-side setup.
 PROMETHEUS_RW ?= 1
@@ -105,7 +105,7 @@ bench-all:
 	done
 
 bench-report:
-	@test -n "$(SCALE)" || (echo "Usage: make bench-report SCALE=S1|S2|S3 [REPS=3] [BASELINE=../docs-v00/Benchmark/result/<file>.md]"; exit 1)
+	@test -n "$(SCALE)" || (echo "Usage: make bench-report SCALE=S1|S2|S3 [REPS=3] [BASELINE=../docs/Benchmark/result/<file>.md]"; exit 1)
 	node report.js --scale=$(SCALE) --reps=$(REPS) $(if $(BASELINE),--baseline=$(BASELINE))
 
 # PM-038: exactly what .github/workflows/benchmark-smoke.yml runs, for local dry-run parity.
@@ -218,7 +218,7 @@ bench-mixed-soak: bench-node-modules
 	kill -INT $$monitor_pid 2>/dev/null || true; \
 	sleep 1
 
-# --- v0.1 roadmap orchestration (docs-v01/Benchmark/07-improvement-roadmap.md IP-01..IP-11,
+# --- v0.1 roadmap orchestration (docs/Benchmark/07-improvement-roadmap.md IP-01..IP-11,
 # 08-hazard-fix-specs.md's per-item Targets/Verification sections) ------------------------------
 
 IP_SUITE_SCALE ?= S2

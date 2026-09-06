@@ -8,7 +8,7 @@ import {
 } from '@chakra-ui/react/anatomy';
 
 /**
- * The Zen design system, per `docs-v00/UI-UX/02-Japanese-Zen-Design.md`.
+ * The Zen design system, per `docs/UI-UX/02-Japanese-Zen-Design.md`.
  *
  * Still a `defineConfig` overlay on Chakra's defaults rather than a stylesheet: the Emotion SSR
  * registry (`app/emotion-registry.tsx`) is load-bearing for hydration, and a second styling runtime

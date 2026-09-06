@@ -146,7 +146,7 @@ class JdbcBookRepositoryTest {
   void searchRoutesANullOrBlankQueryToBrowseInsteadOfTheFulltextStatement() {
     // A null/blank query must never reach the MATCH-based `search` statement -- routing it there
     // via an "(:query IS NULL OR ...)" branch is exactly the combined-query shape that regressed
-    // the no-filter case (docs-v01/Benchmark/09-v01-vs-v00-conclusions.md §3, BM-STU-001 +191%).
+    // the no-filter case (docs/Benchmark/09-v01-vs-v00-conclusions.md §3, BM-STU-001 +191%).
     repository = new JdbcBookRepository(springRepo);
     when(springRepo.browse(isNull(), isNull(), anyInt())).thenReturn(List.of());
 

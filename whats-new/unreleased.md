@@ -4,7 +4,7 @@
 | --- | --- |
 | Status | In progress — uncommitted on `update-ui`, not yet merged to `main` |
 | Date | as of 2026-09-06 |
-| Reference | `docs-v00/UI-UX/02-Japanese-Zen-Design.md` (updated alongside this work) |
+| Reference | `docs/UI-UX/02-Japanese-Zen-Design.md` (updated alongside this work) |
 
 ## Summary
 
@@ -41,6 +41,6 @@ and a rail-based app shell that responds down to phone width. The screenshots in
 
 ## Details
 
-- [`docs-v00/UI-UX/02-Japanese-Zen-Design.md`](../docs-v00/UI-UX/02-Japanese-Zen-Design.md) — the design system this implements.
-- [`docs-v00/UI-UX/01-frontend-strategy.md`](../docs-v00/UI-UX/01-frontend-strategy.md) — the frontend strategy this pass updated.
+- [`docs/UI-UX/02-Japanese-Zen-Design.md`](../docs/UI-UX/02-Japanese-Zen-Design.md) — the design system this implements.
+- [`docs/UI-UX/01-frontend-strategy.md`](../docs/UI-UX/01-frontend-strategy.md) — the frontend strategy this pass updated.
 - `management-frontend/src/components/AppShell.tsx` — the shell rewrite, with the reasoning in its doc comment.
