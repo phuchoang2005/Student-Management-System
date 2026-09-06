@@ -35,6 +35,9 @@ export default function SurfaceCard({
           flexDirection="row"
           justifyContent="space-between"
           alignItems="flex-start"
+          // The identity column is ~21rem wide, so a title and an action button do not always fit
+          // on one line there. Wrapping is cheaper than a second card variant.
+          flexWrap="wrap"
           gap="4"
         >
           <div>

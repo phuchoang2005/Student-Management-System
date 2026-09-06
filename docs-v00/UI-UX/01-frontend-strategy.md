@@ -297,7 +297,9 @@ The single source for nav rendering and button gating. Mirrors `SecurityConfig.f
 
 | Route | Visible to | Behaviour, per role |
 | --- | --- | --- |
-| `/login` | public | `GET /auth/demo-accounts` chips, `POST /auth/login`. UC-21 |
+| `/login` | public | `POST /auth/login`, beside a **role board** built from `GET /auth/demo-accounts` and `navItemsFor()`: each role states the work it does and previews its actual sidebar. Absent when demo accounts are disabled, leaving the form alone. UC-21 |
+| `/home` | any | Where every role now lands (`landingRoute` returns it for all five). The role's remit, its sections with a line each, and the records opened this session (`lib/recent.ts`, `sessionStorage`). **Not a metrics dashboard** — this API exposes no aggregates, so there is no honest number to show. |
+| `/account` | any | Who you are signed in as, and links to change password / sign out. |
 | `/change-password` | any (forced) | `POST /auth/password`. The one route the must-change gate allows. UC-22 |
 | `/students` | Registrar, Librarian, Student | **Student:** `GET /me/profile` rendered as a card — no list, no search. **Registrar / Librarian:** search + table + pagination over `GET /students`; Registrar also gets register / edit / delete. UC-1, 2, 3, 13, 16 |
 | `/students/[code]` | Registrar, Librarian, Course Admin | Record card, plus: **Librarian** → books on loan (`GET /books?ownerStudentCode=`); **Registrar / Course Admin** → enrolled courses (`GET /enrollments?studentCode=`), each row linking to the course. Registrar also gets the initial-password reveal. UC-17, 23 |
@@ -305,11 +307,12 @@ The single source for nav rendering and button gating. Mirrors `SecurityConfig.f
 | `/books/[isbn]` | Librarian, Student | Record card; Librarian additionally gets assign (by student code) and release. UC-5, 6, 18 |
 | `/courses` | Registrar, Course Admin, Student | **Student:** `GET /me/courses` — enrolled only. **Registrar:** read-only catalogue. **Course Admin:** catalogue + create / edit / delete. Every variant shows a **Students** column (`enrolledCount`) — a count, never the roster. UC-8, 9, 10, 15, 16 |
 | `/courses/[code]` | Registrar, Course Admin, Student | Record card, including **Students enrolled**; **Registrar / Course Admin** additionally get the roster itself (`GET /enrollments?courseCode=`), each row linking to that student. The count is on everyone's card, the roster only on theirs. UC-19 |
-| `/enrollments` | Registrar, Course Admin | **Registrar:** type a student code → their courses → end, or open a course picker and enroll into several at once, with a per-course summary of what succeeded. **Course Admin:** course list → a course → its roster → a student's profile. UC-11, 12, 20, 26 |
+| `/enrollments` | Registrar, Course Admin | **Registrar:** find a student with `StudentPicker` → their courses → end, or open a course picker and enroll into several at once, with a per-course summary of what succeeded. **Course Admin:** course list → a course → its roster → a student's profile. UC-11, 12, 20, 26 |
 | `/staff-accounts` | SysAdmin | List, create, deactivate / reactivate. UC-24, 25 |
 | `/sessions` | SysAdmin | Who is signed in, newest activity first, and ending one. Not paged — the source is an in-memory snapshot with no stable ordering. The admin's own row is marked and its End button disabled. UC-27, 28 |
 
-**Coverage: all 28 use cases.** Several UCs (search + detail, create + update + delete) share one screen, and UC-16 is spread across the Student's three tabs rather than living on a page of its own.
+**Coverage: all 28 use cases.** `/home` and `/account` carry no use case of their own — they are
+navigation, not behaviour. Several UCs (search + detail, create + update + delete) share one screen, and UC-16 is spread across the Student's three tabs rather than living on a page of its own.
 
 ### 6.1 Screen anatomy
 
@@ -319,7 +322,33 @@ Three layouts cover every screen:
 
 **Detail screen** — a `RecordCard` definition list, plus zero, one, or two related tables chosen by role (§4.4).
 
-**Action screen** (`/enrollments` for a Registrar, `/staff-accounts`) — a small form driving a list, because the work starts with typing a key rather than browsing.
+**Action screen** (`/enrollments` for a Registrar, `/staff-accounts`) — a small form driving a list, because the work starts with choosing a record rather than browsing.
+
+### 6.2 Finding a record
+
+Two components exist because a business key is precise and unmemorable at the same time, and the
+first build assumed staff would arrive already holding one:
+
+**`StudentPicker`** — search by code, name, or email over the existing `GET /students?query=`.
+It replaced the "Student code" text field and **Look up** button on `/enrollments`, which did
+nothing at all until someone typed a code exactly, from memory. Reused for book ownership.
+
+**`CommandPalette`** (⌘K, with a labelled trigger in the rail) — searches students, courses, and
+books at once, gated per kind by `can()` so it queries only what the signed-in role may read, and
+jumps to the record. Justified by this system specifically: everything is addressed by a readable
+key, so "I have a code, take me to it" is the natural motion.
+
+### 6.3 Responsive behaviour
+
+The first build had no breakpoints at all. There is one, `md` (768px):
+
+- **Rail** — a fixed 15rem column above `md`; a drawer behind a topbar trigger below it. Both render
+  the same `RailContent`, so they cannot drift.
+- **Tables** — the ledger above `md`; below it each row is re-laid out as a stacked record, driven by
+  the `priority` field on the same `Column` definition (`primary`/`secondary` lead, `actions` go to
+  the foot). There is no second column definition to maintain.
+- **Content column** — capped at 1100px and centred rather than pinned left, so a four-column table
+  stops sitting in the left half of a wide display with its last column flung at the far edge.
 
 ---
 
@@ -399,7 +428,7 @@ A role `Badge` in the topbar makes "who am I logged in as" readable at a glance 
 
 ### 7.6 The Zen design system
 
-[02-Japanese-Zen-Design.md](02-Japanese-Zen-Design.md) is the visual authority; `theme/system.ts` is its implementation. Four things are worth knowing before editing either:
+[02-Japanese-Zen-Design.md](02-Japanese-Zen-Design.md) is the visual authority; `theme/system.ts` is its implementation. Six things are worth knowing before editing either:
 
 **One ramp re-colours everything.** Chakra derives `bg`, `fg`, `border`, and every neutral surface from `colors.gray.*`. The overlay repoints that ramp at `sumi`, a warm ink neutral whose 50 and 200 steps are the spec's `#F8F8F6` background and `#E5E5E5` border verbatim. Only `fg`, `bg.panel`, `bg.subtle` and `border` need an explicit override on top.
 
@@ -407,9 +436,32 @@ A role `Badge` in the topbar makes "who am I logged in as" readable at a glance 
 
 **Heavy weights are unreachable.** §4 permits 400/500/600, so `fontWeights.bold`, `.extrabold` and `.black` are all aliased to 600 rather than deleted — a recipe reaching for `bold` lands inside the spec instead of breaking.
 
+**Every colour has one job.** `ai` means the primary action, or where you currently are. `matcha`
+means a record is in a state someone is responsible for — a book on loan, a live session — and
+nothing else; `ui/StatusDot.tsx` is the only way it reaches a screen, and the label beside the dot
+always says the same thing in words. §5 caps the palette at one primary and one accent; the earlier
+build honoured the cap by never using the accent at all, which is how the app ended up indigo and
+grey.
+
+**The type scale is a token.** `textStyles` defines the whole vocabulary — `display`, `title`,
+`body`, `prose`, `meta`, `key` — and pages ask for one of those rather than reassembling
+`fontSize="sm" color="fg.muted"` by hand, which is how six screens acquired six slightly different
+captions.
+
 **Motion has one vocabulary.** `components/motion/motion-config.ts` owns every duration and easing in the app, and `useZenTransition()` returns a zero-duration transition under `prefers-reduced-motion`. There are no inline `transition={{...}}` objects anywhere in `src/` — that is what keeps §8's ban on bounce, spring, rotation and zoom enforceable rather than aspirational.
 
-Three primitives are new and should be reached for before composing Chakra directly: `ui/Button.tsx` (which is why no page passes `size="xs"`), `ui/SurfaceCard.tsx` (the one card), and `ui/EmptyState.tsx` (§13's icon + explanation + action).
+Reach for these primitives before composing Chakra directly:
+
+| Primitive | For |
+| --- | --- |
+| `ui/Button.tsx` | Any button. Why no page passes `size="xs"`. |
+| `ui/RowAction.tsx` | A button inside a table row. Quiet until pointed at; `destructive` turns it red on hover, so a roll of twenty students no longer draws twenty red **Delete** buttons. Red lives on the confirm dialog, where something is actually about to be destroyed. |
+| `ui/SurfaceCard.tsx` | The one card — a bounded object only. Not lists. |
+| `ui/EmptyState.tsx` | §13's icon + explanation + action. |
+| `ui/Key.tsx` | A business key. Mono, `tabular-nums`, no chip. |
+| `ui/StatusDot.tsx` | Record state. The only route the accent takes to the screen. |
+| `ui/TableSkeleton.tsx`, `ui/RecordSkeleton.tsx` | Loading. They hold the layout, so navigation stops flashing a centred spinner and snapping. |
+| `ui/toaster.tsx` | `confirmDone('Student registered')` — success only, in the words the control used. Failures stay inline in `ErrorBanner`, next to what caused them. |
 
 ---
 

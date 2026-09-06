@@ -5,6 +5,7 @@ import { ThemeProvider } from 'next-themes';
 import type { ReactNode } from 'react';
 
 import EmotionRegistry from './emotion-registry';
+import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/lib/auth/AuthContext';
 import system from '@/theme/system';
 
@@ -23,7 +24,10 @@ export default function Providers({ children }: { children: ReactNode }) {
     <EmotionRegistry>
       <ChakraProvider value={system}>
         <ThemeProvider attribute="class" defaultTheme="system" disableTransitionOnChange>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            {children}
+            <Toaster />
+          </AuthProvider>
         </ThemeProvider>
       </ChakraProvider>
     </EmotionRegistry>

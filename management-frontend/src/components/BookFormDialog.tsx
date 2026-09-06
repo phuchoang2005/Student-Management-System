@@ -8,6 +8,8 @@ import FormDialog from './FormDialog';
 import FormField from './FormField';
 import { books } from '@/lib/api/endpoints';
 import useAsyncAction from '@/lib/hooks/useAsyncAction';
+import { confirmDone } from '@/components/ui/toaster';
+import StudentPicker from '@/components/StudentPicker';
 
 /**
  * Add a book, optionally already assigned to a student.
@@ -55,7 +57,10 @@ export default function BookFormDialog({
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const result = await action.run();
-    if (result) onSaved();
+    if (result) {
+      confirmDone('Book added');
+      onSaved();
+    }
   };
 
   return (
@@ -101,11 +106,10 @@ export default function BookFormDialog({
           onChange={(e) => setPublishedDate(e.target.value)}
           error={action.error?.fieldError('publishedDate')}
         />
-        <FormField
-          label="Assign to student code"
-          name="ownerStudentCode"
+        <StudentPicker
+          label="Assign to"
           value={ownerStudentCode}
-          onChange={(e) => setOwnerStudentCode(e.target.value)}
+          onSelect={setOwnerStudentCode}
           error={action.error?.fieldError('ownerStudentCode')}
           helper="Optional. Leave blank to shelve the book unassigned."
         />

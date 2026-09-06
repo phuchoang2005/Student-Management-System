@@ -13,6 +13,11 @@ import type { ReactNode } from 'react';
  * The three parts here are the spec's: a small supporting icon, a concise explanation, one primary
  * action. The icon is capped at 32px on purpose — "avoid oversized illustrations that distract from
  * the intended action".
+ *
+ * It sits on the page ground under a single hairline, in the same place the table's header rule
+ * would be. The bordered white panel it used to draw was a box around nothing — the strongest frame
+ * on the screen wrapping the one state that has no content in it — and it made "no results yet"
+ * look like a result.
  */
 export default function EmptyState({
   icon = Inbox,
@@ -26,14 +31,7 @@ export default function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <Center
-      py="16"
-      px="8"
-      borderWidth="1px"
-      borderColor="border"
-      borderRadius="l3"
-      bg="bg.panel"
-    >
+    <Center py="20" px="8" borderTopWidth="1px" borderColor="border">
       <Stack gap="4" align="center" maxW="26rem" textAlign="center">
         <Icon as={icon} boxSize="8" color="fg.subtle" strokeWidth={1.5} aria-hidden />
         <Box>

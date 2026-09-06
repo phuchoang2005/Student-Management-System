@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Box, Center, Code, Spinner, Stack } from '@chakra-ui/react';
+import { Alert, Box, Stack } from '@chakra-ui/react';
 import { UserPlus, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -16,6 +16,10 @@ import PageHeader from '@/components/PageHeader';
 import RecordCard from '@/components/RecordCard';
 import SearchInput from '@/components/SearchInput';
 import StudentFormDialog from '@/components/StudentFormDialog';
+import Key from '@/components/ui/Key';
+import { confirmDone } from '@/components/ui/toaster';
+import RecordSkeleton from '@/components/ui/RecordSkeleton';
+import RowAction from '@/components/ui/RowAction';
 import { me, students } from '@/lib/api/endpoints';
 import type { StudentSummary } from '@/lib/api/types';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -46,9 +50,7 @@ function MyRecord() {
 
   if (loading) {
     return (
-      <Center py="16">
-        <Spinner size="lg" color="fg.subtle" borderWidth="1.5px" />
-      </Center>
+      <RecordSkeleton fields={5} />
     );
   }
 
@@ -59,7 +61,7 @@ function MyRecord() {
       {data ? (
         <RecordCard
           fields={[
-            { label: 'Student code', value: <Code>{data.studentCode}</Code> },
+            { label: 'Student code', value: <Key>{data.studentCode}</Key> },
             { label: 'First name', value: data.firstName },
             { label: 'Last name', value: data.lastName },
             { label: 'Email', value: data.email },
@@ -103,6 +105,7 @@ function StudentRoll() {
     // would report the *previous* attempt's outcome.
     const result = await removeAction.run(deleting.studentCode);
     if (result !== undefined) {
+      confirmDone('Student removed');
       setDeleting(null);
       resource.refetch();
     }
@@ -138,11 +141,19 @@ function StudentRoll() {
             key: 'studentCode',
             header: 'Code',
             width: '9rem',
-            cell: (row) => <Code>{row.studentCode}</Code>,
+            priority: 'primary' as const,
+            cell: (row) => <Key>{row.studentCode}</Key>,
           },
-          { key: 'firstName', header: 'First name', cell: (row) => row.firstName },
-          { key: 'lastName', header: 'Last name', cell: (row) => row.lastName },
-          { key: 'email', header: 'Email', cell: (row) => row.email },
+          // One column, not two. A first and last name are one thing to scan for, and splitting
+          // them cost a column's width to say nothing the joined name doesn't.
+          {
+            key: 'name',
+            header: 'Name',
+            width: '16rem',
+            priority: 'secondary' as const,
+            cell: (row) => `${row.firstName} ${row.lastName}`,
+          },
+          { key: 'email', header: 'Email', width: '22rem', cell: (row) => row.email },
           ...(mayWrite
             ? [
                 {
@@ -150,36 +161,33 @@ function StudentRoll() {
                   header: '',
                   width: '10rem',
                   align: 'end' as const,
+                  priority: 'actions' as const,
                   cell: (row: StudentSummary) => (
                     <Stack direction="row" gap="2" justify="flex-end">
-                      <Button
-                        size="sm"
-                        tone="neutral"
-                        variant="outline"
+                      <RowAction
                         onClick={(event) => {
                           event.stopPropagation();
                           setEditing(row);
                         }}
                       >
                         Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        tone="danger"
-                        variant="outline"
+                      </RowAction>
+                      <RowAction
+                        destructive
                         onClick={(event) => {
                           event.stopPropagation();
                           setDeleting(row);
                         }}
                       >
                         Delete
-                      </Button>
+                      </RowAction>
                     </Stack>
                   ),
                 },
               ]
             : []),
         ]}
+        pack
         rows={resource.data?.content ?? []}
         keyOf={(row) => row.studentCode}
         loading={resource.loading}

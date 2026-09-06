@@ -1,9 +1,9 @@
 'use client';
 
-import { Box, Center, Code, Heading, Spinner, Stack, Text } from '@chakra-ui/react';
-import { ArrowLeft, BookOpen, GraduationCap } from 'lucide-react';
+import { Box, Code, Heading, Stack, Text } from '@chakra-ui/react';
+import { BookOpen, GraduationCap } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import CursorPagination from '@/components/CursorPagination';
 import DataTable from '@/components/DataTable';
@@ -12,6 +12,10 @@ import PageHeader from '@/components/PageHeader';
 import RecordCard from '@/components/RecordCard';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
+import Key from '@/components/ui/Key';
+import RecordSkeleton from '@/components/ui/RecordSkeleton';
+import DetailLayout from '@/components/DetailLayout';
+import Breadcrumb from '@/components/Breadcrumb';
 import { books, enrollments, students } from '@/lib/api/endpoints';
 import type { BookSummary, Enrollment } from '@/lib/api/types';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -20,6 +24,7 @@ import RequireAuth from '@/lib/auth/RequireAuth';
 import useAsyncAction from '@/lib/hooks/useAsyncAction';
 import useCursorResource from '@/lib/hooks/useCursorResource';
 import useResource from '@/lib/hooks/useResource';
+import { remember } from '@/lib/recent';
 
 /**
  * One student, plus whichever side of their record the viewing role is responsible for:
@@ -45,59 +50,67 @@ export default function StudentDetailPage() {
 function StudentDetail() {
   const params = useParams<{ code: string }>();
   const code = decodeURIComponent(params.code);
-  const router = useRouter();
   const { session } = useAuth();
 
   const { data, loading, error } = useResource(() => students.get(code), [code]);
+
+  // Remembered once the record resolves, so a failed or in-flight lookup never lands in the list.
+  useEffect(() => {
+    if (!data) return;
+    remember({
+      kind: 'student',
+      code: data.studentCode,
+      label: `${data.firstName} ${data.lastName}`,
+      href: `/students/${encodeURIComponent(data.studentCode)}`,
+    });
+  }, [data]);
 
   const showBooks = can(session?.role, 'books:read') && session?.role === 'LIBRARIAN';
   const showCourses = can(session?.role, 'enrollments:read');
 
   if (loading) {
     return (
-      <Center py="16">
-        <Spinner size="lg" color="fg.subtle" borderWidth="1.5px" />
-      </Center>
+      <RecordSkeleton fields={6} />
     );
   }
 
   return (
     <Box>
+      <Breadcrumb
+        parent={{ href: '/students', label: 'Students' }}
+        current={data ? `${data.firstName} ${data.lastName}` : code}
+      />
       <PageHeader
         title={data ? `${data.firstName} ${data.lastName}` : code}
         description={data ? data.email : undefined}
-        actions={
-          <Button tone="neutral" variant="outline" onClick={() => router.back()}>
-            <ArrowLeft strokeWidth={1.5} />
-            Back
-          </Button>
-        }
       />
 
       <ErrorBanner error={error} />
 
       {data ? (
-        <Stack gap="8">
-          <RecordCard
-            title="Record"
-            fields={[
-              { label: 'Student code', value: <Code>{data.studentCode}</Code> },
-              { label: 'First name', value: data.firstName },
-              { label: 'Last name', value: data.lastName },
-              { label: 'Email', value: data.email },
-              { label: 'Date of birth', value: data.dateOfBirth },
-              { label: 'Registered', value: new Date(data.createdAt).toLocaleString() },
-            ]}
-            actions={
-              can(session?.role, 'students:initial-password') ? (
-                <InitialPasswordButton code={data.studentCode} />
-              ) : undefined
-            }
-          />
-
+        <DetailLayout
+          record={
+            <RecordCard
+              title="Record"
+              fields={[
+                { label: 'Student code', value: <Key>{data.studentCode}</Key> },
+                { label: 'First name', value: data.firstName },
+                { label: 'Last name', value: data.lastName },
+                { label: 'Email', value: data.email },
+                { label: 'Date of birth', value: data.dateOfBirth },
+                { label: 'Registered', value: new Date(data.createdAt).toLocaleString() },
+              ]}
+              actions={
+                can(session?.role, 'students:initial-password') ? (
+                  <InitialPasswordButton code={data.studentCode} />
+                ) : undefined
+              }
+            />
+          }
+        >
           {showBooks ? <BorrowedBooks code={data.studentCode} /> : null}
           {showCourses ? <EnrolledCourses code={data.studentCode} /> : null}
-        </Stack>
+        </DetailLayout>
       ) : null}
     </Box>
   );
@@ -153,7 +166,7 @@ function BorrowedBooks({ code }: { code: string }) {
       <ErrorBanner error={resource.error} />
       <DataTable<BookSummary>
         columns={[
-          { key: 'isbn', header: 'ISBN', width: '13rem', cell: (row) => <Code>{row.isbn}</Code> },
+          { key: 'isbn', header: 'ISBN', width: '13rem', cell: (row) => <Key>{row.isbn}</Key> },
           { key: 'title', header: 'Title', cell: (row) => row.title },
           { key: 'author', header: 'Author', cell: (row) => row.author },
         ]}
@@ -200,7 +213,7 @@ function EnrolledCourses({ code }: { code: string }) {
             key: 'courseCode',
             header: 'Code',
             width: '9rem',
-            cell: (row) => <Code>{row.course.courseCode}</Code>,
+            cell: (row) => <Key>{row.course.courseCode}</Key>,
           },
           { key: 'name', header: 'Course', cell: (row) => row.course.name },
           { key: 'credits', header: 'Credits', width: '6rem', cell: (row) => row.course.credits },

@@ -74,6 +74,25 @@ Recommended options:
 * Noto Sans
 * Geist
 
+### As shipped: Public Sans + IBM Plex Mono
+
+The rule is one modern sans-serif; the four names above are examples of it, not the whole of it.
+The build uses **Public Sans**, which satisfies the rule and was chosen for this system in
+particular: it was drawn for the US Web Design System — for government forms and public records —
+which is the genre this application actually belongs to, and it ships true tabular figures, which is
+what makes a column of credits or enrolment counts line up.
+
+It replaced Geist, which is the typeface you arrive at by not choosing one.
+
+**IBM Plex Mono** carries business keys and numeric cells. That is a deliberate promotion rather
+than a code style: every record in this system is addressed by a human-readable key
+(`studentCode`, `courseCode`, ISBN) and staff read those keys in columns all day, so they are the
+app's primary typographic material. See `components/ui/Key.tsx`.
+
+Both are self-hosted through `@fontsource/*` and `next/font/local`, and only the three permitted
+weights are loaded — a weight that cannot be used should not be downloaded. `next build` still needs
+no network.
+
 ## Font Weights
 
 Use only:
@@ -286,6 +305,29 @@ Recommendations:
 Data should remain easy to scan during prolonged usage.
 
 ---
+
+## Column headers
+
+Sentence case, at label size, in muted ink. **Not** tracked-out uppercase.
+
+Capitals strip the word-shape the eye uses to jump to the column it wants, and the treatment is the
+default admin-table look rather than a decision. §3 also asks for hierarchy from spacing and weight
+rather than from a second typographic device, and the header row already has a rule under it.
+
+## Figures
+
+Every table cell is set in `tabular-nums`. Credits, enrolment counts, dates and codes are all read
+down a column, and proportional figures leave such a column ragged on both edges.
+
+## Lists are not cards
+
+A list sits directly on the page ground, bounded by a rule above the header and a rule under each
+row. It does not go inside a bordered surface.
+
+Wrapping a table in a panel put the strongest frame on the screen around the page's main content,
+and on a wide display it produced a thin ribbon of data floating on a large empty slab — frame more
+prominent than rows. `SurfaceCard` remains correct for a genuinely bounded object: one record, one
+form, one dialog. See §6.
 
 # 13. Empty States
 
