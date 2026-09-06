@@ -229,7 +229,7 @@ class EventPublicationRegistryIntegrationTest {
    * AbortPolicy} ({@code BM-XC-001} measured 568/801 incomplete at N=200). This test uses a
    * JUnit-practical N (10 students, 20 cascade listener firings) rather than reproducing N=200 —
    * the full zero-loss claim at that scale is verified separately via the k6 {@code BM-XC-001}
-   * re-run documented in {@code docs-v01/Benchmark/08-hazard-fix-specs.md}'s IP-06 entry.
+   * re-run documented in {@code docs/Benchmark/08-hazard-fix-specs.md}'s IP-06 entry.
    *
    * <p>The {@code await} window below is sized to the design's own documented worst case (see
    * {@link EventPublicationRecoveryJob}: up to ~2 minutes before a stuck publication is eligible,

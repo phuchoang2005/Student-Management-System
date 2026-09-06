@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Code, Stack, Text } from '@chakra-ui/react';
+import { Box, Stack } from '@chakra-ui/react';
 import { BookOpen, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -14,6 +14,10 @@ import PageHeader from '@/components/PageHeader';
 import SearchInput from '@/components/SearchInput';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
+import Key from '@/components/ui/Key';
+import StatusDot from '@/components/ui/StatusDot';
+import { confirmDone } from '@/components/ui/toaster';
+import RowAction from '@/components/ui/RowAction';
 import { books, me } from '@/lib/api/endpoints';
 import type { BookSummary } from '@/lib/api/types';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -61,6 +65,7 @@ function Books() {
     if (!deleting) return;
     await removeAction.run(deleting.isbn);
     if (!removeAction.error) {
+      confirmDone('Book removed');
       setDeleting(null);
       resource.refetch();
     }
@@ -94,9 +99,21 @@ function Books() {
 
       <DataTable<BookSummary>
         columns={[
-          { key: 'isbn', header: 'ISBN', width: '13rem', cell: (row) => <Code>{row.isbn}</Code> },
-          { key: 'title', header: 'Title', cell: (row) => row.title },
-          { key: 'author', header: 'Author', cell: (row) => row.author },
+          {
+            key: 'isbn',
+            header: 'ISBN',
+            width: '13rem',
+            priority: 'primary' as const,
+            cell: (row) => <Key>{row.isbn}</Key>,
+          },
+          {
+            key: 'title',
+            header: 'Title',
+            width: '22rem',
+            priority: 'secondary' as const,
+            cell: (row) => row.title,
+          },
+          { key: 'author', header: 'Author', width: '14rem', cell: (row) => row.author },
           ...(isStudent
             ? []
             : [
@@ -104,14 +121,11 @@ function Books() {
                   key: 'owner',
                   header: 'Held by',
                   width: '9rem',
-                  cell: (row: BookSummary) =>
-                    row.ownerStudentCode ? (
-                      <Code>{row.ownerStudentCode}</Code>
-                    ) : (
-                      <Text fontSize="sm" color="fg.muted">
-                        On shelf
-                      </Text>
-                    ),
+                  cell: (row: BookSummary) => (
+                    <StatusDot active={!!row.ownerStudentCode}>
+                      {row.ownerStudentCode ? <Key>{row.ownerStudentCode}</Key> : 'On shelf'}
+                    </StatusDot>
+                  ),
                 },
               ]),
           ...(mayWrite
@@ -121,25 +135,25 @@ function Books() {
                   header: '',
                   width: '6rem',
                   align: 'end' as const,
+                  priority: 'actions' as const,
                   cell: (row: BookSummary) => (
                     <Stack direction="row" gap="2" justify="flex-end">
-                      <Button
-                        size="sm"
-                        tone="danger"
-                        variant="outline"
+                      <RowAction
+                        destructive
                         onClick={(event) => {
                           event.stopPropagation();
                           setDeleting(row);
                         }}
                       >
                         Delete
-                      </Button>
+                      </RowAction>
                     </Stack>
                   ),
                 },
               ]
             : []),
         ]}
+        pack
         rows={resource.data?.content ?? []}
         keyOf={(row) => row.isbn}
         loading={resource.loading}

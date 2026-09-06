@@ -1,7 +1,7 @@
 # bench/observability/
 
 Prometheus + Grafana wiring for the six dashboards specified in
-[`docs-v00/Benchmark/benchmark-strategy/06-dashboard-building.md`](../../docs-v00/Benchmark/benchmark-strategy/06-dashboard-building.md):
+[`docs/Benchmark/benchmark-strategy/06-dashboard-building.md`](../../docs/Benchmark/benchmark-strategy/06-dashboard-building.md):
 Overview, HTTP & Load Testing, JVM Runtime, Spring Boot Runtime, MySQL Performance, Performance
 Correlation. Prometheus, Grafana, and mysqld-exporter all run as containers, defined in
 `management/docker-compose.yml` alongside `mysql`, gated behind the `benchmark` docker-compose

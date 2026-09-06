@@ -1,4 +1,4 @@
-# Scrape config for the benchmark observability stack (docs-v00/Benchmark/benchmark-strategy/
+# Scrape config for the benchmark observability stack (docs/Benchmark/benchmark-strategy/
 # 06-dashboard-building.md). Mounted straight into the prometheus container (docker-compose.yml)
 # at /etc/prometheus/prometheus.yml -- edit this file and `docker compose restart prometheus`.
 global:

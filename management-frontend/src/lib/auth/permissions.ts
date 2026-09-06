@@ -13,7 +13,7 @@ import {
   BookOpen,
   ClipboardList,
   GraduationCap,
-  KeyRound,
+  House,
   RadioTower,
   ShieldCheck,
   Users,
@@ -105,6 +105,12 @@ export interface NavItem {
  */
 export const NAV_ITEMS: NavItem[] = [
   {
+    href: '/home',
+    label: 'Home',
+    icon: House,
+    roles: ['REGISTRAR', 'LIBRARIAN', 'COURSE_ADMINISTRATOR', 'STUDENT', 'SYSTEM_ADMINISTRATOR'],
+  },
+  {
     href: '/students',
     label: 'Students',
     icon: Users,
@@ -131,30 +137,32 @@ export const NAV_ITEMS: NavItem[] = [
     icon: RadioTower,
     roles: ['SYSTEM_ADMINISTRATOR'],
   },
-  {
-    href: '/change-password',
-    label: 'Change Password',
-    icon: KeyRound,
-    roles: ['REGISTRAR', 'LIBRARIAN', 'COURSE_ADMINISTRATOR', 'STUDENT', 'SYSTEM_ADMINISTRATOR'],
-  },
 ];
+
+/**
+ * Changing your own password is an account setting, not a section of the domain.
+ *
+ * It used to sit in `NAV_ITEMS` between Enrollments and Staff Accounts, which put "the thing you do
+ * once, to yourself" in the same list as "the records you are responsible for" — and gave the
+ * Librarian a two-item sidebar where one item was a password form. It now lives in the shell's
+ * account block instead. The route is unchanged and still outside the `(app)` group, because
+ * `MustChangePasswordFilter` sends a forced-change session there and the group layout would bounce
+ * it straight back out.
+ */
+export const CHANGE_PASSWORD_HREF = '/change-password';
 
 export function navItemsFor(role: Role | undefined | null): NavItem[] {
   if (!role) return [];
   return NAV_ITEMS.filter((item) => item.roles.includes(role));
 }
 
-/** Where each role lands after login — no single route is visible to all five. */
-export function landingRoute(role: Role): string {
-  switch (role) {
-    case 'SYSTEM_ADMINISTRATOR':
-      return '/staff-accounts';
-    case 'COURSE_ADMINISTRATOR':
-      return '/courses';
-    case 'LIBRARIAN':
-      return '/books';
-    default:
-      // REGISTRAR lands on the student roll; STUDENT lands on their own record.
-      return '/students';
-  }
+/**
+ * Where every role lands after login.
+ *
+ * This used to fan out to a different list per role, because no single route was visible to all
+ * five. `/home` is that route: it holds nothing but what the caller's own role can already reach,
+ * so it is safe for everyone and it gives the app one front door instead of five.
+ */
+export function landingRoute(_role: Role): string {
+  return '/home';
 }

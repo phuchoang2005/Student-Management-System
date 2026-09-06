@@ -10,6 +10,7 @@ import { courses } from '@/lib/api/endpoints';
 import type { CourseDetail, CourseSummary } from '@/lib/api/types';
 import useAsyncAction from '@/lib/hooks/useAsyncAction';
 import useResource from '@/lib/hooks/useResource';
+import { confirmDone } from '@/components/ui/toaster';
 
 /**
  * Create / edit a course. `courseCode` is immutable — the PUT body does not accept it — so it is
@@ -74,7 +75,10 @@ export default function CourseFormDialog({
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const result = await action.run();
-    if (result) onSaved();
+    if (result) {
+      confirmDone(editing ? 'Course updated' : 'Course created');
+      onSaved();
+    }
   };
 
   return (

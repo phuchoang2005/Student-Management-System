@@ -1,5 +1,5 @@
 # Backend infrastructure -- the MySQL container the app runs against. Split out of the former
-# root Makefile so each toolchain (management/, bench/, docs-v00/) owns its own targets. Invoke
+# root Makefile so each toolchain (management/, bench/, docs/) owns its own targets. Invoke
 # from the repo root as `make -C management <target>`, or `cd management && make <target>`.
 #
 # docker-compose.yml lives here (it's backend infrastructure); .env stays at the repo root.

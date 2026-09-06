@@ -18,6 +18,19 @@ import {
  * `border`, and every neutral component surface — from `colors.gray.*`. Replacing that ramp with the
  * warm ink ramp below re-colours the entire app from one place, so only a handful of semantic tokens
  * need an explicit override underneath.
+ *
+ * ## The two commitments this file makes
+ *
+ * **Every colour has exactly one job.** §5 caps the palette at one primary and one accent, and the
+ * earlier build honoured the cap by simply never using the accent — leaving an app that was indigo
+ * and grey. Here `ai` means *the primary action, or where you currently are*, and `matcha` means
+ * *state that belongs to a record* — a book on loan, a live session. Neither is ever decoration, and
+ * neither is ever used for the other's job.
+ *
+ * **The type scale is a token, not a call-site decision.** `textStyles` below is the whole
+ * vocabulary; pages ask for `display`/`title`/`prose`/`meta`/`key` rather than reassembling
+ * `fontSize="sm" color="fg.muted"` by hand, which is how six screens ended up with six slightly
+ * different captions.
  */
 
 /** Warm ink neutral. 50 and 200 are the spec's background (#F8F8F6) and border (#E5E5E5) verbatim. */
@@ -96,31 +109,41 @@ const paletteSlots = (
 const config = defineConfig({
   globalCss: {
     body: {
-      bg: 'bg.subtle',
+      bg: 'bg.canvas',
       color: 'fg',
+      textStyle: 'body',
       // Zen typography is about readability, not expression: soften the default grid-fitting so the
-      // variable weights render at the intended thickness rather than a heavier hinted approximation.
+      // weights render at the intended thickness rather than a heavier hinted approximation.
       textRendering: 'optimizeLegibility',
     },
-    // §14: the focus indicator must be visible, and it must be the *same* indicator everywhere.
+    /**
+     * §14: the focus indicator must be visible, and it must be the *same* indicator everywhere.
+     * Stated in full rather than only re-coloured, because Chakra's per-component defaults differ
+     * in width and offset — which is how "visible focus" became "visible on some controls".
+     */
     '*:focus-visible': {
+      outlineWidth: '2px',
+      outlineStyle: 'solid',
       outlineColor: 'colorPalette.focusRing',
+      outlineOffset: '2px',
     },
   },
 
   theme: {
     tokens: {
       fonts: {
-        // Loaded by `next/font` in `app/layout.tsx`, which self-hosts the files — no network at build.
-        body: { value: 'var(--font-geist-sans), system-ui, sans-serif' },
-        heading: { value: 'var(--font-geist-sans), system-ui, sans-serif' },
-        mono: { value: 'var(--font-geist-mono), ui-monospace, monospace' },
+        // Loaded by `next/font/local` in `app/layout.tsx`, which self-hosts the files — no network
+        // at build. The token layer never names the typeface, only the variable.
+        body: { value: 'var(--font-sans), system-ui, sans-serif' },
+        heading: { value: 'var(--font-sans), system-ui, sans-serif' },
+        mono: { value: 'var(--font-mono), ui-monospace, monospace' },
       },
 
       /**
        * §4 permits 400/500/600 only. `bold`, `extrabold` and `black` are aliased down rather than
        * deleted so that any Chakra recipe reaching for them lands inside the spec instead of
-       * breaking — there is no way for a heavy weight to reach the screen.
+       * breaking — there is no way for a heavy weight to reach the screen. `app/layout.tsx` loads
+       * only these three files, so a heavier weight could not render even if one leaked through.
        */
       fontWeights: {
         thin: { value: '400' },
@@ -136,7 +159,7 @@ const config = defineConfig({
 
       // §4: body 1.5–1.7, headings 1.2–1.3.
       lineHeights: {
-        shorter: { value: 1.25 },
+        shorter: { value: 1.2 },
         short: { value: 1.3 },
         moderate: { value: 1.6 },
         tall: { value: 1.65 },
@@ -159,6 +182,58 @@ const config = defineConfig({
       },
     },
 
+    /**
+     * The whole type vocabulary, in six entries.
+     *
+     * §3 allows exactly three hierarchy levels, so there are three *sizes* that carry hierarchy
+     * (`display`, `title`, `body`) and three that carry role rather than rank: `prose` for running
+     * explanation, `meta` for a label, `key` for a business code.
+     *
+     * `key` is the one that matters most here. Every record in this system is addressed by a
+     * human-readable code, so codes are read in columns — `tabular-nums` plus a fixed monospace
+     * advance is what lets the eye run down `S00121 / S00122 / S00123` instead of re-finding the
+     * left edge on every row.
+     */
+    textStyles: {
+      display: {
+        value: {
+          fontFamily: 'heading',
+          fontSize: '2rem',
+          lineHeight: '1.2',
+          fontWeight: '600',
+          letterSpacing: '-0.02em',
+        },
+      },
+      title: {
+        value: {
+          fontFamily: 'heading',
+          fontSize: '1.25rem',
+          lineHeight: '1.3',
+          fontWeight: '600',
+          letterSpacing: '-0.01em',
+        },
+      },
+      body: {
+        value: { fontSize: '0.9375rem', lineHeight: '1.6', fontWeight: '400', letterSpacing: '0' },
+      },
+      prose: {
+        value: { fontSize: '1rem', lineHeight: '1.65', fontWeight: '400', letterSpacing: '0' },
+      },
+      meta: {
+        value: { fontSize: '0.8125rem', lineHeight: '1.5', fontWeight: '500', letterSpacing: '0' },
+      },
+      key: {
+        value: {
+          fontFamily: 'mono',
+          fontSize: '0.875rem',
+          lineHeight: '1.4',
+          fontWeight: '500',
+          letterSpacing: '0',
+          fontVariantNumeric: 'tabular-nums',
+        },
+      },
+    },
+
     semanticTokens: {
       colors: {
         // Softer than Chakra's pure black — ink on paper, not print on screen.
@@ -166,6 +241,14 @@ const config = defineConfig({
           DEFAULT: { value: { _light: '{colors.sumi.900}', _dark: '#EDEDEA' } },
         },
         bg: {
+          /**
+           * The page ground (§5's "background"). Lists sit directly on it; only a genuinely bounded
+           * object gets `bg.panel`. The two are ~1.5% apart by design — the separation between a
+           * list and the page is meant to come from the rules and the spacing, not from a second
+           * shade, and wrapping every table in a panel is what made the old screens read as one
+           * flat field with a white slab dropped on it.
+           */
+          canvas: { value: { _light: '{colors.sumi.50}', _dark: '#161614' } },
           // In dark mode Chakra maps both the page and its panels to gray.950, which flattens the
           // surface/background distinction §5 depends on. Lift the panel one step.
           panel: { value: { _light: '{colors.white}', _dark: '{colors.sumi.900}' } },
@@ -238,11 +321,11 @@ const config = defineConfig({
         },
         variants: {
           size: {
-            '2xs': { h: '10', minW: '10', px: '4', textStyle: 'sm' },
-            xs: { h: '10', minW: '10', px: '4', textStyle: 'sm' },
-            sm: { h: '10', minW: '10', px: '4', textStyle: 'sm' },
-            md: { h: '11', minW: '11', px: '5', textStyle: 'sm' },
-            lg: { h: '11', minW: '11', px: '6', textStyle: 'md' },
+            '2xs': { h: '10', minW: '10', px: '4', textStyle: 'meta' },
+            xs: { h: '10', minW: '10', px: '4', textStyle: 'meta' },
+            sm: { h: '10', minW: '10', px: '4', textStyle: 'meta' },
+            md: { h: '11', minW: '11', px: '5', textStyle: 'body' },
+            lg: { h: '11', minW: '11', px: '6', textStyle: 'body' },
           },
         },
       },
@@ -252,29 +335,41 @@ const config = defineConfig({
         base: { borderRadius: 'l2' },
         variants: {
           size: {
-            sm: { '--input-height': 'sizes.10', px: '4', textStyle: 'sm' },
-            md: { '--input-height': 'sizes.11', px: '4', textStyle: 'sm' },
-            lg: { '--input-height': 'sizes.11', px: '4', textStyle: 'md' },
+            sm: { '--input-height': 'sizes.10', px: '4', textStyle: 'body' },
+            md: { '--input-height': 'sizes.11', px: '4', textStyle: 'body' },
+            lg: { '--input-height': 'sizes.11', px: '4', textStyle: 'body' },
           },
         },
       },
 
       textarea: {
         base: { borderRadius: 'l2' },
-        variants: { size: { md: { px: '4', py: '3', textStyle: 'sm' } } },
+        variants: { size: { md: { px: '4', py: '3', textStyle: 'body' } } },
       },
 
       badge: {
         base: { borderRadius: 'l1', fontWeight: 'medium' },
       },
 
-      // §3: three levels, no more. `lg` is a page title, `md` a section heading.
+      /**
+       * §3: three levels, no more. `lg` is a page title and `md` a section heading — mapped onto
+       * the `display` and `title` text styles so the two agree by construction rather than by two
+       * people picking similar numbers.
+       */
       heading: {
-        base: { fontWeight: 'semibold', lineHeight: 'shorter', letterSpacing: '-0.01em' },
+        base: { fontWeight: 'semibold' },
+        variants: {
+          size: {
+            md: { textStyle: 'title' },
+            lg: { textStyle: 'display' },
+            xl: { textStyle: 'display' },
+          },
+        },
       },
 
+      /** A business key rendered inline in running text. `ui/Key.tsx` is the usual way in. */
       code: {
-        base: { borderRadius: '6px', fontWeight: 'normal' },
+        base: { textStyle: 'key', borderRadius: '6px' },
       },
     },
 
@@ -283,6 +378,9 @@ const config = defineConfig({
        * §6: 12px radius, a thin border, **no shadow**, and consistent internal padding. The
        * `elevated` variant is flattened rather than removed so an inherited `variant="elevated"`
        * cannot reintroduce a drop shadow.
+       *
+       * A card is now reserved for a genuinely bounded object — one record, one form, one dialog.
+       * Lists are not bounded objects and no longer get one; see `DataTable`.
        */
       card: {
         slots: cardAnatomy.keys(),
@@ -293,22 +391,39 @@ const config = defineConfig({
             outline: { root: { bg: 'bg.panel', boxShadow: 'none', borderWidth: '1px', borderColor: 'border' } },
           },
           size: {
-            md: { root: { '--card-padding': 'spacing.6' }, title: { textStyle: 'md' } },
-            lg: { root: { '--card-padding': 'spacing.8' }, title: { textStyle: 'lg' } },
+            md: { root: { '--card-padding': 'spacing.6' }, title: { textStyle: 'title' } },
+            lg: { root: { '--card-padding': 'spacing.8' }, title: { textStyle: 'title' } },
           },
         },
       },
 
       /**
        * §12: 48–56px rows, 16–20px horizontal padding, minimal borders, hover highlighting only.
-       * `py="4"` + `px="5"` on a `sm` text line lands at ~52px. `striped` is neutralised here rather
-       * than only removed from `DataTable`, so zebra shading cannot come back through a prop.
+       * `py="4"` + `px="5"` on a `body` text line lands at ~52px. `striped` is neutralised here
+       * rather than only removed from `DataTable`, so zebra shading cannot come back through a prop.
+       *
+       * Column headers are sentence case. They used to be tracked-out uppercase, which is the
+       * default admin-table treatment and costs real legibility — capitals remove the word-shape
+       * the eye uses to skip to the column it wants. §3 also asks for hierarchy from spacing and
+       * weight rather than from a second typographic device.
+       *
+       * Every cell gets `tabular-nums`. Credits, enrolment counts, dates and codes all read in
+       * columns here, and proportional figures make a column of numbers ragged at both edges.
        */
       table: {
         slots: tableAnatomy.keys(),
         base: {
-          columnHeader: { color: 'fg.muted', fontWeight: 'medium', textStyle: 'xs', letterSpacing: '0.04em', textTransform: 'uppercase' },
+          root: { fontVariantNumeric: 'tabular-nums' },
+          columnHeader: {
+            color: 'fg.muted',
+            textStyle: 'meta',
+            fontWeight: 'medium',
+            textTransform: 'none',
+            letterSpacing: '0',
+            whiteSpace: 'nowrap',
+          },
           row: { transitionProperty: 'background-color', transitionDuration: 'fast', transitionTimingFunction: 'zen' },
+          cell: { textStyle: 'body' },
         },
         variants: {
           striped: { true: { row: { '&:nth-of-type(odd) td': { bg: 'transparent' } } } },
@@ -333,19 +448,33 @@ const config = defineConfig({
         base: {
           content: { borderRadius: 'l3', boxShadow: 'sm', borderWidth: '1px', borderColor: 'border' },
           backdrop: { bg: 'blackAlpha.400', backdropFilter: 'blur(2px)' },
-          title: { fontWeight: 'semibold' },
+          title: { textStyle: 'title' },
+        },
+      },
+
+      drawer: {
+        slots: dialogAnatomy.keys(),
+        base: {
+          content: { bg: 'bg.panel' },
+          backdrop: { bg: 'blackAlpha.400', backdropFilter: 'blur(2px)' },
+          title: { textStyle: 'title' },
         },
       },
 
       alert: {
         slots: alertAnatomy.keys(),
-        base: { root: { borderRadius: 'l2' } },
+        base: { root: { borderRadius: 'l2' }, description: { textStyle: 'body' } },
       },
 
+      /**
+       * `orientation="vertical"` is what the detail screens now use: a 300px identity column has no
+       * room for an 11rem label gutter beside its value, and stacking the pair reads faster anyway.
+       */
       dataList: {
         slots: dataListAnatomy.keys(),
         base: {
-          itemLabel: { color: 'fg.muted' },
+          itemLabel: { color: 'fg.muted', textStyle: 'meta' },
+          itemValue: { textStyle: 'body' },
         },
       },
     },

@@ -1,10 +1,9 @@
 'use client';
 
-import { Box, Center, Code, HStack, Spinner, Stack, Text } from '@chakra-ui/react';
-import { ArrowLeft } from 'lucide-react';
+import { Box, HStack, Stack, Text } from '@chakra-ui/react';
 import NextLink from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useParams } from 'next/navigation';
+import { useEffect, useState, type FormEvent } from 'react';
 
 import ErrorBanner from '@/components/ErrorBanner';
 import FormField from '@/components/FormField';
@@ -12,12 +11,20 @@ import PageHeader from '@/components/PageHeader';
 import RecordCard from '@/components/RecordCard';
 import Button from '@/components/ui/Button';
 import SurfaceCard from '@/components/ui/SurfaceCard';
+import Key from '@/components/ui/Key';
+import { confirmDone } from '@/components/ui/toaster';
+import RecordSkeleton from '@/components/ui/RecordSkeleton';
+import StudentPicker from '@/components/StudentPicker';
+import StatusDot from '@/components/ui/StatusDot';
+import DetailLayout from '@/components/DetailLayout';
+import Breadcrumb from '@/components/Breadcrumb';
 import { books } from '@/lib/api/endpoints';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { can } from '@/lib/auth/permissions';
 import RequireAuth from '@/lib/auth/RequireAuth';
 import useAsyncAction from '@/lib/hooks/useAsyncAction';
 import useResource from '@/lib/hooks/useResource';
+import { remember } from '@/lib/recent';
 
 /** One book, plus the Librarian's assign/unassign controls. */
 export default function BookDetailPage() {
@@ -31,65 +38,72 @@ export default function BookDetailPage() {
 function BookDetail() {
   const params = useParams<{ isbn: string }>();
   const isbn = decodeURIComponent(params.isbn);
-  const router = useRouter();
   const { session } = useAuth();
   const mayWrite = can(session?.role, 'books:write');
 
   const { data, loading, error, refetch } = useResource(() => books.get(isbn), [isbn]);
 
+  useEffect(() => {
+    if (!data) return;
+    remember({
+      kind: 'book',
+      code: data.isbn,
+      label: data.title,
+      href: `/books/${encodeURIComponent(data.isbn)}`,
+    });
+  }, [data]);
+
   if (loading) {
     return (
-      <Center py="16">
-        <Spinner size="lg" color="fg.subtle" borderWidth="1.5px" />
-      </Center>
+      <RecordSkeleton fields={6} />
     );
   }
 
   return (
-    <Box maxW="46rem">
+    <Box>
+      <Breadcrumb
+        parent={{ href: '/books', label: 'Books' }}
+        current={data ? data.title : isbn}
+      />
       <PageHeader
         title={data ? data.title : isbn}
         description={data ? data.author : undefined}
-        actions={
-          <Button tone="neutral" variant="outline" onClick={() => router.back()}>
-            <ArrowLeft strokeWidth={1.5} />
-            Back
-          </Button>
-        }
       />
 
       <ErrorBanner error={error} />
 
       {data ? (
-        <Stack gap="8">
-          <RecordCard
-            title="Book"
-            fields={[
-              { label: 'ISBN', value: <Code>{data.isbn}</Code> },
-              { label: 'Title', value: data.title },
-              { label: 'Author', value: data.author },
-              { label: 'Published', value: data.publishedDate ?? '—' },
-              {
-                label: 'Held by',
-                value: data.owner ? (
-                  // A Student reading their own book has no Students tab to land on, so only the
-                  // roles that can open a profile get a link.
-                  can(session?.role, 'students:read') && session?.role !== 'STUDENT' ? (
-                    <NextLink href={`/students/${encodeURIComponent(data.owner.studentCode)}`}>
-                      <Text as="span" textDecoration="underline">
-                        {data.owner.firstName} {data.owner.lastName} ({data.owner.studentCode})
-                      </Text>
-                    </NextLink>
+        <DetailLayout
+          record={
+            <RecordCard
+              title="Book"
+              fields={[
+                { label: 'ISBN', value: <Key>{data.isbn}</Key> },
+                { label: 'Title', value: data.title },
+                { label: 'Author', value: data.author },
+                { label: 'Published', value: data.publishedDate ?? '—' },
+                {
+                  label: 'Held by',
+                  value: data.owner ? (
+                    // A Student reading their own book has no Students tab to land on, so only the
+                    // roles that can open a profile get a link.
+                    can(session?.role, 'students:read') && session?.role !== 'STUDENT' ? (
+                      <NextLink href={`/students/${encodeURIComponent(data.owner.studentCode)}`}>
+                        <Text as="span" textDecoration="underline">
+                          {data.owner.firstName} {data.owner.lastName} ({data.owner.studentCode})
+                        </Text>
+                      </NextLink>
+                    ) : (
+                      `${data.owner.firstName} ${data.owner.lastName} (${data.owner.studentCode})`
+                    )
                   ) : (
-                    `${data.owner.firstName} ${data.owner.lastName} (${data.owner.studentCode})`
-                  )
-                ) : (
-                  'On shelf'
-                ),
-              },
-            ]}
-          />
-
+                    'On shelf'
+                  ),
+                },
+              ]}
+            />
+          }
+        >
           {mayWrite ? (
             <OwnershipControls
               isbn={data.isbn}
@@ -97,7 +111,7 @@ function BookDetail() {
               onChanged={refetch}
             />
           ) : null}
-        </Stack>
+        </DetailLayout>
       ) : null}
     </Box>
   );
@@ -126,6 +140,7 @@ function OwnershipControls({
     event.preventDefault();
     const result = await assign.run(isbn, studentCode);
     if (result) {
+      confirmDone('Book assigned');
       setStudentCode('');
       onChanged();
     }
@@ -133,7 +148,10 @@ function OwnershipControls({
 
   const onRelease = async () => {
     const result = await release.run(isbn);
-    if (result) onChanged();
+    if (result) {
+      confirmDone('Book released');
+      onChanged();
+    }
   };
 
   return (
@@ -143,28 +161,25 @@ function OwnershipControls({
         <ErrorBanner error={release.error} />
 
         <form onSubmit={onAssign}>
-          <HStack gap="4" align="flex-end">
+          <HStack gap="4" align="flex-start">
             <Box flex="1">
-              <FormField
-                label={currentOwner ? 'Reassign to student code' : 'Assign to student code'}
-                name="studentCode"
+              <StudentPicker
+                label={currentOwner ? 'Reassign to' : 'Assign to'}
                 value={studentCode}
-                onChange={(e) => setStudentCode(e.target.value)}
-                placeholder="e.g. S00123"
+                onSelect={setStudentCode}
                 error={assign.error?.fieldError('studentCode')}
-                required
               />
             </Box>
-            <Button type="submit" loading={assign.pending}>
+            <Button type="submit" loading={assign.pending} mt="6" disabled={!studentCode}>
               {currentOwner ? 'Reassign' : 'Assign'}
             </Button>
           </HStack>
         </form>
 
         <HStack justify="space-between" gap="4">
-          <Text fontSize="sm" color="fg.muted">
-            {currentOwner ? `Currently held by ${currentOwner}.` : 'This book is on the shelf.'}
-          </Text>
+          <StatusDot active={!!currentOwner}>
+            {currentOwner ? <>Held by <Key>{currentOwner}</Key></> : 'On the shelf'}
+          </StatusDot>
           <Button
             tone="neutral"
             variant="outline"

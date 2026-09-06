@@ -1,16 +1,20 @@
 'use client';
 
-import { Box, Center, Code, Heading, Spinner, Stack } from '@chakra-ui/react';
-import { ArrowLeft, Users } from 'lucide-react';
+import { Box, Heading } from '@chakra-ui/react';
+import { Users } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 import CursorPagination from '@/components/CursorPagination';
 import DataTable from '@/components/DataTable';
 import ErrorBanner from '@/components/ErrorBanner';
 import PageHeader from '@/components/PageHeader';
 import RecordCard from '@/components/RecordCard';
-import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
+import Key from '@/components/ui/Key';
+import RecordSkeleton from '@/components/ui/RecordSkeleton';
+import DetailLayout from '@/components/DetailLayout';
+import Breadcrumb from '@/components/Breadcrumb';
 import { courses, enrollments } from '@/lib/api/endpoints';
 import type { Enrollment } from '@/lib/api/types';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -18,6 +22,7 @@ import { can } from '@/lib/auth/permissions';
 import RequireAuth from '@/lib/auth/RequireAuth';
 import useCursorResource from '@/lib/hooks/useCursorResource';
 import useResource from '@/lib/hooks/useResource';
+import { remember } from '@/lib/recent';
 
 /**
  * One course, plus its roster for the roles responsible for enrollments.
@@ -37,50 +42,58 @@ export default function CourseDetailPage() {
 function CourseDetail() {
   const params = useParams<{ code: string }>();
   const code = decodeURIComponent(params.code);
-  const router = useRouter();
   const { session } = useAuth();
 
   const { data, loading, error } = useResource(() => courses.get(code), [code]);
+
+  useEffect(() => {
+    if (!data) return;
+    remember({
+      kind: 'course',
+      code: data.courseCode,
+      label: data.name,
+      href: `/courses/${encodeURIComponent(data.courseCode)}`,
+    });
+  }, [data]);
   const showRoster = can(session?.role, 'enrollments:read');
 
   if (loading) {
     return (
-      <Center py="16">
-        <Spinner size="lg" color="fg.subtle" borderWidth="1.5px" />
-      </Center>
+      <RecordSkeleton fields={5} />
     );
   }
 
   return (
     <Box>
+      <Breadcrumb
+        parent={{ href: '/courses', label: 'Courses' }}
+        current={data ? data.name : code}
+      />
       <PageHeader
         title={data ? data.name : code}
         description={data ? `${data.credits} credits` : undefined}
-        actions={
-          <Button tone="neutral" variant="outline" onClick={() => router.back()}>
-            <ArrowLeft strokeWidth={1.5} />
-            Back
-          </Button>
-        }
       />
 
       <ErrorBanner error={error} />
 
       {data ? (
-        <Stack gap="8">
-          <RecordCard
-            title="Course"
-            fields={[
-              { label: 'Course code', value: <Code>{data.courseCode}</Code> },
-              { label: 'Name', value: data.name },
-              { label: 'Credits', value: data.credits },
-              { label: 'Students enrolled', value: data.enrolledCount },
-              { label: 'Description', value: data.description || '—' },
-              { label: 'Created', value: new Date(data.createdAt).toLocaleString() },
-            ]}
-          />
+        <DetailLayout
+          record={
+            <RecordCard
+              title="Course"
+              fields={[
+                { label: 'Course code', value: <Key>{data.courseCode}</Key> },
+                { label: 'Name', value: data.name },
+                { label: 'Credits', value: data.credits },
+                { label: 'Students enrolled', value: data.enrolledCount },
+                { label: 'Description', value: data.description || '—' },
+                { label: 'Created', value: new Date(data.createdAt).toLocaleString() },
+              ]}
+            />
+          }
+        >
           {showRoster ? <Roster code={data.courseCode} /> : null}
-        </Stack>
+        </DetailLayout>
       ) : null}
     </Box>
   );
@@ -106,7 +119,7 @@ function Roster({ code }: { code: string }) {
             key: 'studentCode',
             header: 'Code',
             width: '9rem',
-            cell: (row) => <Code>{row.student.studentCode}</Code>,
+            cell: (row) => <Key>{row.student.studentCode}</Key>,
           },
           {
             key: 'name',

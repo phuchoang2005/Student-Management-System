@@ -14,6 +14,8 @@ import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import RoleBadge from '@/components/ui/RoleBadge';
 import SurfaceCard from '@/components/ui/SurfaceCard';
+import { confirmDone } from '@/components/ui/toaster';
+import RowAction from '@/components/ui/RowAction';
 import { staffAccounts } from '@/lib/api/endpoints';
 import type { Role, StaffAccountCreated, StaffAccountSummary } from '@/lib/api/types';
 import { ROLE_LABELS } from '@/lib/auth/permissions';
@@ -63,7 +65,11 @@ function StaffAccounts() {
 
   const toggle = async (account: StaffAccountSummary) => {
     await statusAction.run(account.id, !account.enabled);
-    if (!statusAction.error) resource.refetch();
+    if (!statusAction.error) {
+      // The row's button reads Enable / Disable, so the confirmation is its past tense.
+      confirmDone(account.enabled ? 'Account disabled' : 'Account enabled');
+      resource.refetch();
+    }
   };
 
   return (
@@ -137,7 +143,7 @@ function StaffAccounts() {
 
       <DataTable<StaffAccountSummary>
         columns={[
-          { key: 'username', header: 'Username', cell: (row) => row.username },
+          { key: 'username', header: 'Username', width: '18rem', cell: (row) => row.username },
           {
             key: 'role',
             header: 'Role',
@@ -161,18 +167,18 @@ function StaffAccounts() {
             header: '',
             width: '9rem',
             align: 'end' as const,
+            priority: 'actions' as const,
             cell: (row) => (
-              <Button
-                size="sm"
-                tone={row.enabled ? 'danger' : 'neutral'}
-                variant="outline"
+              <RowAction
+                destructive={row.enabled}
                 onClick={() => toggle(row)}
               >
                 {row.enabled ? 'Deactivate' : 'Reactivate'}
-              </Button>
+              </RowAction>
             ),
           },
         ]}
+        pack
         rows={resource.data?.content ?? []}
         keyOf={(row) => String(row.id)}
         loading={resource.loading}

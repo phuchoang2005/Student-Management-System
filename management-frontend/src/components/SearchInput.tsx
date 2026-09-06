@@ -16,7 +16,9 @@ export default function SearchInput({
   return (
     <InputGroup
       maxW="sm"
-      mb="6"
+      // 16px, not 24: the search box filters the table directly beneath it, and the wider gap read
+      // as a separate element sitting between two unrelated things.
+      mb="4"
       startElement={<Search size={16} strokeWidth={1.5} aria-hidden />}
     >
       <Input

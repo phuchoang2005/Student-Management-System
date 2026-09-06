@@ -11,6 +11,8 @@ import { students } from '@/lib/api/endpoints';
 import type { StudentDetail, StudentRegistration, StudentSummary } from '@/lib/api/types';
 import useAsyncAction from '@/lib/hooks/useAsyncAction';
 import useResource from '@/lib/hooks/useResource';
+import Key from '@/components/ui/Key';
+import { confirmDone } from '@/components/ui/toaster';
 
 /**
  * Register / edit, in one dialog — the fields are the same and only `studentCode` differs, since it
@@ -91,10 +93,14 @@ export default function StudentFormDialog({
     const result = await action.run();
     if (!result) return;
     if (!editing && 'initialPassword' in result) {
-      // Hold the dialog open on the one-time password instead of closing over it.
+      // Hold the dialog open on the one-time password instead of closing over it. No toast here:
+      // the panel that appears *is* the confirmation, and a line saying "Student registered" over
+      // the top of credentials the registrar has to write down would be noise competing with the
+      // one thing on screen that cannot be recovered later.
       setRegistered(result as StudentRegistration);
       return;
     }
+    confirmDone('Student updated');
     onSaved();
   };
 
@@ -123,7 +129,7 @@ export default function StudentFormDialog({
         </Alert.Root>
         <Stack gap="2">
           <Text fontSize="sm">
-            Student code: <Code>{registered.studentCode}</Code>
+            Student code: <Key>{registered.studentCode}</Key>
           </Text>
           <Text fontSize="sm">
             Username: <Code>{registered.username}</Code>

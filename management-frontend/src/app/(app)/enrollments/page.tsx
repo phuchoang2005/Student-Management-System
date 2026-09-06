@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Box, Checkbox, Code, HStack, Heading, Stack, Text } from '@chakra-ui/react';
+import { Alert, Box, Checkbox, HStack, Heading, Stack, Text } from '@chakra-ui/react';
 import { ClipboardList, GraduationCap, Plus, Search, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -15,6 +15,10 @@ import SearchInput from '@/components/SearchInput';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import SurfaceCard from '@/components/ui/SurfaceCard';
+import Key from '@/components/ui/Key';
+import { confirmDone } from '@/components/ui/toaster';
+import RowAction from '@/components/ui/RowAction';
+import StudentPicker from '@/components/StudentPicker';
 import { courses, enrollments } from '@/lib/api/endpoints';
 import type {
   BatchEnrollmentResponse,
@@ -61,8 +65,7 @@ function Enrollments() {
 
 function RegistrarView() {
   const router = useRouter();
-  const [input, setInput] = useState('');
-  /** The code actually being shown — only set on submit, so typing doesn't fire a request per key. */
+  /** The student whose enrollments are on screen. `StudentPicker` sets it; nothing else does. */
   const [studentCode, setStudentCode] = useState('');
   const [enrolling, setEnrolling] = useState(false);
   const [ending, setEnding] = useState<Enrollment | null>(null);
@@ -74,11 +77,6 @@ function RegistrarView() {
 
   const endAction = useAsyncAction(enrollments.remove);
 
-  const onLookup = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setStudentCode(input.trim());
-  };
-
   const confirmEnd = async () => {
     if (!ending) return;
     // Checked through the return value, not `endAction.error`: that field holds the state this
@@ -86,6 +84,7 @@ function RegistrarView() {
     // though the enrollment had ended.
     const result = await endAction.run(studentCode, ending.course.courseCode);
     if (result !== undefined) {
+      confirmDone('Enrollment ended');
       setEnding(null);
       resource.refetch();
     }
@@ -95,7 +94,7 @@ function RegistrarView() {
     <Box>
       <PageHeader
         title="Enrollments"
-        description="Look a student up by their student code to see and manage the courses they are taking."
+        description="Find a student to see and manage the courses they are taking."
         actions={
           studentCode ? (
             <Button onClick={() => setEnrolling(true)}>
@@ -106,26 +105,14 @@ function RegistrarView() {
         }
       />
 
-      <form onSubmit={onLookup}>
-        <SurfaceCard mb="8">
-          <HStack gap="4" align="flex-end">
-            <Box flex="1" maxW="20rem">
-              <FormField
-                label="Student code"
-                name="studentCode"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="e.g. S00123"
-                required
-              />
-            </Box>
-            <Button type="submit">
-              <Search strokeWidth={1.5} />
-              Look up
-            </Button>
-          </HStack>
-        </SurfaceCard>
-      </form>
+      <Box maxW="28rem" mb="10">
+        <StudentPicker
+          value={studentCode}
+          onSelect={setStudentCode}
+          helper="Their enrolled courses load as soon as you pick one."
+          autoFocus
+        />
+      </Box>
 
       <ErrorBanner error={resource.error} />
       <ErrorBanner error={endAction.error} />
@@ -134,12 +121,12 @@ function RegistrarView() {
         <EmptyState
           icon={ClipboardList}
           title="No student selected"
-          description="Enter a student code above. Every course that student is enrolled in will be listed here, ready to end or add to."
+          description="Search above to pick a student. Every course they are enrolled in appears here, ready to add to or end."
         />
       ) : (
         <>
           <Heading size="md" mb="4" fontWeight="semibold">
-            Courses for <Code>{studentCode}</Code>
+            Courses for <Key>{studentCode}</Key>
           </Heading>
           <DataTable<Enrollment>
             columns={[
@@ -147,7 +134,7 @@ function RegistrarView() {
                 key: 'courseCode',
                 header: 'Code',
                 width: '9rem',
-                cell: (row) => <Code>{row.course.courseCode}</Code>,
+                cell: (row) => <Key>{row.course.courseCode}</Key>,
               },
               { key: 'name', header: 'Course', cell: (row) => row.course.name },
               {
@@ -167,18 +154,17 @@ function RegistrarView() {
                 header: '',
                 width: '7rem',
                 align: 'end' as const,
+                priority: 'actions' as const,
                 cell: (row) => (
-                  <Button
-                    size="sm"
-                    tone="danger"
-                    variant="outline"
+                  <RowAction
+                    destructive
                     onClick={(event) => {
                       event.stopPropagation();
                       setEnding(row);
                     }}
                   >
                     End
-                  </Button>
+                  </RowAction>
                 ),
               },
             ]}
@@ -301,7 +287,7 @@ function EnrollDialog({
         mt="8"
         title={
           <>
-            Enroll <Code>{studentCode}</Code>
+            Enroll <Key>{studentCode}</Key>
           </>
         }
       >
@@ -341,7 +327,7 @@ function EnrollDialog({
                 key: 'courseCode',
                 header: 'Code',
                 width: '9rem',
-                cell: (row) => <Code>{row.courseCode}</Code>,
+                cell: (row) => <Key>{row.courseCode}</Key>,
               },
               { key: 'name', header: 'Course', cell: (row) => row.name },
               { key: 'credits', header: 'Credits', width: '6rem', cell: (row) => row.credits },
@@ -415,7 +401,7 @@ function EnrollmentOutcome({ outcome }: { outcome: BatchEnrollmentResponse }) {
               {/* The enrolled ones are durable; only these need explaining. */}
               {failures.map((result) => (
                 <Text key={result.courseCode} fontSize="sm">
-                  <Code>{result.courseCode}</Code> — {FAILURE_LABELS[result.status]}
+                  <Key>{result.courseCode}</Key> — {FAILURE_LABELS[result.status]}
                 </Text>
               ))}
             </Stack>
@@ -471,7 +457,7 @@ function CourseAdminView() {
             key: 'courseCode',
             header: 'Code',
             width: '9rem',
-            cell: (row) => <Code>{row.courseCode}</Code>,
+            cell: (row) => <Key>{row.courseCode}</Key>,
           },
           { key: 'name', header: 'Course', cell: (row) => row.name },
           { key: 'credits', header: 'Credits', width: '6rem', cell: (row) => row.credits },
@@ -510,7 +496,7 @@ function CourseAdminView() {
         <Box mt="8">
           <HStack justify="space-between" mb="4" gap="4">
             <Heading size="md" fontWeight="semibold">
-              Enrolled in <Code>{selected.courseCode}</Code> — {selected.name}
+              Enrolled in <Key>{selected.courseCode}</Key> — {selected.name}
             </Heading>
             <Button size="sm" tone="neutral" variant="outline" onClick={() => setSelected(null)}>
               Clear
@@ -523,7 +509,7 @@ function CourseAdminView() {
                 key: 'studentCode',
                 header: 'Code',
                 width: '9rem',
-                cell: (row) => <Code>{row.student.studentCode}</Code>,
+                cell: (row) => <Key>{row.student.studentCode}</Key>,
               },
               {
                 key: 'name',

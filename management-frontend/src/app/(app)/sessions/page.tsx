@@ -1,6 +1,6 @@
 'use client';
 
-import { Badge, Box, Code, Text } from '@chakra-ui/react';
+import { Badge, Box, Text } from '@chakra-ui/react';
 import { RadioTower } from 'lucide-react';
 import { useState } from 'react';
 
@@ -11,6 +11,8 @@ import PageHeader from '@/components/PageHeader';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import RoleBadge from '@/components/ui/RoleBadge';
+import { confirmDone } from '@/components/ui/toaster';
+import RowAction from '@/components/ui/RowAction';
 import { sessions } from '@/lib/api/endpoints';
 import type { ActiveSession } from '@/lib/api/types';
 import RequireAuth from '@/lib/auth/RequireAuth';
@@ -49,6 +51,8 @@ function Sessions() {
     // over, so on a first failure it is still null.
     const result = await revokeAction.run(revoking.handle);
     if (result !== undefined) {
+      // "End session" is what the button says, so this is what the confirmation says.
+      confirmDone('Session ended');
       setRevoking(null);
       resource.refetch();
     }
@@ -71,7 +75,7 @@ function Sessions() {
 
       <DataTable<ActiveSession>
         columns={[
-          { key: 'username', header: 'User', cell: (row) => row.username },
+          { key: 'username', header: 'User', width: '16rem', cell: (row) => row.username },
           {
             key: 'role',
             header: 'Role',
@@ -100,11 +104,10 @@ function Sessions() {
             header: '',
             width: '8rem',
             align: 'end' as const,
+            priority: 'actions' as const,
             cell: (row) => (
-              <Button
-                size="sm"
-                tone="danger"
-                variant="outline"
+              <RowAction
+                destructive
                 // Your own session is not revocable here: ending it mid-task is indistinguishable
                 // from the feature breaking, and signing out already does it deliberately.
                 disabled={row.current}
@@ -114,10 +117,11 @@ function Sessions() {
                 }}
               >
                 End
-              </Button>
+              </RowAction>
             ),
           },
         ]}
+        pack
         rows={resource.data ?? []}
         keyOf={(row) => row.handle}
         loading={resource.loading}

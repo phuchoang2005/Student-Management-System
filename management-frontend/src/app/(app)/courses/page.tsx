@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Code, Stack } from '@chakra-ui/react';
+import { Box, Stack } from '@chakra-ui/react';
 import { GraduationCap, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -14,6 +14,9 @@ import PageHeader from '@/components/PageHeader';
 import SearchInput from '@/components/SearchInput';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
+import Key from '@/components/ui/Key';
+import { confirmDone } from '@/components/ui/toaster';
+import RowAction from '@/components/ui/RowAction';
 import { courses, me } from '@/lib/api/endpoints';
 import type { CourseSummary } from '@/lib/api/types';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -58,6 +61,7 @@ function Courses() {
     if (!deleting) return;
     await removeAction.run(deleting.courseCode);
     if (!removeAction.error) {
+      confirmDone('Course removed');
       setDeleting(null);
       resource.refetch();
     }
@@ -99,14 +103,29 @@ function Courses() {
             key: 'courseCode',
             header: 'Code',
             width: '9rem',
-            cell: (row) => <Code>{row.courseCode}</Code>,
+            priority: 'primary' as const,
+            cell: (row) => <Key>{row.courseCode}</Key>,
           },
-          { key: 'name', header: 'Name', cell: (row) => row.name },
-          { key: 'credits', header: 'Credits', width: '6rem', cell: (row) => row.credits },
+          {
+            key: 'name',
+            header: 'Name',
+            width: '24rem',
+            priority: 'secondary' as const,
+            cell: (row) => row.name,
+          },
+          // Figures right-align so they read as a column of quantities rather than as short text.
+          {
+            key: 'credits',
+            header: 'Credits',
+            width: '6rem',
+            align: 'end' as const,
+            cell: (row) => row.credits,
+          },
           {
             key: 'enrolledCount',
             header: 'Students',
             width: '7rem',
+            align: 'end' as const,
             cell: (row) => row.enrolledCount,
           },
           ...(mayWrite
@@ -116,35 +135,33 @@ function Courses() {
                   header: '',
                   width: '10rem',
                   align: 'end' as const,
+                  priority: 'actions' as const,
                   cell: (row: CourseSummary) => (
                     <Stack direction="row" gap="2" justify="flex-end">
-                      <Button
-                        size="sm"
-                        tone="neutral" variant="outline"
+                      <RowAction
                         onClick={(event) => {
                           event.stopPropagation();
                           setEditing(row);
                         }}
                       >
                         Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        tone="danger"
-                        variant="outline"
+                      </RowAction>
+                      <RowAction
+                        destructive
                         onClick={(event) => {
                           event.stopPropagation();
                           setDeleting(row);
                         }}
                       >
                         Delete
-                      </Button>
+                      </RowAction>
                     </Stack>
                   ),
                 },
               ]
             : []),
         ]}
+        pack
         rows={resource.data?.content ?? []}
         keyOf={(row) => row.courseCode}
         loading={resource.loading}
