@@ -6,3 +6,5 @@ next-env.d.ts
 .env*.local
 CLAUDE.md
 AGENTS.md
+test-results/
+playwright-report/

@@ -64,6 +64,12 @@ The demo includes five different user roles, allowing you to see how the same ap
 
 **System Administrator** — manage staff accounts, activate or deactivate system access, and manage administrative functions.
 
+## Demo video
+
+A short walkthrough covering all four staff roles — Registrar, Librarian, Course Admin, and System Admin — recorded end-to-end against a live instance of the app.
+
+<video src="assests/demo-videos/full-demo.webm" controls width="100%"></video>
+
 ## How is it built?
 
 The application consists of a **Java/Spring Boot REST API** and a **Next.js web interface**. MySQL is used for persistent data storage, with Flyway managing database changes.

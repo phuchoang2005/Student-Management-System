@@ -2,3 +2,4 @@
 .claude
 CLAUDE.md
 bench/observability/mysqld_exporter.my.cnf
+.DS_Store
