@@ -68,7 +68,9 @@ The demo includes five different user roles, allowing you to see how the same ap
 
 A short walkthrough covering all four staff roles — Registrar, Librarian, Course Admin, and System Admin — recorded end-to-end against a live instance of the app.
 
-<video src="assests/demo-videos/full-demo.webm" controls width="100%"></video>
+[Youtube Link](https://youtu.be/vD3ChtpMnwQ)
+
+There is also an Webm format video in [here](assests/demo-videos)
 
 ## How is it built?
 
